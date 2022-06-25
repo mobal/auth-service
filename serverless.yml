@@ -1,0 +1,51 @@
+service: auth-service
+frameworkVersion: '3'
+plugins:
+  - serverless-offline
+  - serverless-python-requirements
+custom:
+  pythonRequirements:
+    dockerizePip: false
+    layer: true
+    zip: true
+  serverless-offline:
+    httpsProtocol: false
+functions:
+  app:
+    environment:
+      APP_NAME: ${env:APP_NAME}
+      APP_STAGE: ${env:APP_STAGE}
+      APP_TIMEZONE: ${env:APP_TIMEZONE}
+    events:
+      - httpApi: '*'
+    handler: app.main.handler
+    layers:
+      - Ref: PythonRequirementsLambdaLayer
+package:
+  patterns:
+    - '!.gitignore'
+    - '!.idea/**'
+    - '!.serverless/**'
+    - '.venv/**'
+    - '!node_modules/**'
+    - 'package.json'
+    - 'package-lock.json'
+    - 'Pipfile'
+    - 'Pipfile.lock'
+    - 'serverless.yml'
+    - '.requirements.zip'
+    - '.pytest_cache'
+provider:
+  name: aws
+  runtime: python3.9
+  stage: dev
+  region: eu-central-1
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:Query
+          Resource: ${env:AWS_ARN_DYNAMODB}
+useDotenv: true
