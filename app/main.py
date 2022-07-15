@@ -1,16 +1,100 @@
+from ast import List
+import logging
+import uuid
+from pydantic import ValidationError
 import uvicorn
-from fastapi import FastAPI
+from botocore.exceptions import ClientError
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi_camelcase import CamelModel
 from mangum import Mangum
+from starlette import status
+from app.auth import JWTBearer
+from starlette.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from app.models import Token
+from app.schemas import CreateUser, Login
+from app.services import AuthService
+
+logger = logging.getLogger()
 
 app = FastAPI()
+auth_service = AuthService()
+jwt_bearer = JWTBearer()
 
 
-@app.get('/')
-async def hello():
-    return 'hello, world!'
+@app.post('/login', status_code=status.HTTP_200_OK)
+async def login(body: Login) -> Token:
+    return await auth_service.login(body.email, body.password)
 
+
+@app.get('/logout', dependencies=Depends(jwt_bearer),
+         status_code=status.HTTP_204_NO_CONTENT)
+async def logout() -> Response:
+    await auth_service.logout()
+
+
+@app.post('/register')
+async def register(create_user: CreateUser) -> Response:
+    user = await auth_service.create_user(create_user.dict())
+    return Response(status_code=status.HTTP_201_CREATED,
+                    headers={'location': f'/{user.id}'})
 
 handler = Mangum(app)
+
+
+class ErrorResponse(CamelModel):
+    status: int
+    id: str(uuid.uuid4())
+    message: str
+
+
+class ValidationErrorResponse(ErrorResponse):
+    errors: List[dict]
+
+
+@app.exception_handler(ClientError)
+async def client_error_handler(request: Request, error: ClientError) -> JSONResponse:
+    error_id = uuid.uuid4()
+    error_message = str(error)
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    logger.error(
+        f'{error_message} with status_code={status_code}, error_id={error_id} and request={request}')
+    return JSONResponse(
+        content=jsonable_encoder(ErrorResponse(
+            status=status_code, id=error_id, message=error_message)),
+        status_code=status_code
+    )
+
+
+@app.exception_handler(HTTPException)
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, error: HTTPException) -> JSONResponse:
+    error_id = uuid.uuid4()
+    logger.error(
+        f'{error.detail} with status_code={error.status_code}, error_id={error_id} and request={request}')
+    return JSONResponse(
+        content=jsonable_encoder(ErrorResponse(
+            status=error.status_code, id=error_id, message=error.detail)),
+        status_code=error.status_code
+    )
+
+
+async def validation_error_handler(request: Request, error: ValidationError) -> JSONResponse:
+    error_id = uuid.uuid4()
+    error_message = str(error)
+    status_code = status.HTTP_400_BAD_REQUEST
+    logger.error(
+        f'{error_message} with status_code={status_code}, error_id={error_id} and request={request}')
+    return JSONResponse(
+        content=jsonable_encoder(
+            ValidationErrorResponse(
+                status=status_code,
+                id=error_id,
+                message=str(error),
+                errors=error.errors())),
+        status_code=status_code)
 
 if __name__ == '__main__':
     uvicorn.run('app.main:app', host='localhost', port=3000, reload=True)
