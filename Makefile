@@ -14,4 +14,4 @@ sls-deploy:
 	pipenv run sls deploy
 
 test:
-	pipenv run pytest --cache-clear --cov-report term --cov=app/
+	pipenv run pytest --cache-clear --cov-report=term --cov=app/
