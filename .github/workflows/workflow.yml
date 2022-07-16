@@ -24,19 +24,6 @@ jobs:
     - name: Analyze code using Pycodestyle
       run: |
         pipenv run pycodestyle --ignore=E501 app/ tests/
-    - name: Running tests with Pytest and generate coverage
-      run: |
-        pipenv run pytest --cov-report=term --cov-report=xml:$Coverage_File --cov=app
-      env:
-        AWS_DEFAULT_REGION: eu-central-1
-        app_name: ${{ github.event.repository.name }}
-        app_stage: test
-        app_timezone: Europe/Budapest
-        jwt_secret: x4mfd4KMaY5Mc6vIcTVJxAouH4CnfPsz
-        cache_service_base_url: https://localhost
-    - name: Fix source path(s) in coverage.xml
-      run: |
-        python utils/coverage.py --coverage-file coverage.xml --find $GITHUB_WORKSPACE --replace /github/workspace
     - name: Scan with Sonar scanner
       uses: sonarsource/sonarqube-scan-action@master
       with:
