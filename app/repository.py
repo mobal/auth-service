@@ -1,3 +1,4 @@
+from curses import erasechar
 from http.client import HTTPException
 import uuid
 import pendulum
@@ -17,7 +18,7 @@ class UserRepository:
         settings = Settings()
         session = boto3.Session()
         dynamodb = session.resource('dynamodb')
-        self.table = dynamodb.Table(f'{settings.app_name}-users')
+        self.table = dynamodb.Table(f'{settings.app_stage}-users')
 
     async def create_user(self, data: dict) -> User:
         user = User(
@@ -40,6 +41,15 @@ class UserRepository:
         user.deleted_at = pendulum.now().to_iso8601_string()
         self.table.put_item(user)
         self._logger.info(f'User successfully deleted with uuid={uuid}')
+
+    async def get_by_email(self, email: str) -> User:
+        response = self.table.scan(FilterExpression=Attr(
+            'email').eq(email) & Attr('deleted_at').eq(None))
+        if response['Count'] != 0:
+            return User.parse_obj(response['Items'][0])
+        error_message = f'The requested user was not found with email={email}'
+        self._logger.error(error_message)
+        raise HTTPException(status.HTTP_404_NOT_FOUND, error_message)
 
     async def get_by_id(self, uuid: str) -> User:
         response = self.table.query(
