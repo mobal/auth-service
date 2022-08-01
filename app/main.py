@@ -26,12 +26,12 @@ auth_service = AuthService()
 jwt_bearer = JWTBearer()
 
 
-@app.post('/login', status_code=status.HTTP_200_OK)
+@app.post('/api/v1/login', status_code=status.HTTP_200_OK)
 async def login(body: Login) -> Token:
     return await auth_service.login(body.email, body.password)
 
 
-@app.get('/logout', dependencies=[Depends(jwt_bearer)],
+@app.get('/api/v1/logout', dependencies=[Depends(jwt_bearer)],
          status_code=status.HTTP_204_NO_CONTENT)
 async def logout():
     await auth_service.logout(jwt_bearer.decoded_token)
@@ -51,7 +51,7 @@ class ValidationErrorResponse(ErrorResponse):
 
 
 @app.exception_handler(ClientError)
-async def client_error_handler(error: ClientError) -> JSONResponse:
+async def client_error_handler(request: Request, error: ClientError) -> JSONResponse:
     error_id = uuid.uuid4()
     error_message = str(error)
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
