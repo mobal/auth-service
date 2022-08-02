@@ -30,6 +30,11 @@ class JWTBearer(HTTPBearer):
                     detail='Invalid authentication token')
             else:
                 return self.decoded_token
+        else:
+            self._logger.error(f'Credentials missing during authentication')
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail='Not authenticated')
 
     async def _validate_token(self, token: str) -> bool:
         try:

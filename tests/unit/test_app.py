@@ -1,12 +1,8 @@
-import uuid
-
-import pendulum
 import pytest
 from botocore.exceptions import ClientError
 from starlette import status
 from starlette.testclient import TestClient
 
-from app.models import JWTToken, User
 from app.services import AuthService
 
 
@@ -30,32 +26,9 @@ class TestApp:
         return {'email': 'root@netcode.hu', 'password': 'root'}
 
     @pytest.fixture
-    def jwt_token(self, user) -> JWTToken:
-        iat = pendulum.now()
-        exp = iat.add(hours=1)
-        return JWTToken(
-            exp=exp.int_timestamp,
-            iat=iat.int_timestamp,
-            jti=str(uuid.uuid4()),
-            sub=user
-        )
-
-    @pytest.fixture
     def test_client(self) -> TestClient:
         from app.main import app
         return TestClient(app, raise_server_exceptions=False)
-
-    @pytest.fixture
-    def user(self) -> User:
-        return User(
-            id=str(uuid.uuid4()),
-            display_name='root',
-            email='root@netcode.hu',
-            password='password',
-            roles=['root'],
-            username='root',
-            created_at=pendulum.now().to_iso8601_string()
-        )
 
     async def test_successfully_login(self, mocker, auth_service, credentials_dict, test_client):
         mocker.patch('app.services.AuthService.login', return_value=None)
