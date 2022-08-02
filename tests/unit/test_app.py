@@ -6,7 +6,6 @@ from botocore.exceptions import ClientError
 from starlette import status
 from starlette.testclient import TestClient
 
-from app.main import app
 from app.models import JWTToken, User
 from app.services import AuthService
 
@@ -43,6 +42,7 @@ class TestApp:
 
     @pytest.fixture
     def test_client(self) -> TestClient:
+        from app.main import app
         return TestClient(app, raise_server_exceptions=False)
 
     @pytest.fixture
