@@ -37,13 +37,13 @@ class TestCacheService:
         result = await cache_service.put(key_value['key'], key_value['value'], pendulum.now().int_timestamp)
         assert bool(result) is True
 
-    async def test_fail_to_put_key_value_due_bad_request(self, cache_service, key_value, settings, httpx_mock):
+    async def test_fail_to_put_key_value_due_empty_values(self, cache_service, key_value, settings, httpx_mock):
         httpx_mock.add_response(
             url=f'{settings.cache_service_base_url}/api/cache',
             status_code=status.HTTP_400_BAD_REQUEST,
             method='POST'
         )
-        result = await cache_service.put(key_value['key'], key_value['value'], pendulum.now().int_timestamp)
+        result = await cache_service.put('', '')
         assert bool(result) is False
 
     async def test_fail_to_get_key_value_due_invalid_id(self, cache_service, key_value, settings, httpx_mock):
