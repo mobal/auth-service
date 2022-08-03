@@ -7,7 +7,7 @@ import pytest as pytest
 from fastapi import HTTPException
 from starlette import status
 
-from app.models import User
+from app.models import User, JWTToken
 from app.repository import UserRepository
 from app.services import AuthService
 
@@ -19,6 +19,17 @@ class TestAuthService:
     @pytest.fixture
     def auth_service(self) -> AuthService:
         return AuthService()
+
+    @pytest.fixture
+    def jwt_token(self, user) -> JWTToken:
+        iat = pendulum.now()
+        exp = iat.add(hours=1)
+        return JWTToken(
+            exp=exp.int_timestamp,
+            iat=iat.int_timestamp,
+            jti=str(uuid.uuid4()),
+            sub=user
+        )
 
     @pytest.fixture
     def user_repository(self) -> UserRepository:
@@ -72,3 +83,16 @@ class TestAuthService:
         assert status.HTTP_401_UNAUTHORIZED == excinfo.value.status_code
         assert 'Invalid email or password' == excinfo.value.detail
         user_repository.get_by_email.assert_called_once_with(user.email)
+
+    async def test_successfully_logout(self, mocker, auth_service, cache_service, jwt_token):
+        mocker.patch('app.services.CacheService.put', return_value=True)
+        await auth_service.logout(jwt_token)
+        cache_service.put.assert_called_once_with(f'jti_{jwt_token.jti}', jwt_token.dict(), jwt_token.exp)
+
+    async def test_fail_to_logout_due_cache_returns_false(self, mocker, auth_service, cache_service, jwt_token):
+        mocker.patch('app.services.CacheService.put', return_value=False)
+        with pytest.raises(HTTPException) as excinfo:
+            await auth_service.logout(jwt_token)
+        assert status.HTTP_500_INTERNAL_SERVER_ERROR == excinfo.value.status_code
+        assert 'Internal Server Error' == excinfo.value.detail
+        cache_service.put.assert_called_once_with(f'jti_{jwt_token.jti}', jwt_token.dict(), jwt_token.exp)
