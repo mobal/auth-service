@@ -9,8 +9,13 @@ uvicorn = "==0.17.6"
 mangum = "==0.15.0"
 pendulum = "==2.1.2"
 python-dotenv = "==0.20.0"
-boto3 = "==1.24.2"
+boto3 = "==1.24.31"
 fastapi-camelcase = "==1.0.5"
+pydantic = {extras = ["email"], version = "1.9.1"}
+bcrypt = "==3.2.2"
+pyjwt = "==2.4.0"
+pycodestyle = "==2.8.0"
+httpx = "==0.23.0"
 
 [dev-packages]
 pytest = "==7.1.2"
@@ -19,6 +24,8 @@ pytest-cov = "==3.0.0"
 pytest-dotenv = "==0.5.2"
 pytest-mock = "==3.7.0"
 moto = "==3.1.14"
+autopep8 = "==1.6.0"
+pytest-httpx = "==0.21.0"
 
 [requires]
 python_version = "3.9"
