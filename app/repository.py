@@ -1,4 +1,3 @@
-from curses import erasechar
 from http.client import HTTPException
 import uuid
 import pendulum
@@ -43,8 +42,9 @@ class UserRepository:
         self._logger.info(f'User successfully deleted with uuid={uuid}')
 
     async def get_by_email(self, email: str) -> User:
-        response = self.table.scan(FilterExpression=Attr(
-            'email').eq(email) & Attr('deleted_at').eq(None))
+        response = self.table.scan(
+            FilterExpression=Attr('email').eq(email) & Attr('deleted_at').eq(None)
+        )
         if response['Count'] != 0:
             return User.parse_obj(response['Items'][0])
         error_message = f'The requested user was not found with email={email}'
