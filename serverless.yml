@@ -16,6 +16,9 @@ functions:
       APP_NAME: ${env:APP_NAME}
       APP_STAGE: ${env:APP_STAGE}
       APP_TIMEZONE: ${env:APP_TIMEZONE}
+      CACHE_SERVICE_BASE_URL: ${env:CACHE_SERVICE_BASE_URL}
+      JWT_SECRET: ${env:JWT_SECRET}
+      JWT_TOKEN_LIFETIME: ${env:JWT_TOKEN_LIFETIME}
     events:
       - httpApi: '*'
     handler: app.main.handler
@@ -47,5 +50,6 @@ provider:
           Action:
             - dynamodb:PutItem
             - dynamodb:Query
+            - dynamodb:Scan
           Resource: ${env:AWS_ARN_DYNAMODB}
 useDotenv: true

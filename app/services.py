@@ -1,8 +1,9 @@
 import logging
 import uuid
 from typing import Optional, Any
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHash, VerifyMismatchError
 
-import bcrypt
 import httpx
 import jwt
 import pendulum
@@ -43,6 +44,7 @@ class AuthService:
     def __init__(self):
         self._logger = logging.getLogger()
         self.cache_service = CacheService()
+        self.password_hasher = PasswordHasher()
         self.settings = Settings()
         self.user_repository = UserRepository()
 
@@ -65,13 +67,14 @@ class AuthService:
 
     async def login(self, email: str, password: str) -> Token:
         user = await self.user_repository.get_by_email(email)
-        if bcrypt.checkpw(
-                password.encode('utf-8'),
-                user.password.encode('utf-8')):
+        try:
+            self.password_hasher.verify(user.password, password)
             return Token(token=await self._generate_token(await self._transform_user(user.dict())))
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid email or password')
+        except (InvalidHash, VerifyMismatchError) as err:
+            self._logger.error(err)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail='Invalid email or password')
 
     async def logout(self, jwt_token: JWTToken):
         result = await self.cache_service.put(

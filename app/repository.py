@@ -1,4 +1,3 @@
-from curses import erasechar
 from http.client import HTTPException
 import uuid
 import pendulum
