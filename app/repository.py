@@ -21,8 +21,7 @@ class UserRepository:
 
     async def create_user(self, data: dict) -> User:
         user = User(
-            id=str(
-                uuid.uuid4()),
+            id=str(uuid.uuid4()),
             display_name=data['display_name'],
             email=data['email'],
             password=data['password'],
@@ -30,7 +29,8 @@ class UserRepository:
             username=data['username'],
             created_at=pendulum.now().to_iso8601_string(),
             deleted_at=None,
-            updated_at=None)
+            updated_at=None,
+        )
         self.table.put_item(user)
         self._logger.info(f'User successfully created user={user}')
         return user
@@ -42,8 +42,9 @@ class UserRepository:
         self._logger.info(f'User successfully deleted with uuid={uuid}')
 
     async def get_by_email(self, email: str) -> User:
-        response = self.table.scan(FilterExpression=Attr(
-            'email').eq(email) & Attr('deleted_at').eq(None))
+        response = self.table.scan(
+            FilterExpression=Attr('email').eq(email) & Attr('deleted_at').eq(None)
+        )
         if response['Count'] != 0:
             return User.parse_obj(response['Items'][0])
         error_message = f'The requested user was not found with email={email}'
@@ -53,7 +54,7 @@ class UserRepository:
     async def get_by_id(self, uuid: str) -> User:
         response = self.table.query(
             KeyConditionExpression=Key('id').eq(uuid),
-            FilterExpression=Attr('deleted_at').eq(None)
+            FilterExpression=Attr('deleted_at').eq(None),
         )
         if response['Count'] != 0:
             return User.parse_obj(response['Items'][0])
@@ -66,5 +67,4 @@ class UserRepository:
         user = user.copy(update=data)
         user.updated_at = pendulum.now().to_iso8601_string()
         self.table.put_item(user)
-        self._logger.info(
-            f'User with uuid={uuid} successfully updated data={data}')
+        self._logger.info(f'User with uuid={uuid} successfully updated data={data}')
