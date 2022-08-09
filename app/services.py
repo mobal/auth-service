@@ -78,7 +78,7 @@ class AuthService:
                     await self._transform_user(user.dict())
                 )
             )
-        except (InvalidHash, VerifyMismatchError) as err:
+        except (InvalidHash, VerifyMismatchError):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail='Invalid email or password',
