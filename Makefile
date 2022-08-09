@@ -1,10 +1,10 @@
 autopep8:
 	pipenv run autopep8 --in-place --aggressive --aggressive --recursive app/ tests/
 
-install:
-	pipenv install
+black:
+	pipenv run black app tests
 
-install-dev:
+install:
 	pipenv install --dev
 
 pycodestyle:
