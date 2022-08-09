@@ -10,8 +10,5 @@ install-dev:
 pycodestyle:
 	pipenv run pycodestyle --ignore=E501 app/ tests/
 
-sls-deploy:
-	pipenv run sls deploy
-
 test:
 	pipenv run pytest --cache-clear --cov-report=term --cov=app/
