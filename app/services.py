@@ -52,8 +52,8 @@ class AuthService:
         self.user_repository = UserRepository()
 
     async def _generate_token(self, payload: dict) -> str:
-        exp = pendulum.now().add(seconds=self.settings.jwt_token_lifetime)
         iat = pendulum.now()
+        exp = iat.add(seconds=self.settings.jwt_token_lifetime)
         return jwt.encode(
             JWTToken(
                 exp=exp.int_timestamp,
