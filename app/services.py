@@ -71,7 +71,6 @@ class AuthService:
             self.password_hasher.verify(user.password, password)
             return Token(token=await self._generate_token(await self._transform_user(user.dict())))
         except (InvalidHash, VerifyMismatchError) as err:
-            self._logger.error(err)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail='Invalid email or password')
