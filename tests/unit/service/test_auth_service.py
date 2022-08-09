@@ -63,6 +63,10 @@ class TestAuthService:
         user_dict = user.dict()
         del user_dict['password']
         assert user_dict == decoded_token['sub']
+        assert (
+            pendulum.from_timestamp(decoded_token.get('exp'))
+            - pendulum.from_timestamp(decoded_token.get('iat'))
+        ).in_words() == '1 hour'
         user_repository.get_by_email.assert_called_once_with(user.email)
 
     async def test_fail_to_login_due_user_not_found_by_email(
