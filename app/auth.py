@@ -24,25 +24,28 @@ class JWTBearer(HTTPBearer):
         if credentials:
             if not await self._validate_token(credentials.credentials):
                 self._logger.error(
-                    f'Invalid authentication token credentials={credentials}')
+                    f"Invalid authentication token credentials={credentials}"
+                )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail='Invalid authentication token')
+                    detail="Invalid authentication token",
+                )
             else:
                 return self.decoded_token
         else:
-            self._logger.error(f'Credentials missing during authentication')
+            self._logger.error(f"Credentials missing during authentication")
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail='Not authenticated')
+                status_code=status.HTTP_403_FORBIDDEN, detail="Not authenticated"
+            )
 
     async def _validate_token(self, token: str) -> bool:
         try:
-            self.decoded_token = JWTToken.parse_obj(jwt.decode(
-                token, self.settings.jwt_secret, algorithms='HS256'))
+            self.decoded_token = JWTToken.parse_obj(
+                jwt.decode(token, self.settings.jwt_secret, algorithms="HS256")
+            )
         except (DecodeError, ExpiredSignatureError) as err:
             self._logger.error(err)
             return False
-        if await self.cache_service.get(f'jti_{self.decoded_token.jti}') is None:
+        if await self.cache_service.get(f"jti_{self.decoded_token.jti}") is None:
             return True
         return False
