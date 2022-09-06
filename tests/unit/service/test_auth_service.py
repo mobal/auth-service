@@ -39,10 +39,6 @@ class TestAuthService:
         return PasswordHasher()
 
     @pytest.fixture
-    def user_repository(self) -> UserRepository:
-        return UserRepository()
-
-    @pytest.fixture
     def user(self, password_hasher: PasswordHasher) -> User:
         return User(
             id=str(uuid.uuid4()),
