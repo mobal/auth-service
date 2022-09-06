@@ -25,8 +25,8 @@ pytest-dotenv = "==0.5.2"
 pytest-mock = "==3.7.0"
 moto = "==3.1.14"
 autopep8 = "==1.6.0"
-pytest-httpx = "==0.21.0"
 black = "==22.6.0"
+respx = "==0.19.2"
 
 [requires]
 python_version = "3.9"
