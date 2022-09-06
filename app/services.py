@@ -8,14 +8,50 @@ import httpx
 import jwt
 import pendulum
 from fastapi import HTTPException
+from fastapi_camelcase import CamelModel
+from pydantic.main import BaseModel
+from pydantic.networks import EmailStr
 from starlette import status
 
-from app.models import Cache, JWTToken, Token
-from app.repository import UserRepository
+from app.exceptions import CacheServiceException, UserNotFoundException
+from app.repositories import UserRepository
 from app.settings import Settings
 
 
+class Cache(CamelModel):
+    key: str
+    value: Any
+    created_at: str
+    ttl: int
+
+
+class JWTToken(BaseModel):
+    exp: int
+    iat: int
+    iss: Optional[str]
+    jti: str
+    sub: Any
+
+
+class User(CamelModel):
+    id: str
+    display_name: str
+    email: EmailStr
+    password: str
+    roles: list[str]
+    username: str
+    created_at: str
+    deleted_at: Optional[str]
+    updated_at: Optional[str]
+
+
+class Token(CamelModel):
+    token: str
+
+
 class CacheService:
+    ERROR_MESSAGE_INTERNAL_SERVER_ERROR = 'Internal Server Error'
+
     def __init__(self):
         self._logger = logging.getLogger()
         self.settings = Settings()
@@ -27,7 +63,10 @@ class CacheService:
             )
         if response.status_code == status.HTTP_200_OK:
             return Cache.parse_obj(response.json())
-        return None
+        elif response.status_code == status.HTTP_404_NOT_FOUND:
+            return None
+        self._logger.error(f'Failed to get cache {response=}')
+        raise CacheServiceException(detail=self.ERROR_MESSAGE_INTERNAL_SERVER_ERROR)
 
     async def put(self, key: str, value: Any, ttl: int = 0):
         async with httpx.AsyncClient() as client:
@@ -36,13 +75,14 @@ class CacheService:
                 json={'key': key, 'value': value, 'ttl': ttl},
             )
         if response.status_code == status.HTTP_201_CREATED:
-            return True
-        self._logger.error(f'Failed to cache key={key}, value={value}, ttl={ttl}')
-        return False
+            self._logger.info(f'Cache successfully created {key=} {value=} {ttl=}')
+        else:
+            self._logger.error(f'Failed to put cache {key=} {value=} {ttl=}')
+            raise CacheServiceException(detail=self.ERROR_MESSAGE_INTERNAL_SERVER_ERROR)
 
 
 class AuthService:
-    USER_KEYS_TO_REMOVE = ['password']
+    ERROR_MESSAGE_USER_NOT_FOUND = 'The requested user was not found'
 
     def __init__(self):
         self._logger = logging.getLogger()
@@ -64,32 +104,21 @@ class AuthService:
             self.settings.jwt_secret,
         )
 
-    async def _transform_user(self, user_dict: dict) -> dict:
-        for k in self.USER_KEYS_TO_REMOVE:
-            user_dict.pop(k, None)
-        return user_dict
-
     async def login(self, email: str, password: str) -> Token:
-        user = await self.user_repository.get_by_email(email)
+        item = await self.user_repository.get_by_email(email)
+        if item is None:
+            raise UserNotFoundException(self.ERROR_MESSAGE_USER_NOT_FOUND)
         try:
-            self.password_hasher.verify(user.password, password)
-            return Token(
-                token=await self._generate_token(
-                    await self._transform_user(user.dict())
-                )
-            )
+            self.password_hasher.verify(item['password'], password)
+            del item['password']
+            return Token(token=await self._generate_token(item))
         except (InvalidHash, VerifyMismatchError):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail='Invalid email or password',
+                detail='Unauthorized',
             )
 
     async def logout(self, jwt_token: JWTToken):
-        result = await self.cache_service.put(
+        await self.cache_service.put(
             f'jti_{jwt_token.jti}', jwt_token.dict(), jwt_token.exp
         )
-        if result is False:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail='Internal Server Error',
-            )

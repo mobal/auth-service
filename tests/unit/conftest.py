@@ -6,8 +6,7 @@ import pytest as pytest
 from moto import mock_dynamodb
 
 from app.auth import JWTBearer
-from app.models import JWTToken, User
-from app.services import CacheService
+from app.services import CacheService, JWTToken, User
 
 
 @pytest.fixture
