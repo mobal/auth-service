@@ -80,3 +80,19 @@ class TestCacheService:
         )
         assert await cache_service.get(self.key_value['key']) is None
         assert 1 == route.call_count
+
+    async def test_fail_to_get_key_value_due_unexpected_return_value(
+        self, cache_service: CacheService, settings: Settings, respx_mock: MockRouter
+    ):
+        route = respx_mock.get(
+            f'{settings.cache_service_base_url}/api/cache/{self.key_value["key"]}'
+        ).mock(
+            Response(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            ),
+        )
+        with pytest.raises(CacheServiceException) as excinfo:
+            await cache_service.get(self.key_value['key'])
+        assert CacheServiceException.__name__ == excinfo.typename
+        assert status.HTTP_500_INTERNAL_SERVER_ERROR == excinfo.value.status_code
+        assert 1 == route.call_count
