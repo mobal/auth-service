@@ -1,9 +1,10 @@
 import logging
 import uuid
+from contextvars import Token
 from typing import List, Dict
 
 import uvicorn
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -11,17 +12,23 @@ from fastapi_camelcase import CamelModel
 from mangum import Mangum
 from pydantic import ValidationError
 from starlette import status
-from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.exceptions import (
+    HTTPException as StarletteHTTPException,
+    ExceptionMiddleware,
+)
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import JSONResponse
 
 from app.auth import JWTBearer
-from app.models import Token
 from app.schemas import Login
 from app.services import AuthService
 
 logger = logging.getLogger()
 
-app = FastAPI()
+app = FastAPI(debug=True)
+app.add_middleware(GZipMiddleware)
+app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
+
 auth_service = AuthService()
 jwt_bearer = JWTBearer()
 
@@ -41,6 +48,7 @@ async def logout():
 
 
 handler = Mangum(app)
+handler.__name__ = 'handler'
 
 
 class ErrorResponse(CamelModel):
@@ -53,7 +61,9 @@ class ValidationErrorResponse(ErrorResponse):
     errors: List[Dict]
 
 
+@app.exception_handler(BotoCoreError)
 @app.exception_handler(ClientError)
+@app.exception_handler(Exception)
 async def client_error_handler(request: Request, error: ClientError) -> JSONResponse:
     error_id = uuid.uuid4()
     error_message = str(error)
