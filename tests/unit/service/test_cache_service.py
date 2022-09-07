@@ -1,72 +1,98 @@
 import uuid
 import pendulum
 import pytest
+from httpx import Response
+from respx import MockRouter
 from starlette import status
+
+from app.exceptions import CacheServiceException
+from app.services import CacheService
+from app.settings import Settings
 
 
 @pytest.mark.asyncio
 class TestCacheService:
-    @pytest.fixture
-    def key_value(self) -> dict:
-        now = pendulum.now()
-        return {
-            'key': str(uuid.uuid4()),
-            'value': 'Some random value',
-            'created_at': now.to_iso8601_string(),
-            'ttl': now.int_timestamp,
-        }
+    key_value = {
+        'key': str(uuid.uuid4()),
+        'value': 'Some random value',
+        'created_at': pendulum.now().to_iso8601_string(),
+        'ttl': pendulum.now().int_timestamp,
+    }
 
     async def test_successfully_get_key_value(
-        self, cache_service, key_value, settings, httpx_mock
+        self,
+        cache_service: CacheService,
+        settings: Settings,
+        respx_mock: MockRouter,
     ):
-        httpx_mock.add_response(
-            url=f'{settings.cache_service_base_url}/api/cache/{key_value["key"]}',
-            status_code=status.HTTP_200_OK,
-            json=key_value,
+        route = respx_mock.get(
+            f'{settings.cache_service_base_url}/api/cache/{self.key_value["key"]}'
+        ).mock(
+            return_value=Response(status_code=status.HTTP_200_OK, json=self.key_value)
         )
-        result = await cache_service.get(key_value['key'])
+        result = await cache_service.get(self.key_value['key'])
         assert bool(result) is True
-        assert key_value['key'] == result.key
-        assert key_value['created_at'] == result.created_at
-        assert key_value['value'] == result.value
-        assert key_value['ttl'] == result.ttl
+        assert self.key_value['key'] == result.key
+        assert self.key_value['created_at'] == result.created_at
+        assert self.key_value['value'] == result.value
+        assert self.key_value['ttl'] == result.ttl
+        assert 1 == route.call_count
 
     async def test_successfully_put_key_value(
-        self, cache_service, key_value, settings, httpx_mock
+        self, cache_service: CacheService, settings: Settings, respx_mock: MockRouter
     ):
-        httpx_mock.add_response(
-            url=f'{settings.cache_service_base_url}/api/cache',
-            status_code=status.HTTP_201_CREATED,
-            method='POST',
+        route = respx_mock.post(f'{settings.cache_service_base_url}/api/cache').mock(
+            Response(status_code=status.HTTP_201_CREATED)
         )
-        result = await cache_service.put(
-            key_value['key'], key_value['value'], pendulum.now().int_timestamp
+        await cache_service.put(
+            self.key_value['key'], self.key_value['value'], pendulum.now().int_timestamp
         )
-        assert bool(result) is True
+        assert 1 == route.call_count
 
     async def test_fail_to_put_key_value_due_empty_values(
-        self, cache_service, key_value, settings, httpx_mock
+        self, cache_service: CacheService, settings: Settings, respx_mock: MockRouter
     ):
-        httpx_mock.add_response(
-            url=f'{settings.cache_service_base_url}/api/cache',
-            status_code=status.HTTP_400_BAD_REQUEST,
-            method='POST',
+        route = respx_mock.post(f'{settings.cache_service_base_url}/api/cache').mock(
+            Response(status_code=status.HTTP_400_BAD_REQUEST)
         )
-        result = await cache_service.put('', '')
-        assert bool(result) is False
+        with pytest.raises(CacheServiceException) as excinfo:
+            await cache_service.put('', '')
+        assert CacheServiceException.__name__ == excinfo.typename
+        assert status.HTTP_500_INTERNAL_SERVER_ERROR == excinfo.value.status_code
+        assert 'Internal Server Error' == excinfo.value.detail
+        assert 1 == route.call_count
 
     async def test_fail_to_get_key_value_due_invalid_id(
-        self, cache_service, key_value, settings, httpx_mock
+        self, cache_service: CacheService, settings: Settings, respx_mock: MockRouter
     ):
-        message = f'The requested value was not found for key={key_value["key"]}'
-        httpx_mock.add_response(
-            url=f'{settings.cache_service_base_url}/api/cache/{key_value["key"]}',
-            status_code=status.HTTP_404_NOT_FOUND,
-            json={
-                'status': status.HTTP_404_NOT_FOUND,
-                'id': key_value['key'],
-                'message': message,
-            },
+        message = f'The requested value was not found for key={self.key_value["key"]}'
+        route = respx_mock.get(
+            f'{settings.cache_service_base_url}/api/cache/{self.key_value["key"]}'
+        ).mock(
+            Response(
+                status_code=status.HTTP_404_NOT_FOUND,
+                json={
+                    'status': status.HTTP_404_NOT_FOUND,
+                    'id': self.key_value['key'],
+                    'message': message,
+                },
+            ),
         )
-        result = await cache_service.get(key_value['key'])
-        assert result is None
+        assert await cache_service.get(self.key_value['key']) is None
+        assert 1 == route.call_count
+
+    async def test_fail_to_get_key_value_due_unexpected_return_value(
+        self, cache_service: CacheService, settings: Settings, respx_mock: MockRouter
+    ):
+        route = respx_mock.get(
+            f'{settings.cache_service_base_url}/api/cache/{self.key_value["key"]}'
+        ).mock(
+            Response(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            ),
+        )
+        with pytest.raises(CacheServiceException) as excinfo:
+            await cache_service.get(self.key_value['key'])
+        assert CacheServiceException.__name__ == excinfo.typename
+        assert status.HTTP_500_INTERNAL_SERVER_ERROR == excinfo.value.status_code
+        assert 1 == route.call_count
