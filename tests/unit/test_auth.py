@@ -13,23 +13,27 @@ from app.settings import Settings
 NOT_AUTHENTICATED = 'Not authenticated'
 
 
-@pytest.fixture
-def empty_request() -> Mock:
-    request = Mock()
-    request.headers = {}
-    return request
-
-
-@pytest.fixture
-def valid_request(empty_request: Mock, jwt_token: JWTToken, settings: Settings) -> Mock:
-    empty_request.headers = {
-        'Authorization': f'Bearer {jwt.encode(jwt_token.dict(), settings.jwt_secret)}'
-    }
-    return empty_request
-
-
 @pytest.mark.asyncio
 class TestJWTAuth:
+    @pytest.fixture
+    def empty_request(self) -> Mock:
+        request = Mock()
+        request.headers = {}
+        return request
+
+    @pytest.fixture
+    def jwt_auth(self) -> JWTBearer:
+        return JWTBearer()
+
+    @pytest.fixture
+    def valid_request(
+        self, empty_request: Mock, jwt_token: JWTToken, settings: Settings
+    ) -> Mock:
+        empty_request.headers = {
+            'Authorization': f'Bearer {jwt.encode(jwt_token.dict(), settings.jwt_secret)}'
+        }
+        return empty_request
+
     async def test_fail_to_authorize_request_due_to_authorization_header_is_empty(
         self, empty_request: Mock, jwt_bearer: JWTBearer
     ):

@@ -1,4 +1,3 @@
-import logging
 import uuid
 from typing import Optional, Any
 from argon2 import PasswordHasher
@@ -7,6 +6,7 @@ from argon2.exceptions import InvalidHash, VerifyMismatchError
 import httpx
 import jwt
 import pendulum
+from aws_lambda_powertools import Logger, Tracer
 from fastapi import HTTPException
 from fastapi_camelcase import CamelModel
 from pydantic.main import BaseModel
@@ -16,6 +16,8 @@ from starlette import status
 from app.exceptions import CacheServiceException, UserNotFoundException
 from app.repositories import UserRepository
 from app.settings import Settings
+
+tracer = Tracer()
 
 
 class Cache(CamelModel):
@@ -53,9 +55,10 @@ class CacheService:
     ERROR_MESSAGE_INTERNAL_SERVER_ERROR = 'Internal Server Error'
 
     def __init__(self):
-        self._logger = logging.getLogger()
+        self._logger = Logger()
         self.settings = Settings()
 
+    @tracer.capture_method
     async def get(self, key: str) -> Optional[Cache]:
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -68,6 +71,7 @@ class CacheService:
         self._logger.error(f'Failed to get cache {response=}')
         raise CacheServiceException(detail=self.ERROR_MESSAGE_INTERNAL_SERVER_ERROR)
 
+    @tracer.capture_method
     async def put(self, key: str, value: Any, ttl: int = 0):
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -85,12 +89,13 @@ class AuthService:
     ERROR_MESSAGE_USER_NOT_FOUND = 'The requested user was not found'
 
     def __init__(self):
-        self._logger = logging.getLogger()
+        self._logger = Logger()
         self.cache_service = CacheService()
         self.password_hasher = PasswordHasher()
         self.settings = Settings()
         self.user_repository = UserRepository()
 
+    @tracer.capture_method
     async def _generate_token(self, payload: dict) -> str:
         iat = pendulum.now()
         exp = iat.add(seconds=self.settings.jwt_token_lifetime)
@@ -104,6 +109,7 @@ class AuthService:
             self.settings.jwt_secret,
         )
 
+    @tracer.capture_method
     async def login(self, email: str, password: str) -> Token:
         item = await self.user_repository.get_by_email(email)
         if item is None:
@@ -118,6 +124,7 @@ class AuthService:
                 detail='Unauthorized',
             )
 
+    @tracer.capture_method
     async def logout(self, jwt_token: JWTToken):
         await self.cache_service.put(
             f'jti_{jwt_token.jti}', jwt_token.dict(), jwt_token.exp

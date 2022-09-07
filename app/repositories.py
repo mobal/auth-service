@@ -1,8 +1,8 @@
 from typing import Optional
 
 import boto3
-import logging
 
+from aws_lambda_powertools import Logger
 from boto3.dynamodb.conditions import Attr, Key
 
 from app.settings import Settings
@@ -10,7 +10,7 @@ from app.settings import Settings
 
 class UserRepository:
     def __init__(self):
-        self._logger = logging.getLogger()
+        self._logger = Logger()
         settings = Settings()
         session = boto3.Session()
         dynamodb = session.resource('dynamodb')
