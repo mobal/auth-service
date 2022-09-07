@@ -1,7 +1,7 @@
-import logging
 from typing import Optional
 
 import jwt
+from aws_lambda_powertools import Logger, Tracer
 from fastapi import Request
 from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPBearer
@@ -11,11 +11,13 @@ from starlette import status
 from app.services import CacheService, JWTToken
 from app.settings import Settings
 
+tracer = Tracer()
+
 
 class JWTBearer(HTTPBearer):
     def __init__(self, auto_error: bool = True):
         super().__init__(auto_error=auto_error)
-        self._logger = logging.getLogger()
+        self._logger = Logger()
         self.auto_error = auto_error
         self.cache_service = CacheService()
         self.settings = Settings()
@@ -36,6 +38,7 @@ class JWTBearer(HTTPBearer):
         else:
             return None
 
+    @tracer.capture_lambda_handler
     async def _validate_token(self, token: str) -> bool:
         try:
             decoded_token = JWTToken(

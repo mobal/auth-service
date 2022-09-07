@@ -16,6 +16,7 @@ pyjwt = "==2.4.0"
 pycodestyle = "==2.8.0"
 httpx = "==0.23.0"
 argon2-cffi = "==21.3.0"
+aws-lambda-powertools = "==1.28.0"
 
 [dev-packages]
 pytest = "==7.1.2"
