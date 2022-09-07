@@ -6,8 +6,9 @@ plugins:
 custom:
   pythonRequirements:
     dockerImage: mlupin/docker-lambda:python3.9-build
-    dockerizePip: false
+    dockerizePip: non-linux
     layer: true
+    slim: true
     strip: false
     zip: true
   serverless-offline:
@@ -34,15 +35,8 @@ package:
     - '!npm-debug.log'
     - '!.serverless/**'
     - '!.serverless_plugins/**'
-    - '!.github/**'
-    - '!.idea/**'
-    - '!.pytest_cache/**'
-    - '!.vscode/**'
     - '!.venv/**'
-    - '!node_modules/**'
-    - '!htmlcov/**'
-    - '!.coverage'
-    - '!coverage.xml'
+  excludeDevDependencies: true
 provider:
   name: aws
   runtime: python3.9
