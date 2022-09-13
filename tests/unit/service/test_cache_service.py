@@ -30,12 +30,7 @@ class TestCacheService:
         ).mock(
             return_value=Response(status_code=status.HTTP_200_OK, json=self.key_value)
         )
-        result = await cache_service.get(self.key_value['key'])
-        assert bool(result) is True
-        assert self.key_value['key'] == result.key
-        assert self.key_value['created_at'] == result.created_at
-        assert self.key_value['value'] == result.value
-        assert self.key_value['ttl'] == result.ttl
+        assert await cache_service.get(self.key_value['key']) is True
         assert 1 == route.call_count
 
     async def test_successfully_put_key_value(
@@ -78,7 +73,7 @@ class TestCacheService:
                 },
             ),
         )
-        assert await cache_service.get(self.key_value['key']) is None
+        assert await cache_service.get(self.key_value['key']) is False
         assert 1 == route.call_count
 
     async def test_fail_to_get_key_value_due_unexpected_return_value(

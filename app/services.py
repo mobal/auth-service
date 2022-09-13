@@ -14,6 +14,7 @@ from pydantic.networks import EmailStr
 from starlette import status
 
 from app.exceptions import CacheServiceException, UserNotFoundException
+from app.middlewares import correlation_id
 from app.repositories import UserRepository
 from app.settings import Settings
 
@@ -53,29 +54,35 @@ class Token(CamelModel):
 
 class CacheService:
     ERROR_MESSAGE_INTERNAL_SERVER_ERROR = 'Internal Server Error'
+    X_CORRELATION_ID = 'X-Correlation-ID'
 
     def __init__(self):
         self._logger = Logger()
-        self.settings = Settings()
+        self._settings = Settings()
 
     @tracer.capture_method
-    async def get(self, key: str) -> Optional[Cache]:
+    async def get(self, key: str) -> Optional[bool]:
         async with httpx.AsyncClient() as client:
+            url = f'{self._settings.cache_service_base_url}/api/cache/{key}'
+            self._logger.debug(f'Get cache for {key=} {url=}')
             response = await client.get(
-                f'{self.settings.cache_service_base_url}/api/cache/{key}'
+                url, headers={self.X_CORRELATION_ID: correlation_id.get()}
             )
-        if response.status_code == status.HTTP_200_OK:
-            return Cache.parse_obj(response.json())
+        if response.is_success:
+            return True
         elif response.status_code == status.HTTP_404_NOT_FOUND:
-            return None
-        self._logger.error(f'Failed to get cache {response=}')
+            self._logger.debug(f'Cache was not found for {key=}')
+            return False
+        self._logger.error(f'Unexpected error {response=}')
         raise CacheServiceException(detail=self.ERROR_MESSAGE_INTERNAL_SERVER_ERROR)
 
     @tracer.capture_method
     async def put(self, key: str, value: Any, ttl: int = 0):
         async with httpx.AsyncClient() as client:
+            url = f'{self._settings.cache_service_base_url}/api/cache'
             response = await client.post(
-                f'{self.settings.cache_service_base_url}/api/cache',
+                url,
+                headers={self.X_CORRELATION_ID: correlation_id.get()},
                 json={'key': key, 'value': value, 'ttl': ttl},
             )
         if response.status_code == status.HTTP_201_CREATED:
