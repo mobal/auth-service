@@ -18,13 +18,15 @@ from starlette.exceptions import (
     ExceptionMiddleware,
 )
 from starlette.middleware.gzip import GZipMiddleware
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse
 
 from app.auth import JWTBearer
+from app.middlewares import CorrelationIdMiddleware
 from app.schemas import Login
 from app.services import AuthService
 
 app = FastAPI(debug=True)
+app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(GZipMiddleware)
 app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
 
@@ -56,22 +58,6 @@ async def login(body: Login) -> Token:
 async def logout():
     await auth_service.logout(jwt_bearer.decoded_token)
     metrics.add_metric(name='Logout', unit=MetricUnit.Count, value=1)
-
-
-@app.middleware('http')
-async def correlation_id_middleware(request: Request, call_next) -> Response:
-    correlation_id = request.headers.get('X-Correlation-ID')
-    if not correlation_id:
-        correlation_id = (
-            request.scope['aws_context'].aws_request_id
-            if request.scope.get('aws_context')
-            else str(uuid.uuid4())
-        )
-    logger.set_correlation_id(correlation_id)
-    tracer.put_annotation(key='correlation_id', value=correlation_id)
-    response = await call_next(request)
-    response.headers['X-Correlation-ID'] = correlation_id
-    return response
 
 
 class ErrorResponse(CamelModel):
