@@ -10,6 +10,7 @@ from app.services import AuthService, JWTToken
 @pytest.mark.asyncio
 class TestApp:
     BASE_URL = '/api/v1'
+    X_CORRELATION_ID = 'X-Correlation-ID'
 
     credentials = {'email': 'root@netcode.hu', 'password': '123456'}
 
@@ -43,6 +44,7 @@ class TestApp:
         mocker.patch('app.services.AuthService.login', return_value=jwt_token)
         response = test_client.post(f'{self.BASE_URL}/login', json=self.credentials)
         assert status.HTTP_200_OK == response.status_code
+        assert self.X_CORRELATION_ID in response.headers
         auth_service.login.assert_called_once_with(
             self.credentials['email'], self.credentials['password']
         )
@@ -50,6 +52,7 @@ class TestApp:
     async def test_fail_to_login_due_empty_body(self, test_client: TestClient):
         response = test_client.post(f'{self.BASE_URL}/login', json=None)
         assert status.HTTP_400_BAD_REQUEST == response.status_code
+        assert self.X_CORRELATION_ID in response.headers
 
     async def test_fail_to_login_due_invalid_credentials(self, test_client: TestClient):
         login_url = f'{self.BASE_URL}/login'
@@ -57,24 +60,33 @@ class TestApp:
         assert (
             status.HTTP_400_BAD_REQUEST == response.status_code
         ), 'empty email and password'
+        assert self.X_CORRELATION_ID in response.headers
+
         response = test_client.post(login_url, json={'email': 'asd', 'password': 'as'})
         assert (
             status.HTTP_400_BAD_REQUEST == response.status_code
         ), 'invalid email and password'
+        assert self.X_CORRELATION_ID in response.headers
+
         response = test_client.post(
             login_url, json={'email': 'asd', 'password': 'root'}
         )
         assert status.HTTP_400_BAD_REQUEST == response.status_code, 'invalid email'
+        assert self.X_CORRELATION_ID in response.headers
+
         response = test_client.post(
             login_url, json={'email': 'root@netcode.hu', 'password': ''}
         )
         assert status.HTTP_400_BAD_REQUEST == response.status_code, 'empty password'
+        assert self.X_CORRELATION_ID in response.headers
+
         response = test_client.post(
             login_url, json={'email': 'root@netcode.hu', 'password': 'as'}
         )
         assert (
             status.HTTP_400_BAD_REQUEST == response.status_code
         ), 'invalid password password length'
+        assert self.X_CORRELATION_ID in response.headers
 
     async def test_fail_to_login_due_client_error(
         self, mocker, auth_service: AuthService, test_client: TestClient
@@ -85,6 +97,7 @@ class TestApp:
         )
         response = test_client.post(f'{self.BASE_URL}/login', json=self.credentials)
         assert status.HTTP_500_INTERNAL_SERVER_ERROR == response.status_code
+        assert self.X_CORRELATION_ID in response.headers
         auth_service.login.assert_called_once_with(
             self.credentials['email'], self.credentials['password']
         )
@@ -99,6 +112,7 @@ class TestApp:
         mocker.patch('app.services.AuthService.logout', return_value=None)
         response = test_client_ex.get(f'{self.BASE_URL}/logout')
         assert status.HTTP_204_NO_CONTENT == response.status_code
+        assert self.X_CORRELATION_ID in response.headers
         auth_service.logout.assert_called_once_with(jwt_token)
 
     async def test_fail_to_logout(
@@ -114,5 +128,6 @@ class TestApp:
         )
         response = test_client_ex.get(f'{self.BASE_URL}/logout')
         assert status.HTTP_500_INTERNAL_SERVER_ERROR == response.status_code
+        assert self.X_CORRELATION_ID in response.headers
         assert 3 == len(response.json())
         auth_service.logout.assert_called_once_with(jwt_token)
