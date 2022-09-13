@@ -5,7 +5,7 @@ black:
 	pipenv run black --skip-string-normalization app/ tests/
 
 deploy:
-        pipenv run sls deploy
+	pipenv run sls deploy
 
 install:
 	pipenv install --dev
