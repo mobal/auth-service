@@ -1,7 +1,9 @@
 import uuid
 from contextvars import Token
+from inspect import isclass
 from typing import Dict, List
 
+import botocore
 import uvicorn
 from aws_lambda_powertools import Logger, Metrics, Tracer
 from aws_lambda_powertools.metrics import MetricUnit
@@ -22,23 +24,35 @@ from app.auth import JWTBearer
 from app.middlewares import CorrelationIdMiddleware
 from app.schemas import Login
 from app.services import AuthService
-
-app = FastAPI(debug=True)
-app.add_middleware(CorrelationIdMiddleware)
-app.add_middleware(GZipMiddleware)
-app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
+from app.settings import Settings
 
 auth_service = AuthService()
 jwt_bearer = JWTBearer()
 logger = Logger()
 metrics = Metrics()
+settings = Settings()
 tracer = Tracer()
+
+app = FastAPI(debug=settings.app_debug, title='AuthApp', version='1.0.0')
+app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(GZipMiddleware)
+app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
 
 handler = Mangum(app)
 handler.__name__ = 'handler'
 handler = tracer.capture_lambda_handler(handler)
-handler = logger.inject_lambda_context(handler, clear_state=True)
+handler = logger.inject_lambda_context(handler, clear_state=True, log_event=True)
 handler = metrics.log_metrics(handler, capture_cold_start_metric=True)
+
+
+class ErrorResponse(CamelModel):
+    status: int
+    id: uuid.UUID
+    message: str
+
+
+class ValidationErrorResponse(ErrorResponse):
+    errors: List[Dict]
 
 
 @app.post('/api/v1/login', status_code=status.HTTP_200_OK)
@@ -58,25 +72,14 @@ async def logout():
     metrics.add_metric(name='Logout', unit=MetricUnit.Count, value=1)
 
 
-class ErrorResponse(CamelModel):
-    status: int
-    id: uuid.UUID
-    message: str
-
-
-class ValidationErrorResponse(ErrorResponse):
-    errors: List[Dict]
-
-
-@app.exception_handler(BotoCoreError)
-@app.exception_handler(ClientError)
-@app.exception_handler(Exception)
-async def error_handler(request: Request, error: ClientError) -> JSONResponse:
+async def botocore_error_handler(
+    request: Request, error: BotoCoreError
+) -> JSONResponse:
     error_id = uuid.uuid4()
-    error_message = str(error)
+    error_message = str(error) if settings.app_debug else 'Internal Server Error'
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-    logger.error(f'{error_message} with status_code={status_code}, error_id={error_id}')
-    metrics.add_metric(name='ErrorHandler', unit=MetricUnit.Count, value=1)
+    logger.error(f'{str(error)} with {status_code=} and {error_id=}')
+    metrics.add_metric(name='BotocoreErrorHandler', unit=MetricUnit.Count, value=1)
     return JSONResponse(
         content=jsonable_encoder(
             ErrorResponse(status=status_code, id=error_id, message=error_message)
@@ -85,15 +88,21 @@ async def error_handler(request: Request, error: ClientError) -> JSONResponse:
     )
 
 
+for k, v in sorted(
+    filter(
+        lambda elem: isclass(elem[1]) and issubclass(elem[1], BotoCoreError),
+        botocore.exceptions.__dict__.items(),
+    )
+):
+    app.add_exception_handler(v, botocore_error_handler)
+
+
 @app.exception_handler(HTTPException)
-@app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(
     request: Request, error: HTTPException
 ) -> JSONResponse:
     error_id = uuid.uuid4()
-    logger.error(
-        f'{error.detail} with status_code={error.status_code}, error_id={error_id}'
-    )
+    logger.error(f'{error.detail} with {error.status_code=} and {error_id=}')
     metrics.add_metric(name='HttpExceptionHandler', unit=MetricUnit.Count, value=1)
     return JSONResponse(
         content=jsonable_encoder(
@@ -104,15 +113,16 @@ async def http_exception_handler(
 
 
 @app.exception_handler(RequestValidationError)
-@app.exception_handler(ValidationError)
-async def validation_error_handler(
-    request: Request, error: ValidationError
+async def request_validation_error_handler(
+    request: Request, error: RequestValidationError
 ) -> JSONResponse:
     error_id = uuid.uuid4()
     error_message = str(error)
-    status_code = status.HTTP_400_BAD_REQUEST
-    logger.error(f'{error_message} with status_code={status_code}, error_id={error_id}')
-    metrics.add_metric(name='ValidationErrorHandler', unit=MetricUnit.Count, value=1)
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    logger.error(f'{error_message} with {status_code=} and {error_id=}')
+    metrics.add_metric(
+        name='RequestValidationErrorHandler', unit=MetricUnit.Count, value=1
+    )
     return JSONResponse(
         content=jsonable_encoder(
             ValidationErrorResponse(
