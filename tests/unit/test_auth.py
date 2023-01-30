@@ -7,7 +7,7 @@ from starlette import status
 from starlette.requests import Request
 
 from app.auth import JWTBearer
-from app.services import JWTToken, CacheService
+from app.services import CacheService, JWTToken
 from app.settings import Settings
 
 NOT_AUTHENTICATED = 'Not authenticated'

@@ -1,15 +1,15 @@
 import uuid
-from argon2 import PasswordHasher
 
 import jwt
 import pendulum
 import pytest as pytest
+from argon2 import PasswordHasher
 from fastapi import HTTPException
 from starlette import status
 
-from app.exceptions import UserNotFoundException, CacheServiceException
+from app.exceptions import CacheServiceException, UserNotFoundException
 from app.repositories import UserRepository
-from app.services import AuthService, JWTToken, User, CacheService
+from app.services import AuthService, CacheService, JWTToken, User
 from app.settings import Settings
 
 
