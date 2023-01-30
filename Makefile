@@ -1,17 +1,16 @@
-autopep8:
-	pipenv run autopep8 --in-place --aggressive --aggressive --recursive app/ tests/
-
 black:
-	pipenv run black --skip-string-normalization app/ tests/
+	python3 -m pipenv run black --skip-string-normalization app/ tests/
 
 deploy:
-	pipenv run sls deploy
+	python3 -m pipenv run sls deploy
 
 install:
-	pipenv install --dev
+	python3 -m pipenv install --dev
 
 pycodestyle:
-	pipenv run pycodestyle --ignore=E501,W503 app/ tests/
+	python3 -m pipenv run pycodestyle --ignore=E501,W503 app/ tests/
 
+sort:
+	python3 -m pipenv run python -m isort --atomic app/ tests/
 test:
-	pipenv run pytest --cache-clear --cov-report=term --cov=app/
+	python3 -m pipenv run pytest --cache-clear --cov-report=term --cov=app/
