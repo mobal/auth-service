@@ -22,6 +22,7 @@ class JWTBearer(HTTPBearer):
         self.cache_service = CacheService()
         self.settings = Settings()
 
+    @tracer.capture_method
     async def __call__(self, request: Request) -> Optional[JWTToken]:
         credentials = await super(JWTBearer, self).__call__(request)
         if credentials:
@@ -47,7 +48,9 @@ class JWTBearer(HTTPBearer):
             if await self.cache_service.get(f'jti_{decoded_token.jti}') is None:
                 self.decoded_token = decoded_token
                 return True
-        except (DecodeError, ExpiredSignatureError) as err:
-            self._logger.error(f'{err=}')
-            return False
+            self._logger.debug(f'Token blacklisted {decoded_token=}')
+        except DecodeError as err:
+            self._logger.error(f'Error occurred during token decoding {err=}')
+        except ExpiredSignatureError as err:
+            self._logger.error(f'Expired signature {err=}')
         return False
