@@ -7,16 +7,14 @@ import botocore
 import uvicorn
 from aws_lambda_powertools import Logger, Metrics, Tracer
 from aws_lambda_powertools.metrics import MetricUnit
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import BotoCoreError
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi_camelcase import CamelModel
 from mangum import Mangum
-from pydantic import ValidationError
 from starlette import status
 from starlette.exceptions import ExceptionMiddleware
-from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import JSONResponse
 
