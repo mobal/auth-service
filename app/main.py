@@ -1,5 +1,4 @@
 import uuid
-from contextvars import Token
 from inspect import isclass
 from typing import Dict, List
 
@@ -14,19 +13,19 @@ from fastapi.exceptions import RequestValidationError
 from fastapi_camelcase import CamelModel
 from mangum import Mangum
 from starlette import status
-from starlette.exceptions import ExceptionMiddleware
+from starlette.middleware.exceptions import ExceptionMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import JSONResponse
 
 from app.auth import JWTBearer
 from app.middlewares import CorrelationIdMiddleware
 from app.schemas import Login
-from app.services import AuthService
+from app.services import AuthService, Token
 from app.settings import Settings
 
 auth_service = AuthService()
 jwt_bearer = JWTBearer()
-logger = Logger()
+logger = Logger(utc=True)
 metrics = Metrics()
 settings = Settings()
 tracer = Tracer()

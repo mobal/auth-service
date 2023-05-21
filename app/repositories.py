@@ -9,7 +9,7 @@ from app.settings import Settings
 
 class UserRepository:
     def __init__(self):
-        self._logger = Logger()
+        self._logger = Logger(utc=True)
         settings = Settings()
         session = boto3.Session()
         dynamodb = session.resource('dynamodb')

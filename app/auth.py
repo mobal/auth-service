@@ -17,7 +17,7 @@ tracer = Tracer()
 class JWTBearer(HTTPBearer):
     def __init__(self, auto_error: bool = True):
         super().__init__(auto_error=auto_error)
-        self._logger = Logger()
+        self._logger = Logger(utc=True)
         self.auto_error = auto_error
         self.cache_service = CacheService()
         self.settings = Settings()
@@ -45,7 +45,7 @@ class JWTBearer(HTTPBearer):
             decoded_token = JWTToken(
                 **jwt.decode(token, self.settings.jwt_secret, algorithms='HS256')
             )
-            if await self.cache_service.get(f'jti_{decoded_token.jti}') is None:
+            if await self.cache_service.get(f'jti_{decoded_token.jti}') is False:
                 self.decoded_token = decoded_token
                 return True
             self._logger.debug(f'Token blacklisted {decoded_token=}')

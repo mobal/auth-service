@@ -18,6 +18,7 @@ from app.middlewares import correlation_id
 from app.repositories import UserRepository
 from app.settings import Settings
 
+logger = Logger(utc=True)
 tracer = Tracer()
 
 
@@ -57,23 +58,22 @@ class CacheService:
     X_CORRELATION_ID = 'X-Correlation-ID'
 
     def __init__(self):
-        self._logger = Logger()
         self._settings = Settings()
 
     @tracer.capture_method
-    async def get(self, key: str) -> Optional[bool]:
+    async def get(self, key: str) -> bool:
         async with httpx.AsyncClient() as client:
             url = f'{self._settings.cache_service_base_url}/api/cache/{key}'
-            self._logger.debug(f'Get cache for {key=} {url=}')
+            logger.debug(f'Get cache for {key=} {url=}')
             response = await client.get(
                 url, headers={self.X_CORRELATION_ID: correlation_id.get()}
             )
         if response.is_success:
             return True
         elif response.status_code == status.HTTP_404_NOT_FOUND:
-            self._logger.debug(f'Cache was not found for {key=}')
+            logger.debug(f'Cache was not found for {key=}')
             return False
-        self._logger.error(f'Unexpected error {response=}')
+        logger.error(f'Unexpected error {response=}')
         raise CacheServiceException(detail=self.ERROR_MESSAGE_INTERNAL_SERVER_ERROR)
 
     @tracer.capture_method
@@ -86,9 +86,9 @@ class CacheService:
                 json={'key': key, 'value': value, 'ttl': ttl},
             )
         if response.status_code == status.HTTP_201_CREATED:
-            self._logger.info(f'Cache successfully created {key=} {value=} {ttl=}')
+            logger.info(f'Cache successfully created {key=} {value=} {ttl=}')
         else:
-            self._logger.error(f'Failed to put cache {key=} {value=} {ttl=}')
+            logger.error(f'Failed to put cache {key=} {value=} {ttl=}')
             raise CacheServiceException(detail=self.ERROR_MESSAGE_INTERNAL_SERVER_ERROR)
 
 
@@ -96,7 +96,6 @@ class AuthService:
     ERROR_MESSAGE_USER_NOT_FOUND = 'The requested user was not found'
 
     def __init__(self):
-        self._logger = Logger()
         self.cache_service = CacheService()
         self.password_hasher = PasswordHasher()
         self.settings = Settings()
