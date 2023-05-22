@@ -19,6 +19,7 @@ class TestJWTAuth:
     def empty_request(self) -> Mock:
         request = Mock()
         request.headers = {}
+        request.query_params = dict()
         return request
 
     @pytest.fixture
