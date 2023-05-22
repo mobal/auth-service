@@ -5,8 +5,8 @@ plugins:
   - serverless-python-requirements
 custom:
   pythonRequirements:
-    dockerImage: public.ecr.aws/shogo82148/lambda-python:3.10
-    dockerizePip: false
+    dockerImage: public.ecr.aws/sam/build-python3.10:latest-x86_64
+    dockerizePip: true
     layer: true
     slim: true
     strip: false
