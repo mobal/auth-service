@@ -5,11 +5,10 @@ plugins:
   - serverless-python-requirements
 custom:
   pythonRequirements:
-    dockerImage: public.ecr.aws/sam/build-python3.10:latest-x86_64
-    dockerizePip: true
+    dockerImage: public.ecr.aws/sam/build-python3.10
+    dockerizePip: 'non-linux'
+    dockerRunCmdExtraArgs: ['--platform', 'linux/amd64']
     layer: true
-    slim: true
-    strip: false
     zip: true
 functions:
   app:
@@ -43,6 +42,7 @@ package:
   excludeDevDependencies: true
 provider:
   name: aws
+  memorySize: 512
   region: eu-central-1
   runtime: python3.10
   stage: dev
