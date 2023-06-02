@@ -7,7 +7,7 @@ from starlette import status
 from starlette.requests import Request
 
 from app.auth import JWTBearer
-from app.services import JWTToken, CacheService
+from app.services import CacheService, JWTToken
 from app.settings import Settings
 
 NOT_AUTHENTICATED = 'Not authenticated'
@@ -19,6 +19,7 @@ class TestJWTAuth:
     def empty_request(self) -> Mock:
         request = Mock()
         request.headers = {}
+        request.query_params = dict()
         return request
 
     @pytest.fixture
@@ -86,7 +87,7 @@ class TestJWTAuth:
         valid_request: Request,
     ):
         mocker.patch('app.services.CacheService.get', return_value=jwt_token.jti)
-        with (pytest.raises(HTTPException)) as excinfo:
+        with pytest.raises(HTTPException) as excinfo:
             await jwt_bearer(valid_request)
         assert NOT_AUTHENTICATED == excinfo.value.detail
         assert status.HTTP_403_FORBIDDEN == excinfo.value.status_code
@@ -96,7 +97,7 @@ class TestJWTAuth:
         self, empty_request: Mock
     ):
         jwt_bearer = JWTBearer()
-        with (pytest.raises(HTTPException)) as excinfo:
+        with pytest.raises(HTTPException) as excinfo:
             await jwt_bearer(empty_request)
         assert status.HTTP_403_FORBIDDEN == excinfo.value.status_code
         assert NOT_AUTHENTICATED == excinfo.value.detail
@@ -116,7 +117,7 @@ class TestJWTAuth:
         jwt_token: JWTToken,
         valid_request: Request,
     ):
-        mocker.patch('app.services.CacheService.get', return_value=None)
+        mocker.patch('app.services.CacheService.get', return_value=False)
         result = await jwt_bearer(valid_request)
         assert jwt_token.dict() == result
         cache_service.get.assert_called_once_with(f'jti_{jwt_token.jti}')

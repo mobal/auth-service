@@ -3,7 +3,8 @@ from contextvars import ContextVar
 from typing import Optional
 
 from aws_lambda_powertools import Logger, Tracer
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.middleware.base import (BaseHTTPMiddleware,
+                                       RequestResponseEndpoint)
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp
@@ -17,7 +18,7 @@ correlation_id: ContextVar[Optional[str]] = ContextVar(
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp):
         super().__init__(app)
-        self._logger = Logger()
+        self._logger = Logger(utc=True)
         self._tracer = Tracer()
 
     async def dispatch(

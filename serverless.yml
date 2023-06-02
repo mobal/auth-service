@@ -5,20 +5,19 @@ plugins:
   - serverless-python-requirements
 custom:
   pythonRequirements:
-    dockerImage: mlupin/docker-lambda:python3.9-build
-    dockerizePip: non-linux
+    dockerImage: public.ecr.aws/sam/build-python3.10
+    dockerizePip: 'non-linux'
+    dockerRunCmdExtraArgs: ['--platform', 'linux/amd64']
     layer: true
-    slim: true
-    strip: false
     zip: true
 functions:
   app:
     environment:
-      APP_DEBUG: ${env:APP_DEBUG}
       APP_NAME: ${env:APP_NAME}
       APP_STAGE: ${env:APP_STAGE}
       APP_TIMEZONE: ${env:APP_TIMEZONE}
       CACHE_SERVICE_BASE_URL: ${env:CACHE_SERVICE_BASE_URL}
+      DEBUG: ${env:DEBUG}
       JWT_SECRET: ${env:JWT_SECRET}
       JWT_TOKEN_LIFETIME: ${env:JWT_TOKEN_LIFETIME}
       LOG_LEVEL: DEBUG
@@ -29,6 +28,7 @@ functions:
       - httpApi: '*'
     handler: app.main.handler
     layers:
+      - arn:aws:lambda:${aws:region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:20
       - Ref: PythonRequirementsLambdaLayer
 package:
   patterns:
@@ -42,8 +42,9 @@ package:
   excludeDevDependencies: true
 provider:
   name: aws
+  memorySize: 512
   region: eu-central-1
-  runtime: python3.9
+  runtime: python3.10
   stage: dev
   tracing:
     lambda: true
