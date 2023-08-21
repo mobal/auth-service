@@ -98,7 +98,7 @@ def user_model(user_dict: Dict[str, Any]) -> User:
         password=user_dict['password'],
         roles=user_dict['roles'],
         username=user_dict['username'],
-        created_at=user_dict['created_at']
+        created_at=user_dict['created_at'],
     )
 
 
