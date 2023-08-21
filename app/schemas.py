@@ -1,6 +1,7 @@
-from fastapi_camelcase import CamelModel
 from pydantic.networks import EmailStr
 from pydantic.types import constr
+
+from app.services import CamelModel
 
 
 class Login(CamelModel):

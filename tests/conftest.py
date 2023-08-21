@@ -13,7 +13,7 @@ from app.settings import Settings
 
 
 def pytest_configure():
-    pytest.app_stage = 'test'
+    pytest.stage = 'test'
 
     pytest.aws_access_key_id = 'aws_access_key_id'
     pytest.aws_region_name = 'eu-central-1'
@@ -24,14 +24,14 @@ def pytest_configure():
     pytest.jwt_secret = '6fl3AkTFmG2rVveLglUW8DOmp8J4Bvi3'
 
     pytest.service_name = 'auth-service'
-    pytest.table_name = f'{pytest.app_stage}-users'
+    pytest.table_name = f'{pytest.stage}-users'
 
 
 def pytest_sessionstart():
     os.environ['DEBUG'] = 'true'
+    os.environ['STAGE'] = pytest.stage
 
     os.environ['APP_NAME'] = pytest.service_name
-    os.environ['APP_STAGE'] = pytest.app_stage
     os.environ['APP_TIMEZONE'] = 'Europe/Budapest'
 
     os.environ['AWS_REGION_NAME'] = pytest.aws_region_name
@@ -72,7 +72,7 @@ def initialize_users_table(dynamodb_resource, user_model: User, users_table):
         AttributeDefinitions=[{'AttributeName': 'id', 'AttributeType': 'S'}],
         ProvisionedThroughput={'ReadCapacityUnits': 10, 'WriteCapacityUnits': 10},
     )
-    users_table.put_item(Item=user_model.dict())
+    users_table.put_item(Item=user_model.model_dump())
 
 
 @pytest.fixture
@@ -91,16 +91,14 @@ def user_dict() -> Dict[str, Any]:
 
 @pytest.fixture
 def user_model(user_dict: Dict[str, Any]) -> User:
-    return User.parse_obj(
-        {
-            'id': str(uuid.uuid4()),
-            'display_name': user_dict['display_name'],
-            'email': user_dict['email'],
-            'password': user_dict['password'],
-            'roles': user_dict['roles'],
-            'username': user_dict['username'],
-            'created_at': user_dict['created_at'],
-        }
+    return User(
+        id=str(uuid.uuid4()),
+        display_name=user_dict['display_name'],
+        email=user_dict['email'],
+        password=user_dict['password'],
+        roles=user_dict['roles'],
+        username=user_dict['username'],
+        created_at=user_dict['created_at']
     )
 
 

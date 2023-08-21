@@ -58,10 +58,10 @@ class TestAuthService:
         user: User,
         user_repository: UserRepository,
     ):
-        mocker.patch(self.USER_REPOSITORY_GET_BY_EMAIL, return_value=user.dict())
+        mocker.patch(self.USER_REPOSITORY_GET_BY_EMAIL, return_value=user.model_dump())
         token = await auth_service.login(user.email, self.PASSWORD)
         decoded_token = jwt.decode(token.token, settings.jwt_secret, ['HS256'])
-        user_dict = user.dict()
+        user_dict = user.model_dump()
         del user_dict['password']
         assert user_dict == decoded_token['sub']
         assert (
@@ -96,7 +96,7 @@ class TestAuthService:
         user: User,
         user_repository: UserRepository,
     ):
-        mocker.patch(self.USER_REPOSITORY_GET_BY_EMAIL, return_value=user.dict())
+        mocker.patch(self.USER_REPOSITORY_GET_BY_EMAIL, return_value=user.model_dump())
         with pytest.raises(HTTPException) as excinfo:
             await auth_service.login(
                 user.email, password_hasher.hash('doest_not_match')
@@ -115,7 +115,7 @@ class TestAuthService:
         mocker.patch(self.CACHE_SERVICE_PUT, return_value=True)
         await auth_service.logout(jwt_token)
         cache_service.put.assert_called_once_with(
-            f'jti_{jwt_token.jti}', jwt_token.dict(), jwt_token.exp
+            f'jti_{jwt_token.jti}', jwt_token.model_dump(), jwt_token.exp
         )
 
     async def test_fail_to_logout_due_to_cache_service_exception(
@@ -134,5 +134,5 @@ class TestAuthService:
         assert status.HTTP_500_INTERNAL_SERVER_ERROR == excinfo.value.status_code
         assert 'Internal Server Error' == excinfo.value.detail
         cache_service.put.assert_called_once_with(
-            f'jti_{jwt_token.jti}', jwt_token.dict(), jwt_token.exp
+            f'jti_{jwt_token.jti}', jwt_token.model_dump(), jwt_token.exp
         )

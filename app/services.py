@@ -8,7 +8,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerifyMismatchError
 from aws_lambda_powertools import Logger, Tracer
 from fastapi import HTTPException
-from fastapi_camelcase import CamelModel
+from humps import camelize
 from pydantic.main import BaseModel
 from pydantic.networks import EmailStr
 from starlette import status
@@ -22,6 +22,12 @@ logger = Logger(utc=True)
 tracer = Tracer()
 
 
+class CamelModel(BaseModel):
+    class Config:
+        alias_generator = camelize
+        populate_by_name = True
+
+
 class Cache(CamelModel):
     key: str
     value: Any
@@ -32,7 +38,7 @@ class Cache(CamelModel):
 class JWTToken(BaseModel):
     exp: int
     iat: int
-    iss: Optional[str]
+    iss: Optional[str] = None
     jti: str
     sub: Any
 
@@ -45,8 +51,8 @@ class User(CamelModel):
     roles: list[str]
     username: str
     created_at: str
-    deleted_at: Optional[str]
-    updated_at: Optional[str]
+    deleted_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
 
 class Token(CamelModel):
@@ -111,7 +117,7 @@ class AuthService:
                 iat=iat.int_timestamp,
                 jti=str(uuid.uuid4()),
                 sub=payload,
-            ).dict(),
+            ).model_dump(),
             self.settings.jwt_secret,
         )
 
@@ -133,5 +139,5 @@ class AuthService:
     @tracer.capture_method
     async def logout(self, jwt_token: JWTToken):
         await self.cache_service.put(
-            f'jti_{jwt_token.jti}', jwt_token.dict(), jwt_token.exp
+            f'jti_{jwt_token.jti}', jwt_token.model_dump(), jwt_token.exp
         )

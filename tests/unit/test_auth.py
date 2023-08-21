@@ -31,7 +31,7 @@ class TestJWTAuth:
         self, empty_request: Mock, jwt_token: JWTToken, settings: Settings
     ) -> Mock:
         empty_request.headers = {
-            'Authorization': f'Bearer {jwt.encode(jwt_token.dict(), settings.jwt_secret)}'
+            'Authorization': f'Bearer {jwt.encode(jwt_token.model_dump(), settings.jwt_secret)}'
         }
         return empty_request
 
@@ -119,5 +119,5 @@ class TestJWTAuth:
     ):
         mocker.patch('app.services.CacheService.get', return_value=False)
         result = await jwt_bearer(valid_request)
-        assert jwt_token.dict() == result
+        assert jwt_token.model_dump() == result.model_dump()
         cache_service.get.assert_called_once_with(f'jti_{jwt_token.jti}')

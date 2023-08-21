@@ -25,6 +25,7 @@ def jwt_token(user_model) -> JWTToken:
     return JWTToken(
         exp=exp.int_timestamp,
         iat=iat.int_timestamp,
+        iss=None,
         jti=str(uuid.uuid4()),
         sub=user_model,
     )
