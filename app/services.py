@@ -9,6 +9,7 @@ from argon2.exceptions import InvalidHash, VerifyMismatchError
 from aws_lambda_powertools import Logger, Tracer
 from fastapi import HTTPException
 from humps import camelize
+from pydantic import ConfigDict
 from pydantic.main import BaseModel
 from pydantic.networks import EmailStr
 from starlette import status
@@ -23,9 +24,7 @@ tracer = Tracer()
 
 
 class CamelModel(BaseModel):
-    class Config:
-        alias_generator = camelize
-        populate_by_name = True
+    model_config = ConfigDict(alias_generator=camelize, populate_by_name=True)
 
 
 class Cache(CamelModel):
