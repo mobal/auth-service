@@ -13,7 +13,7 @@ class UserRepository:
         settings = Settings()
         session = boto3.Session()
         dynamodb = session.resource('dynamodb')
-        self._table = dynamodb.Table(f'{settings.app_stage}-users')
+        self._table = dynamodb.Table(f'{settings.stage}-users')
 
     async def get_by_email(self, email: str) -> Optional[dict]:
         response = self._table.scan(

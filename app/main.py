@@ -10,7 +10,6 @@ from botocore.exceptions import BotoCoreError
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi_camelcase import CamelModel
 from mangum import Mangum
 from starlette import status
 from starlette.middleware.exceptions import ExceptionMiddleware
@@ -20,7 +19,7 @@ from starlette.responses import JSONResponse
 from app.auth import JWTBearer
 from app.middlewares import CorrelationIdMiddleware
 from app.schemas import Login
-from app.services import AuthService, Token
+from app.services import AuthService, CamelModel, Token
 from app.settings import Settings
 
 auth_service = AuthService()
@@ -30,7 +29,7 @@ metrics = Metrics()
 settings = Settings()
 tracer = Tracer()
 
-app = FastAPI(debug=settings.app_debug, title='AuthApp', version='1.0.0')
+app = FastAPI(debug=settings.debug, title='AuthApp', version='1.0.0')
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(GZipMiddleware)
 app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
@@ -73,7 +72,7 @@ async def botocore_error_handler(
     request: Request, error: BotoCoreError
 ) -> JSONResponse:
     error_id = uuid.uuid4()
-    error_message = str(error) if settings.app_debug else 'Internal Server Error'
+    error_message = str(error) if settings.debug else 'Internal Server Error'
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     logger.error(f'{str(error)} with {status_code=} and {error_id=}')
     metrics.add_metric(name='BotocoreErrorHandler', unit=MetricUnit.Count, value=1)

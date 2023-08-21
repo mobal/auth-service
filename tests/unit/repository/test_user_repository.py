@@ -31,16 +31,16 @@ class TestUserRepository:
             AttributeDefinitions=[{'AttributeName': 'id', 'AttributeType': 'S'}],
             ProvisionedThroughput={'ReadCapacityUnits': 1, 'WriteCapacityUnits': 1},
         )
-        dynamodb_table.put_item(Item=user_model.dict())
+        dynamodb_table.put_item(Item=user_model.model_dump())
 
     async def test_successfully_get_item_by_email(
         self, dynamodb_table, user_model: User, user_repository: UserRepository
     ):
         item = await user_repository.get_by_email(user_model.email)
-        assert user_model.dict() == item
+        assert user_model.model_dump() == item
 
     async def test_successfully_get_item_by_id(
         self, dynamodb_table, user_model: User, user_repository: UserRepository
     ):
         item = await user_repository.get_by_id(user_model.id)
-        assert user_model.dict() == item
+        assert user_model.model_dump() == item
