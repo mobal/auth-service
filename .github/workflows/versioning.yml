@@ -47,6 +47,8 @@ jobs:
       - name: Create Semver Tag
         run: |
           # Create and push the Semver tag
+          git config user.name "$(git log -n 1 --pretty=format:%an)"
+          git config user.email "$(git log -n 1 --pretty=format:%ae)"
           git tag -a "v${{ env.PR_VERSION }}" -m "Version for PR #${{ github.event.pull_request.number }}"
           git push origin "v${{ env.PR_VERSION }}"
 
