@@ -1,0 +1,56 @@
+name: Semver Versioning for PRs
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Determine PR Version
+        id: semver
+        run: |
+          # Extract the PR number from the branch name
+          PR_NUMBER=$(echo "${{ github.head_ref }}" | sed 's/[^0-9]*//g')
+
+          # Determine the Semver version based on PR labels or other criteria
+          # Example: Assign a version based on labels like "major", "minor", "patch"
+          if [[ $(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                -H "Accept: application/vnd.github.v3+json" \
+                "${{ github.api_url }}/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" \
+                | jq -r '.labels[].name' | grep -E '^(major|minor|patch)$') ]]; then
+            PR_VERSION=$(echo "${{ github.event.pull_request.base.ref }}" | sed 's/[^0-9]*//g')
+            if [[ $(echo "${{ github.event.pull_request.labels }}" | grep "minor") ]]; then
+              PR_VERSION=$((PR_VERSION + 1))
+            elif [[ $(echo "${{ github.event.pull_request.labels }}" | grep "major") ]]; then
+              PR_VERSION=$((PR_VERSION + 1))
+              PR_VERSION="${PR_VERSION}.0.0"
+            else
+              PR_VERSION="${PR_VERSION}.0"
+            fi
+          else
+            # If no labels found, use a default version
+            PR_VERSION="1.0.0-pr${PR_NUMBER}"
+          fi
+
+          echo "PR_VERSION=${PR_VERSION}" >> $GITHUB_ENV
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Semver Tag
+        run: |
+          # Create and push the Semver tag
+          git config user.name "$(git log -n 1 --pretty=format:%an)"
+          git config user.email "$(git log -n 1 --pretty=format:%ae)"
+          git tag -a "v${{ env.PR_VERSION }}" -m "Version for PR #${{ github.event.pull_request.number }}"
+          git push origin "v${{ env.PR_VERSION }}"
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
