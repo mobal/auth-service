@@ -35,11 +35,11 @@ def jwt_token(user_model) -> JWTToken:
 def user_model() -> User:
     return User(
         id=str(uuid.uuid4()),
-        display_name='root',
-        email='root@netcode.hu',
-        password='password',
-        roles=['root'],
-        username='root',
+        display_name="root",
+        email="root@netcode.hu",
+        password="password",
+        roles=["root"],
+        username="root",
         created_at=pendulum.now().to_iso8601_string(),
     )
 

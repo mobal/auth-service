@@ -1,24 +1,27 @@
-all:
-
+all: black flake pycodestyle sort test
 
 black:
-	python3 -m pipenv run python -m black --skip-string-normalization app/ tests/
+	pipenv run black ./
 
 deploy:
-	python3 -m pipenv run npx sls deploy
+	pipenv run npx sls deploy
 
 flake:
-	python3 -m pipenv run python -m autoflake --in-place --remove-unused-variables app/*.py tests/*.py
+	pipenv run autoflake --in-place --recursive --remove-all-unused-imports --remove-unused-variables app/*.py tests/*.py
 
-install:
-	python3 -m pipenv install --dev
-	npm i --dev
+install: install-python install-node
+
+install-node:
+	npm i --include=dev
+
+install-python:
+	pipenv install --dev --python 3.12
 
 pycodestyle:
-	python3 -m pipenv run python -m pycodestyle --ignore=E501,W503 app/ tests/
+	pipenv run python -m pycodestyle --ignore=E501,W503 app/ tests/
 
 sort:
-	python3 -m pipenv run python -m isort --atomic app/ tests/
+	pipenv run python -m isort --atomic app/ tests/
 
 test:
-	python3 -m pipenv run python -m pytest
+	pipenv run python -m pytest
