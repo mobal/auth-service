@@ -9,7 +9,6 @@ custom:
     dockerizePip: 'non-linux'
     dockerRunCmdExtraArgs: ['--platform', 'linux/amd64']
     layer: true
-    slim: true
     zip: true
 functions:
   app:
@@ -31,16 +30,6 @@ functions:
     layers:
       - arn:aws:lambda:${aws:region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:20
       - Ref: PythonRequirementsLambdaLayer
-package:
-  patterns:
-    - '!.git/**'
-    - '!.gitignore'
-    - '!.DS_Store'
-    - '!npm-debug.log'
-    - '!.serverless/**'
-    - '!.serverless_plugins/**'
-    - '!.venv/**'
-  excludeDevDependencies: true
 provider:
   name: aws
   memorySize: 512
