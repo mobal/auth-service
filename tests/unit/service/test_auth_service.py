@@ -15,8 +15,6 @@ from app.settings import Settings
 
 @pytest.mark.asyncio
 class TestAuthService:
-    CACHE_SERVICE_PUT = "app.services.CacheService.put"
-    USER_REPOSITORY_GET_BY_EMAIL = "app.repositories.UserRepository.get_by_email"
     PASSWORD = "123456"
 
     @pytest.fixture
@@ -58,11 +56,15 @@ class TestAuthService:
         user: User,
         user_repository: UserRepository,
     ):
-        mocker.patch(self.USER_REPOSITORY_GET_BY_EMAIL, return_value=user.model_dump())
+        mocker.patch.object(
+            UserRepository, "get_by_email", return_value=user.model_dump()
+        )
+
         token = await auth_service.login(user.email, self.PASSWORD)
+
         decoded_token = jwt.decode(token.token, settings.jwt_secret, ["HS256"])
-        user_dict = user.model_dump()
-        del user_dict["password"]
+        user_dict = user.model_dump(exclude=["password"])
+
         assert user_dict == decoded_token["sub"]
         assert (
             pendulum.from_timestamp(decoded_token.get("exp"))
@@ -77,13 +79,12 @@ class TestAuthService:
         user: User,
         user_repository: UserRepository,
     ):
-        error_message = f"The requested user was not found"
-        mocker.patch(
-            self.USER_REPOSITORY_GET_BY_EMAIL,
-            return_value=None,
-        )
+        error_message = "The requested user was not found"
+        mocker.patch.object(UserRepository, "get_by_email", return_value=None)
+
         with pytest.raises(UserNotFoundException) as excinfo:
             await auth_service.login(user.email, self.PASSWORD)
+
         assert status.HTTP_404_NOT_FOUND == excinfo.value.status_code
         assert error_message == excinfo.value.detail
         user_repository.get_by_email.assert_called_once_with(user.email)
@@ -96,11 +97,15 @@ class TestAuthService:
         user: User,
         user_repository: UserRepository,
     ):
-        mocker.patch(self.USER_REPOSITORY_GET_BY_EMAIL, return_value=user.model_dump())
+        mocker.patch.object(
+            UserRepository, "get_by_email", return_value=user.model_dump()
+        )
+
         with pytest.raises(HTTPException) as excinfo:
             await auth_service.login(
                 user.email, password_hasher.hash("doest_not_match")
             )
+
         assert status.HTTP_401_UNAUTHORIZED == excinfo.value.status_code
         assert "Unauthorized" == excinfo.value.detail
         user_repository.get_by_email.assert_called_once_with(user.email)
@@ -112,8 +117,10 @@ class TestAuthService:
         cache_service: CacheService,
         jwt_token: JWTToken,
     ):
-        mocker.patch(self.CACHE_SERVICE_PUT, return_value=True)
+        mocker.patch.object(CacheService, "put", return_value=True)
+
         await auth_service.logout(jwt_token)
+
         cache_service.put.assert_called_once_with(
             f"jti_{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
         )
@@ -125,12 +132,15 @@ class TestAuthService:
         cache_service: CacheService,
         jwt_token: JWTToken,
     ):
-        mocker.patch(
-            self.CACHE_SERVICE_PUT,
+        mocker.patch.object(
+            CacheService,
+            "put",
             side_effect=CacheServiceException("Internal Server Error"),
         )
+
         with pytest.raises(CacheServiceException) as excinfo:
             await auth_service.logout(jwt_token)
+
         assert status.HTTP_500_INTERNAL_SERVER_ERROR == excinfo.value.status_code
         assert "Internal Server Error" == excinfo.value.detail
         cache_service.put.assert_called_once_with(
