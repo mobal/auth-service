@@ -1,7 +1,7 @@
 from pydantic.networks import EmailStr
 from pydantic.types import constr
 
-from app.services import CamelModel
+from app.models import CamelModel
 
 
 class Login(CamelModel):

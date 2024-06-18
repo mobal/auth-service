@@ -8,7 +8,7 @@ import pytest
 from argon2 import PasswordHasher
 from moto import mock_aws
 
-from app.services import User
+from app.models import User
 from app.settings import Settings
 
 

@@ -4,8 +4,9 @@ import pendulum
 import pytest as pytest
 
 from app.auth import JWTBearer
+from app.models import User
 from app.repositories import UserRepository
-from app.services import CacheService, JWTToken, User
+from app.services import CacheService, JWTToken
 
 
 @pytest.fixture
