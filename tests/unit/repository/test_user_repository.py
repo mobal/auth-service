@@ -2,8 +2,8 @@ import boto3
 import pytest
 from moto import mock_aws
 
+from app.models import User
 from app.repositories import UserRepository
-from app.services import User
 from app.settings import Settings
 
 
@@ -37,10 +37,11 @@ class TestUserRepository:
         self, dynamodb_table, user_model: User, user_repository: UserRepository
     ):
         item = await user_repository.get_by_email(user_model.email)
-        assert user_model.model_dump() == item
+
+        assert user_model == item
 
     async def test_successfully_get_item_by_id(
         self, dynamodb_table, user_model: User, user_repository: UserRepository
     ):
         item = await user_repository.get_by_id(user_model.id)
-        assert user_model.model_dump() == item
+        assert user_model == item

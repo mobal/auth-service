@@ -17,8 +17,9 @@ from starlette.responses import JSONResponse
 
 from app.auth import JWTBearer
 from app.middlewares import CorrelationIdMiddleware
+from app.models import CamelModel
 from app.schemas import Login
-from app.services import AuthService, CamelModel, Token
+from app.services import AuthService, Token
 from app.settings import Settings
 
 auth_service = AuthService()

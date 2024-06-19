@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 import jwt
@@ -8,53 +8,15 @@ from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerifyMismatchError
 from aws_lambda_powertools import Logger
 from fastapi import HTTPException
-from humps import camelize
-from pydantic import ConfigDict
-from pydantic.main import BaseModel
-from pydantic.networks import EmailStr
 from starlette import status
 
 from app.exceptions import CacheServiceException, UserNotFoundException
 from app.middlewares import correlation_id
+from app.models import JWTToken, Token
 from app.repositories import UserRepository
 from app.settings import Settings
 
 logger = Logger(utc=True)
-
-
-class CamelModel(BaseModel):
-    model_config = ConfigDict(alias_generator=camelize, populate_by_name=True)
-
-
-class Cache(CamelModel):
-    key: str
-    value: Any
-    created_at: str
-    ttl: int
-
-
-class JWTToken(BaseModel):
-    exp: int
-    iat: int
-    iss: Optional[str] = None
-    jti: str
-    sub: Any
-
-
-class User(CamelModel):
-    id: str
-    display_name: str
-    email: EmailStr
-    password: str
-    roles: list[str]
-    username: str
-    created_at: str
-    deleted_at: Optional[str] = None
-    updated_at: Optional[str] = None
-
-
-class Token(CamelModel):
-    token: str
 
 
 class CacheService:
@@ -117,13 +79,24 @@ class AuthService:
         )
 
     async def login(self, email: str, password: str) -> Token:
-        item = await self.user_repository.get_by_email(email)
-        if item is None:
+        user = await self.user_repository.get_by_email(email)
+        if user is None:
             raise UserNotFoundException(self.ERROR_MESSAGE_USER_NOT_FOUND)
         try:
-            self.password_hasher.verify(item["password"], password)
-            del item["password"]
-            return Token(token=await self._generate_token(item))
+            self.password_hasher.verify(user.password, password)
+            return Token(
+                token=await self._generate_token(
+                    user.model_dump(
+                        exclude=[
+                            "id",
+                            "created_at",
+                            "deleted_at",
+                            "password",
+                            "updated_at",
+                        ]
+                    )
+                )
+            )
         except (InvalidHash, VerifyMismatchError):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
