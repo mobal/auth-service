@@ -87,7 +87,13 @@ class AuthService:
             return Token(
                 token=await self._generate_token(
                     user.model_dump(
-                        exclude=["id", "created_at", "deleted_at", "password", "updated_at"]
+                        exclude=[
+                            "id",
+                            "created_at",
+                            "deleted_at",
+                            "password",
+                            "updated_at",
+                        ]
                     )
                 )
             )

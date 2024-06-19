@@ -8,8 +8,9 @@ from fastapi import HTTPException
 from starlette import status
 
 from app.exceptions import CacheServiceException, UserNotFoundException
+from app.models import User
 from app.repositories import UserRepository
-from app.services import AuthService, CacheService, JWTToken, User
+from app.services import AuthService, CacheService, JWTToken
 from app.settings import Settings
 
 
@@ -56,14 +57,14 @@ class TestAuthService:
         user: User,
         user_repository: UserRepository,
     ):
-        mocker.patch.object(
-            UserRepository, "get_by_email", return_value=user.model_dump()
-        )
+        mocker.patch.object(UserRepository, "get_by_email", return_value=user)
 
         token = await auth_service.login(user.email, self.PASSWORD)
 
         decoded_token = jwt.decode(token.token, settings.jwt_secret, ["HS256"])
-        user_dict = user.model_dump(exclude=["password"])
+        user_dict = user.model_dump(
+            exclude=["id", "created_at", "deleted_at", "password", "updated_at"]
+        )
 
         assert user_dict == decoded_token["sub"]
         assert (
@@ -97,9 +98,7 @@ class TestAuthService:
         user: User,
         user_repository: UserRepository,
     ):
-        mocker.patch.object(
-            UserRepository, "get_by_email", return_value=user.model_dump()
-        )
+        mocker.patch.object(UserRepository, "get_by_email", return_value=user)
 
         with pytest.raises(HTTPException) as excinfo:
             await auth_service.login(
