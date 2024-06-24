@@ -1,11 +1,11 @@
 from typing import Any, Optional
 
-from humps import camelize
 from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic.alias_generators import to_camel
 
 
 class CamelModel(BaseModel):
-    model_config = ConfigDict(alias_generator=camelize, populate_by_name=True)
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
 class Cache(CamelModel):
