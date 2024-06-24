@@ -120,6 +120,7 @@ class TestJWTAuth:
     ):
         jwt_bearer = JWTBearer(auto_error=False)
         result = await jwt_bearer(empty_request)
+
         assert result is None
 
     async def test_successfully_authorize_request(

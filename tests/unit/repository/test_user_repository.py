@@ -44,4 +44,5 @@ class TestUserRepository:
         self, dynamodb_table, user_model: User, user_repository: UserRepository
     ):
         item = await user_repository.get_by_id(user_model.id)
+
         assert user_model == item

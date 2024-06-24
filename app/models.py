@@ -1,11 +1,11 @@
-from typing import Any, Optional
+from typing import Any
 
-from humps import camelize
 from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic.alias_generators import to_camel
 
 
 class CamelModel(BaseModel):
-    model_config = ConfigDict(alias_generator=camelize, populate_by_name=True)
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
 class Cache(CamelModel):
@@ -18,7 +18,7 @@ class Cache(CamelModel):
 class JWTToken(BaseModel):
     exp: int
     iat: int
-    iss: Optional[str] = None
+    iss: str | None = None
     jti: str
     sub: Any
 
@@ -31,8 +31,8 @@ class User(CamelModel):
     roles: list[str]
     username: str
     created_at: str
-    deleted_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    deleted_at: str | None = None
+    updated_at: str | None = None
 
 
 class Token(CamelModel):
