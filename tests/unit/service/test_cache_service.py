@@ -31,7 +31,9 @@ class TestCacheService:
         ).mock(
             return_value=Response(status_code=status.HTTP_200_OK, json=self.key_value)
         )
+
         assert await cache_service.get(self.key_value["key"]) is True
+
         assert 1 == route.call_count
 
     async def test_successfully_put_key_value(
@@ -40,9 +42,11 @@ class TestCacheService:
         route = respx_mock.post(f"{settings.cache_service_base_url}/api/cache").mock(
             Response(status_code=status.HTTP_201_CREATED)
         )
+
         await cache_service.put(
             self.key_value["key"], self.key_value["value"], pendulum.now().int_timestamp
         )
+
         assert 1 == route.call_count
 
     async def test_fail_to_put_key_value_due_empty_values(
@@ -51,8 +55,10 @@ class TestCacheService:
         route = respx_mock.post(f"{settings.cache_service_base_url}/api/cache").mock(
             Response(status_code=status.HTTP_400_BAD_REQUEST)
         )
+
         with pytest.raises(CacheServiceException) as excinfo:
             await cache_service.put("", "")
+
         assert CacheServiceException.__name__ == excinfo.typename
         assert status.HTTP_500_INTERNAL_SERVER_ERROR == excinfo.value.status_code
         assert "Internal Server Error" == excinfo.value.detail
@@ -74,7 +80,9 @@ class TestCacheService:
                 },
             ),
         )
+
         assert await cache_service.get(self.key_value["key"]) is False
+
         assert 1 == route.call_count
 
     async def test_fail_to_get_key_value_due_unexpected_return_value(
@@ -87,8 +95,10 @@ class TestCacheService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             ),
         )
+
         with pytest.raises(CacheServiceException) as excinfo:
             await cache_service.get(self.key_value["key"])
+
         assert CacheServiceException.__name__ == excinfo.typename
         assert status.HTTP_500_INTERNAL_SERVER_ERROR == excinfo.value.status_code
         assert 1 == route.call_count

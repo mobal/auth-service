@@ -1,5 +1,3 @@
-from typing import Optional
-
 import jwt
 from aws_lambda_powertools import Logger
 from fastapi import HTTPException, Request
@@ -22,9 +20,7 @@ class HTTPBearer(FastAPIHTTPBearer):
         super().__init__(auto_error=auto_error)
         self.auto_error = auto_error
 
-    async def __call__(
-        self, request: Request
-    ) -> Optional[HTTPAuthorizationCredentials]:
+    async def __call__(self, request: Request) -> HTTPAuthorizationCredentials | None:
         authorization = request.headers.get("Authorization")
         if authorization is not None:
             return await self._get_authorization_credentials_from_header(authorization)
@@ -38,7 +34,7 @@ class HTTPBearer(FastAPIHTTPBearer):
 
     async def _get_authorization_credentials_from_header(
         self, authorization: str
-    ) -> Optional[HTTPAuthorizationCredentials]:
+    ) -> HTTPAuthorizationCredentials | None:
         scheme, credentials = get_authorization_scheme_param(authorization)
         if not (authorization and scheme and credentials):
             logger.error(f"Missing {authorization=}, {scheme=} or {credentials=}")
@@ -61,8 +57,8 @@ class HTTPBearer(FastAPIHTTPBearer):
         return HTTPAuthorizationCredentials(scheme=scheme, credentials=credentials)
 
     async def _get_authorization_credentials_from_token(
-        self, token: Optional[str]
-    ) -> Optional[HTTPAuthorizationCredentials]:
+        self, token: str | None
+    ) -> HTTPAuthorizationCredentials | None:
         if not token:
             if self.auto_error:
                 raise HTTPException(
@@ -81,7 +77,7 @@ class JWTBearer(HTTPBearer):
         self.cache_service = CacheService()
         self.settings = Settings()
 
-    async def __call__(self, request: Request) -> Optional[JWTToken]:
+    async def __call__(self, request: Request) -> JWTToken | None:
         credentials = await super(JWTBearer, self).__call__(request)
         if credentials:
             if not await self._validate_token(credentials.credentials):

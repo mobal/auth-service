@@ -98,6 +98,7 @@ class TestAuthApi:
             f"{self.BASE_URL}/login",
             json={},
         )
+
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     async def test_successfully_login(self, test_client: TestClient):
@@ -105,6 +106,7 @@ class TestAuthApi:
             f"{self.BASE_URL}/login",
             json={"email": "root@netcode.hu", "password": "12345678"},
         )
+
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["token"]
 
@@ -112,6 +114,7 @@ class TestAuthApi:
         self, test_client: TestClient
     ):
         response = test_client.get(f"{self.BASE_URL}/logout")
+
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
     async def test_successfully_logout(
@@ -131,9 +134,11 @@ class TestAuthApi:
             respx_mock,
             pytest.cache_service_base_url,
         )
+
         response = test_client.get(
             f"{self.BASE_URL}/logout", headers={"Authorization": f"Bearer {jwt_token}"}
         )
+
         assert response.status_code == status.HTTP_204_NO_CONTENT
         assert cache_service_get_keyvalue_mock.called
         assert cache_service_get_keyvalue_mock.call_count == 1
