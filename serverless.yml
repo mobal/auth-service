@@ -7,9 +7,9 @@ custom:
   pythonRequirements:
     dockerImage: public.ecr.aws/sam/build-python3.12
     dockerizePip: 'non-linux'
-    dockerRunCmdExtraArgs: ['--platform', 'linux/amd64']
+    dockerRunCmdExtraArgs: ['--platform', 'linux/arm64']
     layer: true
-    zip: true
+    slim: false
 functions:
   app:
     environment:
@@ -28,23 +28,31 @@ functions:
       - httpApi: '*'
     handler: app.main.handler
     layers:
-      - arn:aws:lambda:${aws:region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:20
+      - arn:aws:lambda:${aws:region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:73
       - Ref: PythonRequirementsLambdaLayer
 package:
   patterns:
-    - '!.git/**'
-    - '!.gitignore'
     - '!.DS_Store'
-    - '!npm-debug.log'
+    - '!.coverage'
+    - '!.env'
+    - '!.git/**'
+    - '!.idea/**'
+    - '!.pytest_cache/**'
     - '!.serverless/**'
     - '!.serverless_plugins/**'
+    - '!.terraform/**'
+    - '!.terraform.lock.hcl'
     - '!.venv/**'
+    - '!coverage.xml'
+    - '!htmlcov/**'
+    - '!node_modules/**'
 provider:
   name: aws
+  architecture: arm64
   memorySize: 512
-  region: eu-central-1
+  region: ${env:AWS_REGION, 'eu-central-1'}
   runtime: python3.12
-  stage: dev
+  stage: ${opt:stage, 'dev'}
   iam:
     role:
       statements:
@@ -53,5 +61,28 @@ provider:
             - dynamodb:PutItem
             - dynamodb:Query
             - dynamodb:Scan
-          Resource: ${env:AWS_ARN_DYNAMODB}
-useDotenv: true
+          Resource:
+            - !GetAtt usersTable.Arn
+            - !Sub ${usersTable.Arn}/index/EmailIndex
+resources:
+  Resources:
+    usersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.stage}-users
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: email
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: EmailIndex
+            KeySchema:
+              - AttributeName: email
+                KeyType: HASH
+            Projection:
+              ProjectionType: 'ALL'
+        BillingMode: PAY_PER_REQUEST

@@ -3,7 +3,7 @@ all: black flake pycodestyle sort test
 black:
 	pipenv run black ./
 
-deploy:
+deploy-dev:
 	pipenv run npx sls deploy
 
 flake:

@@ -67,9 +67,23 @@ def dynamodb_resource(settings):
 @pytest.fixture
 def initialize_users_table(dynamodb_resource, user_model: User, users_table):
     dynamodb_resource.create_table(
-        TableName=pytest.table_name,
+        AttributeDefinitions=[
+            {"AttributeName": "id", "AttributeType": "S"},
+            {"AttributeName": "email", "AttributeType": "S"},
+        ],
+        TableName="test-users",
         KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
-        AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
+        GlobalSecondaryIndexes=[
+            {
+                "IndexName": "EmailIindex",
+                "KeySchema": [
+                    {"AttributeName": "email", "KeyType": "HASH"},
+                ],
+                "Projection": {
+                    "ProjectionType": "ALL",
+                },
+            },
+        ],
         ProvisionedThroughput={"ReadCapacityUnits": 10, "WriteCapacityUnits": 10},
     )
     users_table.put_item(Item=user_model.model_dump())
