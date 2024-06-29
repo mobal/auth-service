@@ -3,7 +3,7 @@ import uuid
 import pendulum
 import pytest as pytest
 
-from app.auth import JWTBearer
+from app.jwt_bearer import JWTBearer
 from app.models import User
 from app.repositories import UserRepository
 from app.services import CacheService, JWTToken

@@ -37,6 +37,7 @@ package:
     - '!.env'
     - '!.git/**'
     - '!.idea/**'
+    - '!.mypy_cache/**'
     - '!.pytest_cache/**'
     - '!.serverless/**'
     - '!.serverless_plugins/**'

@@ -1,6 +1,6 @@
 import uuid
 from inspect import isclass
-from typing import Dict, List
+from typing import Dict, Sequence
 
 import botocore
 import uvicorn
@@ -15,17 +15,16 @@ from starlette.middleware.exceptions import ExceptionMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import JSONResponse
 
-from app.auth import JWTBearer
+from app import settings
+from app.jwt_bearer import JWTBearer
 from app.middlewares import CorrelationIdMiddleware
 from app.models import CamelModel
 from app.schemas import Login
 from app.services import AuthService, Token
-from app.settings import Settings
 
 auth_service = AuthService()
 jwt_bearer = JWTBearer()
 logger = Logger(utc=True)
-settings = Settings()
 
 app = FastAPI(debug=settings.debug, title="AuthApp", version="1.0.0")
 app.add_middleware(CorrelationIdMiddleware)
@@ -33,7 +32,6 @@ app.add_middleware(GZipMiddleware)
 app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
 
 handler = Mangum(app)
-handler.__name__ = "handler"
 handler = logger.inject_lambda_context(handler, clear_state=True, log_event=True)
 
 
@@ -44,7 +42,7 @@ class ErrorResponse(CamelModel):
 
 
 class ValidationErrorResponse(ErrorResponse):
-    errors: List[Dict]
+    errors: Sequence[Dict]
 
 
 @app.post("/api/v1/login", status_code=status.HTTP_200_OK)
