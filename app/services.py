@@ -10,11 +10,11 @@ from aws_lambda_powertools import Logger
 from fastapi import HTTPException
 from starlette import status
 
+from app import settings
 from app.exceptions import CacheServiceException, UserNotFoundException
 from app.middlewares import correlation_id
 from app.models import JWTToken, Token
 from app.repositories import UserRepository
-from app.settings import Settings
 
 logger = Logger(utc=True)
 
@@ -23,12 +23,9 @@ class CacheService:
     ERROR_MESSAGE_INTERNAL_SERVER_ERROR = "Internal Server Error"
     X_CORRELATION_ID = "X-Correlation-ID"
 
-    def __init__(self):
-        self._settings = Settings()
-
     async def get(self, key: str) -> bool:
         async with httpx.AsyncClient() as client:
-            url = f"{self._settings.cache_service_base_url}/api/cache/{key}"
+            url = f"{settings.cache_service_base_url}/api/cache/{key}"
             logger.debug(f"Get cache for {key=} {url=}")
             response = await client.get(
                 url, headers={self.X_CORRELATION_ID: correlation_id.get()}
@@ -43,7 +40,7 @@ class CacheService:
 
     async def put(self, key: str, value: Any, ttl: int = 0):
         async with httpx.AsyncClient() as client:
-            url = f"{self._settings.cache_service_base_url}/api/cache"
+            url = f"{settings.cache_service_base_url}/api/cache"
             response = await client.post(
                 url,
                 headers={self.X_CORRELATION_ID: correlation_id.get()},
@@ -62,12 +59,11 @@ class AuthService:
     def __init__(self):
         self.cache_service = CacheService()
         self.password_hasher = PasswordHasher()
-        self.settings = Settings()
         self.user_repository = UserRepository()
 
     async def _generate_token(self, payload: dict) -> str:
         iat = pendulum.now()
-        exp = iat.add(seconds=self.settings.jwt_token_lifetime)
+        exp = iat.add(seconds=settings.jwt_token_lifetime)
         return jwt.encode(
             JWTToken(
                 exp=exp.int_timestamp,
@@ -75,7 +71,7 @@ class AuthService:
                 jti=str(uuid.uuid4()),
                 sub=payload,
             ).model_dump(),
-            self.settings.jwt_secret,
+            settings.jwt_secret,
         )
 
     async def login(self, email: str, password: str) -> Token:
@@ -87,13 +83,13 @@ class AuthService:
             return Token(
                 token=await self._generate_token(
                     user.model_dump(
-                        exclude=[
+                        exclude={
                             "id",
                             "created_at",
                             "deleted_at",
                             "password",
                             "updated_at",
-                        ]
+                        },
                     )
                 )
             )

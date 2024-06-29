@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from starlette import status
 from starlette.requests import Request
 
-from app.auth import JWTBearer
+from app.jwt_bearer import JWTBearer
 from app.services import CacheService, JWTToken
 from app.settings import Settings
 

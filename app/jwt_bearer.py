@@ -7,8 +7,9 @@ from fastapi.security.utils import get_authorization_scheme_param
 from jwt import DecodeError, ExpiredSignatureError
 from starlette import status
 
-from app.services import CacheService, JWTToken
-from app.settings import Settings
+from app import settings
+from app.models import JWTToken
+from app.services import CacheService
 
 logger = Logger(utc=True)
 
@@ -37,7 +38,7 @@ class HTTPBearer(FastAPIHTTPBearer):
     ) -> HTTPAuthorizationCredentials | None:
         scheme, credentials = get_authorization_scheme_param(authorization)
         if not (authorization and scheme and credentials):
-            logger.error(f"Missing {authorization=}, {scheme=} or {credentials=}")
+            logger.warning(f"Missing {authorization=}, {scheme=} or {credentials=}")
             if self.auto_error:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -46,7 +47,7 @@ class HTTPBearer(FastAPIHTTPBearer):
             else:
                 return None
         if scheme.lower() != "bearer":
-            logger.error(f"Invalid {scheme=}")
+            logger.warning(f"Invalid {scheme=}")
             if self.auto_error:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -75,14 +76,13 @@ class JWTBearer(HTTPBearer):
         super().__init__(auto_error=auto_error)
         self.auto_error = auto_error
         self.cache_service = CacheService()
-        self.settings = Settings()
 
     async def __call__(self, request: Request) -> JWTToken | None:
         credentials = await super(JWTBearer, self).__call__(request)
         if credentials:
             if not await self._validate_token(credentials.credentials):
                 if self.auto_error:
-                    logger.error(f"Invalid authentication token {credentials=}")
+                    logger.warning(f"Invalid authentication token {credentials=}")
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail=ERROR_MESSAGE_NOT_AUTHENTICATED,
@@ -96,7 +96,7 @@ class JWTBearer(HTTPBearer):
     async def _validate_token(self, token: str) -> bool:
         try:
             decoded_token = JWTToken(
-                **jwt.decode(token, self.settings.jwt_secret, algorithms="HS256")
+                **jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
             )
             if await self.cache_service.get(f"jti_{decoded_token.jti}") is False:
                 logger.debug(f"Token is not blacklisted {decoded_token=}")
@@ -104,7 +104,7 @@ class JWTBearer(HTTPBearer):
                 return True
             logger.debug(f"Token blacklisted {decoded_token=}")
         except DecodeError as err:
-            logger.error(f"Error occurred during token decoding {err=}")
+            logger.exception(f"Error occurred during token decoding {err=}")
         except ExpiredSignatureError as err:
-            logger.error(f"Expired signature {err=}")
+            logger.exception(f"Expired signature {err=}")
         return False

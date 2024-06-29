@@ -2,14 +2,13 @@ import boto3
 from aws_lambda_powertools import Logger
 from boto3.dynamodb.conditions import Attr, Key
 
+from app import settings
 from app.models import User
-from app.settings import Settings
 
 
 class UserRepository:
     def __init__(self):
         self._logger = Logger(utc=True)
-        settings = Settings()
         session = boto3.Session()
         dynamodb = session.resource("dynamodb")
         self._table = dynamodb.Table(f"{settings.stage}-users")
@@ -20,6 +19,7 @@ class UserRepository:
         )
         if response["Items"]:
             return User(**response["Items"][0])
+        return None
 
     async def get_by_id(self, user_uuid: str) -> User | None:
         response = self._table.query(
@@ -28,3 +28,4 @@ class UserRepository:
         )
         if response["Items"]:
             return User(**response["Items"][0])
+        return None
