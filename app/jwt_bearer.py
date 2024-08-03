@@ -79,7 +79,7 @@ class JWTBearer:
     async def __call__(self, request: Request) -> JWTToken | None:
         credentials = await HTTPBearer(self.__auto_error).__call__(request)
         if credentials:
-            if not await self._validate_token(credentials.credentials):
+            if not await self.__validate_token(credentials.credentials):
                 if self.__auto_error:
                     logger.warning(f"Invalid authentication token {credentials=}")
                     raise HTTPException(
@@ -92,7 +92,7 @@ class JWTBearer:
         else:
             return None
 
-    async def _validate_token(self, token: str) -> bool:
+    async def __validate_token(self, token: str) -> bool:
         try:
             decoded_token = JWTToken(
                 **jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])

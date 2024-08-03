@@ -53,7 +53,7 @@ def initialize_users_table(dynamodb_resource, user_model: User, users_table):
         KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
         GlobalSecondaryIndexes=[
             {
-                "IndexName": "EmailIindex",
+                "IndexName": "EmailIndex",
                 "KeySchema": [
                     {"AttributeName": "email", "KeyType": "HASH"},
                 ],
@@ -62,7 +62,7 @@ def initialize_users_table(dynamodb_resource, user_model: User, users_table):
                 },
             },
         ],
-        ProvisionedThroughput={"ReadCapacityUnits": 10, "WriteCapacityUnits": 10},
+        ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
     )
     users_table.put_item(Item=user_model.model_dump())
 

@@ -61,7 +61,7 @@ class AuthService:
         self.password_hasher = PasswordHasher()
         self.user_repository = UserRepository()
 
-    async def _generate_token(self, payload: dict) -> str:
+    async def __generate_token(self, payload: dict) -> str:
         iat = pendulum.now()
         exp = iat.add(seconds=settings.jwt_token_lifetime)
         return jwt.encode(
@@ -81,7 +81,7 @@ class AuthService:
         try:
             self.password_hasher.verify(user.password, password)
             return Token(
-                token=await self._generate_token(
+                token=await self.__generate_token(
                     user.model_dump(
                         exclude={
                             "id",
