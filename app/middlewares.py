@@ -9,22 +9,24 @@ from starlette.responses import Response
 from starlette.types import ASGIApp
 
 X_CORRELATION_ID = "X-Correlation-ID"
-correlation_id: ContextVar[str | None] = ContextVar(
-    X_CORRELATION_ID, default=str(uuid.uuid4())
-)
+
+correlation_id: ContextVar[str] = ContextVar(X_CORRELATION_ID)
+logger = Logger(utc=True)
 
 
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp):
         super().__init__(app)
-        self._logger = Logger(utc=True)
 
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        if request.headers.get(X_CORRELATION_ID):
-            correlation_id.set(request.headers[X_CORRELATION_ID])
-        self._logger.set_correlation_id(correlation_id.get())
+        correlation_id.set(
+            request.headers[X_CORRELATION_ID]
+            if request.headers.get(X_CORRELATION_ID)
+            else str(uuid.uuid4())
+        )
+        logger.set_correlation_id(correlation_id.get())
         response = await call_next(request)
         response.headers[X_CORRELATION_ID] = correlation_id.get()
         return response
