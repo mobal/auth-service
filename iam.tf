@@ -30,10 +30,8 @@ resource "aws_iam_policy" "lambda_policy" {
           "dynamodb:UpdateItem"
         ]
         Resource = [
-          aws_dynamodb_table.posts.arn,
-          "${aws_dynamodb_table.posts.arn}/index/PostPathIndex",
-          "${aws_dynamodb_table.posts.arn}/index/TitleIndex",
-          "${aws_dynamodb_table.posts.arn}/index/CreatedAtIndex"
+          aws_dynamodb_table.users.arn,
+          "${aws_dynamodb_table.users.arn}/index/EmailIndex"
         ]
       },
       {
@@ -72,13 +70,13 @@ resource "aws_security_group" "lambda_security_groups" {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.private_subnet_cidr_block]
   }
 
   ingress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["10.0.0.0/16"]
+    cidr_blocks = [var.private_subnet_cidr_block]
   }
 }
