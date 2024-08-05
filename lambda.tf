@@ -1,7 +1,3 @@
-locals {
-  app_name = "${var.stage}-${var.app_name}"
-}
-
 data "archive_file" "lambda_zip" {
   type = "zip"
   source_dir = path.module

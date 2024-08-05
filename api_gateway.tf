@@ -1,5 +1,5 @@
 resource "aws_apigatewayv2_api" "http_api" {
-  name          = "${var.stage}-auth-service-fastapi"
+  name          = "${local.app_name}-fastapi"
   protocol_type = "HTTP"
 }
 
