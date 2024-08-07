@@ -40,3 +40,7 @@ variable "power_tools_service_name" {
   default = "auth-service"
   type    = string
 }
+
+variable "x_api_key" {
+  type = string
+}
