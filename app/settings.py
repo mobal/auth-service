@@ -11,3 +11,4 @@ class Settings(BaseSettings):
     cache_service_base_url: str
     debug: bool = False
     stage: str
+    x_api_key: str

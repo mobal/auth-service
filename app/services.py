@@ -18,17 +18,22 @@ from app.repositories import UserRepository
 
 logger = Logger(utc=True)
 
+ERROR_MESSAGE_INTERNAL_SERVER_ERROR = "Internal Server Error"
+X_API_KEY = "X-Api-Key"
+X_CORRELATION_ID = "X-Correlation-ID"
+
 
 class CacheService:
-    ERROR_MESSAGE_INTERNAL_SERVER_ERROR = "Internal Server Error"
-    X_CORRELATION_ID = "X-Correlation-ID"
-
     async def get(self, key: str) -> bool:
         async with httpx.AsyncClient() as client:
             url = f"{settings.cache_service_base_url}/api/cache/{key}"
             logger.debug(f"Get cache for {key=} {url=}")
             response = await client.get(
-                url, headers={self.X_CORRELATION_ID: correlation_id.get()}
+                url,
+                headers={
+                    X_CORRELATION_ID: correlation_id.get(),
+                    X_API_KEY: settings.x_api_key,
+                },
             )
         if response.is_success:
             return True
@@ -36,21 +41,24 @@ class CacheService:
             logger.debug(f"Cache was not found for {key=}")
             return False
         logger.error(f"Unexpected error {response=}")
-        raise CacheServiceException(detail=self.ERROR_MESSAGE_INTERNAL_SERVER_ERROR)
+        raise CacheServiceException(detail=ERROR_MESSAGE_INTERNAL_SERVER_ERROR)
 
     async def put(self, key: str, value: Any, ttl: int = 0):
         async with httpx.AsyncClient() as client:
             url = f"{settings.cache_service_base_url}/api/cache"
             response = await client.post(
                 url,
-                headers={self.X_CORRELATION_ID: correlation_id.get()},
+                headers={
+                    X_CORRELATION_ID: correlation_id.get(),
+                    X_API_KEY: settings.x_api_key,
+                },
                 json={"key": key, "value": value, "ttl": ttl},
             )
         if response.status_code == status.HTTP_201_CREATED:
             logger.info(f"Cache successfully created {key=} {value=} {ttl=}")
         else:
             logger.error(f"Failed to put cache {key=} {value=} {ttl=}")
-            raise CacheServiceException(detail=self.ERROR_MESSAGE_INTERNAL_SERVER_ERROR)
+            raise CacheServiceException(detail=ERROR_MESSAGE_INTERNAL_SERVER_ERROR)
 
 
 class AuthService:
