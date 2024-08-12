@@ -19,6 +19,7 @@ from app.repositories import UserRepository
 logger = Logger(utc=True)
 
 ERROR_MESSAGE_INTERNAL_SERVER_ERROR = "Internal Server Error"
+ERROR_MESSAGE_USER_NOT_FOUND = "The requested user was not found"
 X_API_KEY = "X-Api-Key"
 X_CORRELATION_ID = "X-Correlation-ID"
 
@@ -32,7 +33,7 @@ class CacheService:
                 url,
                 headers={
                     X_CORRELATION_ID: correlation_id.get(),
-                    X_API_KEY: settings.x_api_key,
+                    X_API_KEY: settings.cache_service_api_key,
                 },
             )
         if response.is_success:
@@ -50,7 +51,7 @@ class CacheService:
                 url,
                 headers={
                     X_CORRELATION_ID: correlation_id.get(),
-                    X_API_KEY: settings.x_api_key,
+                    X_API_KEY: settings.cache_service_api_key,
                 },
                 json={"key": key, "value": value, "ttl": ttl},
             )
@@ -62,8 +63,6 @@ class CacheService:
 
 
 class AuthService:
-    ERROR_MESSAGE_USER_NOT_FOUND = "The requested user was not found"
-
     def __init__(self):
         self.cache_service = CacheService()
         self.password_hasher = PasswordHasher()
@@ -85,7 +84,7 @@ class AuthService:
     async def login(self, email: str, password: str) -> Token:
         user = await self.user_repository.get_by_email(email)
         if user is None:
-            raise UserNotFoundException(self.ERROR_MESSAGE_USER_NOT_FOUND)
+            raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
         try:
             self.password_hasher.verify(user.password, password)
             return Token(

@@ -39,7 +39,7 @@ class TestAuthApi:
                 "jti": str(uuid.uuid4()),
                 "sub": {"id": str(uuid.uuid4()), "roles": [role] if role else None},
             },
-            pytest.jwt_secret,
+            pytest.jwt_secret_ssm_param_value,
         )
 
     async def __generate_respx_mock(
