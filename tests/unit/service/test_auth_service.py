@@ -59,8 +59,8 @@ class TestAuthService:
     ):
         mocker.patch.object(UserRepository, "get_by_email", return_value=user)
 
-        token = await auth_service.login(user.email, self.PASSWORD)
-        decoded_token = jwt.decode(token.token, settings.jwt_secret, ["HS256"])
+        jwt_token, refresh_token = await auth_service.login(user.email, self.PASSWORD)
+        decoded_token = jwt.decode(jwt_token, settings.jwt_secret, ["HS256"])
 
         user_dict = user.model_dump(
             exclude=["id", "created_at", "deleted_at", "password", "updated_at"]

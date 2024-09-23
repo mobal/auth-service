@@ -13,7 +13,7 @@ from starlette import status
 from app import settings
 from app.exceptions import CacheServiceException, UserNotFoundException
 from app.middlewares import correlation_id
-from app.models import JWTToken, Token
+from app.models import JWTToken
 from app.repositories import UserRepository
 
 logger = Logger(utc=True)
@@ -68,37 +68,42 @@ class AuthService:
         self.password_hasher = PasswordHasher()
         self.user_repository = UserRepository()
 
-    async def __generate_token(self, payload: dict) -> str:
+    async def __generate_token(self, payload: dict, exp: int | None = None) -> JWTToken:
         iat = pendulum.now()
-        exp = iat.add(seconds=settings.jwt_token_lifetime)
-        return jwt.encode(
-            JWTToken(
-                exp=exp.int_timestamp,
-                iat=iat.int_timestamp,
-                jti=str(uuid.uuid4()),
-                sub=payload,
-            ).model_dump(),
-            settings.jwt_secret,
+        exp = (
+            iat.add(seconds=settings.jwt_token_lifetime)
+            if exp is None
+            else iat.add(seconds=exp)
+        )
+        return JWTToken(
+            exp=exp.int_timestamp,
+            iat=iat.int_timestamp,
+            jti=str(uuid.uuid4()),
+            sub=payload,
         )
 
-    async def login(self, email: str, password: str) -> Token:
+    async def login(self, email: str, password: str) -> (str, str):
         user = await self.user_repository.get_by_email(email)
         if user is None:
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
         try:
             self.password_hasher.verify(user.password, password)
-            return Token(
-                token=await self.__generate_token(
-                    user.model_dump(
-                        exclude={
-                            "id",
-                            "created_at",
-                            "deleted_at",
-                            "password",
-                            "updated_at",
-                        },
-                    )
+            jwt_token = await self.__generate_token(
+                user.model_dump(
+                    exclude={
+                        "id",
+                        "created_at",
+                        "deleted_at",
+                        "password",
+                        "updated_at",
+                    },
                 )
+            )
+            refresh_token = await self.__generate_token(
+                {"jti": jwt_token.jti}, int(pendulum.duration(14).total_seconds())
+            )
+            return jwt.encode(jwt_token.model_dump(), settings.jwt_secret), jwt.encode(
+                refresh_token.model_dump(), settings.jwt_secret
             )
         except (InvalidHash, VerifyMismatchError):
             raise HTTPException(

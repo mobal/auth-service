@@ -18,7 +18,7 @@ from app.jwt_bearer import JWTBearer
 from app.middlewares import CorrelationIdMiddleware
 from app.models import CamelModel
 from app.schemas import Login
-from app.services import AuthService, Token
+from app.services import AuthService
 
 auth_service = AuthService()
 jwt_bearer = JWTBearer()
@@ -44,9 +44,12 @@ class ValidationErrorResponse(ErrorResponse):
 
 
 @app.post("/api/v1/login", status_code=status.HTTP_200_OK)
-async def login(body: Login) -> Token:
-    jwt_token = await auth_service.login(body.email, body.password)
-    return jwt_token
+async def login(body: Login) -> dict[str, str]:
+    jwt_token, refresh_token = await auth_service.login(body.email, body.password)
+    return {
+        "token": jwt_token,
+        "refresh_token": refresh_token,
+    }
 
 
 @app.get(
