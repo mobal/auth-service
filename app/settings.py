@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     jwt_token_lifetime: int = 3600
     cache_service_base_url: str
     debug: bool = False
+    refresh_token_lifetime: int = 1209600
     stage: str
 
     @computed_field
