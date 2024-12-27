@@ -1,10 +1,10 @@
-from typing import Tuple
+from typing import Any, Dict
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
 
 from app import settings
-from app.models import JWTToken, User
+from app.models import User
 
 
 class UserRepository:
@@ -37,18 +37,14 @@ class TokenRepository:
             boto3.Session().resource("dynamodb").Table(f"{settings.stage}-tokens")
         )
 
-    async def create(self, jwt_token: JWTToken, refresh_token: JWTToken):
-        pass
+    async def create_token(self, data: Dict[str, Any]):
+        self.__table.put_item(Item=data)
 
-    async def delete(self, jti: str):
-        pass
+    async def delete_by_id(self, jti: str):
+        self.__table.delete_item(Key={"jti": jti})
 
-    async def get_by_id(self, jti: str) -> Tuple[JWTToken, JWTToken] | None:
+    async def get_token_by_id(self, jti: str) -> Dict[str, Any] | None:
         response = self.__table.get_item(
             Key={"jti": jti},
         )
-        if response["Item"]:
-            return JWTToken(**response["Item"]["jwt_token"]), JWTToken(
-                **response["Item"]["refresh_token"]
-            )
-        return None
+        return response["Item"] if "Item" in response else None

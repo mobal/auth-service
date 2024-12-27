@@ -4,8 +4,7 @@ import jwt
 import pendulum
 import pytest as pytest
 from argon2 import PasswordHasher
-from fastapi import HTTPException
-from starlette import status
+from fastapi import HTTPException, status
 
 from app.exceptions import CacheServiceException, UserNotFoundException
 from app.models import User

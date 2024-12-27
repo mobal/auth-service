@@ -4,9 +4,9 @@ from typing import Dict, Optional
 import jwt
 import pendulum
 import pytest
+from fastapi import status
 from httpx import Response
 from respx import MockRouter, Route
-from starlette import status
 from starlette.testclient import TestClient
 
 

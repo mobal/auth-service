@@ -4,14 +4,13 @@ from typing import Dict, Sequence
 import uvicorn
 from aws_lambda_powertools import Logger
 from botocore.exceptions import BotoCoreError
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from mangum import Mangum
-from starlette import status
 from starlette.middleware.exceptions import ExceptionMiddleware
 from starlette.middleware.gzip import GZipMiddleware
-from starlette.responses import JSONResponse
 
 from app import settings
 from app.jwt_bearer import JWTBearer
@@ -44,8 +43,8 @@ class ValidationErrorResponse(ErrorResponse):
 
 
 @app.post("/api/v1/login", status_code=status.HTTP_200_OK)
-async def login(body: Login) -> dict[str, str]:
-    jwt_token, refresh_token = await auth_service.login(body.email, body.password)
+async def login(body: Login) -> Dict[str, str]:
+    jwt_token, refresh_token = await auth_service.login(str(body.email), body.password)
     return {
         "token": jwt_token,
         "refresh_token": refresh_token,
