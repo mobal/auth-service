@@ -132,7 +132,7 @@ class TokenService:
             }
         )
 
-    async def delete(self, jti: str):
+    async def delete_by_id(self, jti: str):
         await self.__token_repository.delete_by_id(jti)
 
     async def get_by_id(self, jti: str) -> Tuple[JWTToken, JWTToken]:
