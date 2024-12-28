@@ -26,7 +26,8 @@ def pytest_configure():
     pytest.jwt_secret_ssm_param_name = "/dev/secrets/secret"
     pytest.jwt_secret_ssm_param_value = "94k9yz00rw"
     pytest.service_name = "auth-service"
-    pytest.table_name = f"{pytest.stage}-users"
+    pytest.tokens_table_name = f"{pytest.stage}-tokens"
+    pytest.users_table_name = f"{pytest.stage}-users"
 
 
 @pytest.fixture(autouse=True)
@@ -69,7 +70,7 @@ def initialize_users_table(dynamodb_resource, user_model: User, users_table):
             {"AttributeName": "id", "AttributeType": "S"},
             {"AttributeName": "email", "AttributeType": "S"},
         ],
-        TableName="test-users",
+        TableName=f"{pytest.stage}-users",
         KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
         GlobalSecondaryIndexes=[
             {
@@ -85,6 +86,18 @@ def initialize_users_table(dynamodb_resource, user_model: User, users_table):
         ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
     )
     users_table.put_item(Item=user_model.model_dump())
+
+
+@pytest.fixture
+def initialize_tokens_table(dynamodb_resource, tokens_table):
+    dynamodb_resource.create_table(
+        AttributeDefinitions=[
+            {"AttributeName": "jti", "AttributeType": "S"},
+        ],
+        TableName=f"{pytest.stage}-tokens",
+        KeySchema=[{"AttributeName": "jti", "KeyType": "HASH"}],
+        ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
+    )
 
 
 @pytest.fixture
@@ -116,4 +129,9 @@ def user_model(user_dict: Dict[str, Any]) -> User:
 
 @pytest.fixture
 def users_table(dynamodb_resource):
-    return dynamodb_resource.Table(pytest.table_name)
+    return dynamodb_resource.Table(pytest.users_table_name)
+
+
+@pytest.fixture
+def tokens_table(dynamodb_resource):
+    return dynamodb_resource.Table(pytest.tokens_table_name)

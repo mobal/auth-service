@@ -88,7 +88,9 @@ class TestAuthApi:
         )
 
     @pytest.fixture
-    def test_client(self, initialize_users_table) -> TestClient:
+    def test_client(
+        self, initialize_tokens_table, initialize_users_table
+    ) -> TestClient:
         from app.main import app
 
         return TestClient(app, raise_server_exceptions=True)

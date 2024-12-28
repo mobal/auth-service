@@ -102,7 +102,7 @@ class AuthService:
             refresh_token = await self.__generate_token(
                 {"jti": jwt_token.jti}, settings.refresh_token_lifetime
             )
-            # await self.__token_service.create(jwt_token, refresh_token)
+            await self.__token_service.create(jwt_token, refresh_token)
             return jwt.encode(jwt_token.model_dump(), settings.jwt_secret), jwt.encode(
                 refresh_token.model_dump(), settings.jwt_secret
             )

@@ -5,8 +5,8 @@ import pytest as pytest
 
 from app.jwt_bearer import JWTBearer
 from app.models import User
-from app.repositories import UserRepository
-from app.services import CacheService, JWTToken
+from app.repositories import TokenRepository, UserRepository
+from app.services import CacheService, JWTToken, TokenService
 
 
 @pytest.fixture
@@ -30,6 +30,16 @@ def jwt_token(user_model) -> JWTToken:
         jti=str(uuid.uuid4()),
         sub=user_model,
     )
+
+
+@pytest.fixture
+def token_repository() -> TokenRepository:
+    return TokenRepository()
+
+
+@pytest.fixture
+def token_service() -> TokenService:
+    return TokenService()
 
 
 @pytest.fixture

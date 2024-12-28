@@ -9,14 +9,15 @@ from fastapi import HTTPException, status
 from app.exceptions import CacheServiceException, UserNotFoundException
 from app.models import User
 from app.repositories import UserRepository
-from app.services import AuthService, CacheService, JWTToken
+from app.services import AuthService, CacheService, JWTToken, TokenService
 from app.settings import Settings
+
+ALGORITHMS = ["HS256"]
+PASSWORD = "123456"
 
 
 @pytest.mark.asyncio
 class TestAuthService:
-    PASSWORD = "123456"
-
     @pytest.fixture
     def auth_service(self) -> AuthService:
         return AuthService()
@@ -42,7 +43,7 @@ class TestAuthService:
             id=str(uuid.uuid4()),
             display_name="root",
             email="root@netcode.hu",
-            password=password_hasher.hash(self.PASSWORD),
+            password=password_hasher.hash(PASSWORD),
             roles=["root"],
             username="root",
             created_at=pendulum.now().to_iso8601_string(),
@@ -53,23 +54,33 @@ class TestAuthService:
         mocker,
         auth_service: AuthService,
         settings: Settings,
+        token_service: TokenService,
         user: User,
         user_repository: UserRepository,
     ):
         mocker.patch.object(UserRepository, "get_by_email", return_value=user)
+        mocker.patch.object(TokenService, "create")
 
-        jwt_token, refresh_token = await auth_service.login(user.email, self.PASSWORD)
-        decoded_token = jwt.decode(jwt_token, settings.jwt_secret, ["HS256"])
+        jwt_token, refresh_token = await auth_service.login(user.email, PASSWORD)
+        decoded_jwt_token = JWTToken(
+            **jwt.decode(jwt_token, settings.jwt_secret, ALGORITHMS)
+        )
+        decoded_refresh_token = JWTToken(
+            **jwt.decode(refresh_token, settings.jwt_secret, ALGORITHMS)
+        )
 
         user_dict = user.model_dump(
             exclude=["id", "created_at", "deleted_at", "password", "updated_at"]
         )
-        assert user_dict == decoded_token["sub"]
+        assert user_dict == decoded_jwt_token.sub
         assert (
-            pendulum.from_timestamp(decoded_token.get("exp"))
-            - pendulum.from_timestamp(decoded_token.get("iat"))
+            pendulum.from_timestamp(decoded_jwt_token.exp)
+            - pendulum.from_timestamp(decoded_jwt_token.iat)
         ).in_words() == "1 hour"
         user_repository.get_by_email.assert_called_once_with(user.email)
+        token_service.create.assert_called_once_with(
+            decoded_jwt_token, decoded_refresh_token
+        )
 
     async def test_fail_to_login_due_user_not_found_by_email(
         self,
@@ -82,7 +93,7 @@ class TestAuthService:
         mocker.patch.object(UserRepository, "get_by_email", return_value=None)
 
         with pytest.raises(UserNotFoundException) as excinfo:
-            await auth_service.login(user.email, self.PASSWORD)
+            await auth_service.login(user.email, PASSWORD)
 
         assert status.HTTP_404_NOT_FOUND == excinfo.value.status_code
         assert error_message == excinfo.value.detail
