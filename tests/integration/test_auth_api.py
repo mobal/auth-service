@@ -130,12 +130,6 @@ class TestAuthApi:
         cache_service_get_keyvalue_mock = await self.__generate_respx_mock(
             "GET", cache_service_response_404, respx_mock, pytest.cache_service_base_url
         )
-        cache_service_put_keyvalue_mock = await self.__generate_respx_mock(
-            "POST",
-            cache_service_response_201,
-            respx_mock,
-            pytest.cache_service_base_url,
-        )
 
         response = test_client.get(
             f"{self.BASE_URL}/logout", headers={"Authorization": f"Bearer {jwt_token}"}
@@ -144,5 +138,3 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_204_NO_CONTENT
         assert cache_service_get_keyvalue_mock.called
         assert cache_service_get_keyvalue_mock.call_count == 1
-        assert cache_service_put_keyvalue_mock.called
-        assert cache_service_put_keyvalue_mock.call_count == 1

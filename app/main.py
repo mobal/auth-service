@@ -57,7 +57,16 @@ async def login(body: Login) -> Dict[str, str]:
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def logout():
-    await auth_service.logout(jwt_bearer.decoded_token)
+    await auth_service.logout(jwt_bearer.decoded_token.jti)
+
+
+@app.get(
+    "/api/v1/refresh",
+    dependencies=[Depends(jwt_bearer)],
+    status_code=status.HTTP_200_OK,
+)
+async def refresh():
+    await auth_service.refresh(jwt_bearer.decoded_token)
 
 
 @app.exception_handler(BotoCoreError)

@@ -10,7 +10,8 @@ from aws_lambda_powertools import Logger
 from fastapi import HTTPException, status
 
 from app import settings
-from app.exceptions import CacheServiceException, UserNotFoundException
+from app.exceptions import (CacheServiceException, TokenNotFoundException,
+                            UserNotFoundException)
 from app.middlewares import correlation_id
 from app.models import JWTToken
 from app.repositories import TokenRepository, UserRepository
@@ -18,6 +19,8 @@ from app.repositories import TokenRepository, UserRepository
 logger = Logger(utc=True)
 
 ERROR_MESSAGE_INTERNAL_SERVER_ERROR = "Internal Server Error"
+ERROR_MESSAGE_TOKEN_NOT_FOUND = "The requested token was not found"
+ERROR_MESSAGE_UNAUTHORIZED = "Unauthorized"
 ERROR_MESSAGE_USER_NOT_FOUND = "The requested user was not found"
 X_API_KEY = "X-Api-Key"
 X_CORRELATION_ID = "X-Correlation-ID"
@@ -109,13 +112,23 @@ class AuthService:
         except (InvalidHash, VerifyMismatchError):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Unauthorized",
+                detail=ERROR_MESSAGE_UNAUTHORIZED,
             )
 
-    async def logout(self, jwt_token: JWTToken):
-        await self.__cache_service.put(
-            f"jti_{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
+    async def logout(self, jti: str):
+        await self.__token_service.delete_by_id(jti)
+
+    async def refresh(self, refresh_token: JWTToken):
+        jwt_token, _ = await self.__token_service.get_by_id(refresh_token.jti)
+        user = await self.__user_repository.get_by_email(jwt_token.sub["email"])
+        if user is None:
+            raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
+        await self.__token_service.delete_by_id(jwt_token.jti)
+        jwt_token = await self.__generate_token(jwt_token.sub)
+        refresh_token = await self.__generate_token(
+            {"jti": jwt_token.jti}, settings.refresh_token_lifetime
         )
+        await self.__token_service.create(jwt_token, refresh_token)
 
 
 class TokenService:
@@ -133,7 +146,9 @@ class TokenService:
         )
 
     async def delete_by_id(self, jti: str):
-        await self.__token_repository.delete_by_id(jti)
+        response = await self.__token_repository.delete_by_id(jti)
+        if "Attributes" not in response:
+            raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
 
     async def get_by_id(self, jti: str) -> Tuple[JWTToken, JWTToken]:
         item = await self.__token_repository.get_token_by_id(jti)

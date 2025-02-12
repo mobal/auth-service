@@ -6,10 +6,10 @@ import pytest as pytest
 from argon2 import PasswordHasher
 from fastapi import HTTPException, status
 
-from app.exceptions import CacheServiceException, UserNotFoundException
+from app.exceptions import TokenNotFoundException, UserNotFoundException
 from app.models import User
 from app.repositories import UserRepository
-from app.services import AuthService, CacheService, JWTToken, TokenService
+from app.services import AuthService, JWTToken, TokenService
 from app.settings import Settings
 
 ALGORITHMS = ["HS256"]
@@ -122,35 +122,32 @@ class TestAuthService:
         self,
         mocker,
         auth_service: AuthService,
-        cache_service: CacheService,
         jwt_token: JWTToken,
+        token_service: TokenService,
     ):
-        mocker.patch.object(CacheService, "put", return_value=True)
+        mocker.patch.object(TokenService, "delete_by_id")
 
-        await auth_service.logout(jwt_token)
+        await auth_service.logout(jwt_token.jti)
 
-        cache_service.put.assert_called_once_with(
-            f"jti_{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
-        )
+        token_service.delete_by_id.assert_called_once_with(jwt_token.jti)
 
-    async def test_fail_to_logout_due_to_cache_service_exception(
+    async def test_fail_to_logout_due_to_token_service_exception(
         self,
         mocker,
         auth_service: AuthService,
-        cache_service: CacheService,
         jwt_token: JWTToken,
+        token_service: TokenService,
     ):
+        error_message = "The requested token was not found"
         mocker.patch.object(
-            CacheService,
-            "put",
-            side_effect=CacheServiceException("Internal Server Error"),
+            TokenService,
+            "delete_by_id",
+            side_effect=TokenNotFoundException(error_message),
         )
 
-        with pytest.raises(CacheServiceException) as excinfo:
-            await auth_service.logout(jwt_token)
+        with pytest.raises(TokenNotFoundException) as excinfo:
+            await auth_service.logout(jwt_token.jti)
 
-        assert status.HTTP_500_INTERNAL_SERVER_ERROR == excinfo.value.status_code
-        assert "Internal Server Error" == excinfo.value.detail
-        cache_service.put.assert_called_once_with(
-            f"jti_{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
-        )
+        assert status.HTTP_404_NOT_FOUND == excinfo.value.status_code
+        assert error_message == excinfo.value.detail
+        token_service.delete_by_id.assert_called_once_with(jwt_token.jti)
