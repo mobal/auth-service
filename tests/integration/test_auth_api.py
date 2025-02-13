@@ -37,7 +37,7 @@ class TestAuthApi:
                 "exp": exp.int_timestamp,
                 "iat": iat.int_timestamp,
                 "jti": str(uuid.uuid4()),
-                "sub": {"id": str(uuid.uuid4()), "roles": [role] if role else None},
+                "sub": str(uuid.uuid4()),
             },
             pytest.jwt_secret_ssm_param_value,
         )

@@ -71,7 +71,7 @@ class AuthService:
         self.__token_service = TokenService()
         self.__user_repository = UserRepository()
 
-    async def __generate_token(self, payload: dict, exp: int | None = None) -> JWTToken:
+    async def __generate_token(self, sub: str, exp: int | None = None) -> JWTToken:
         iat = pendulum.now()
         exp = (
             iat.add(seconds=settings.jwt_token_lifetime)
@@ -82,7 +82,7 @@ class AuthService:
             exp=exp.int_timestamp,
             iat=iat.int_timestamp,
             jti=str(uuid.uuid4()),
-            sub=payload,
+            sub=sub,
         )
 
     async def login(self, email: str, password: str) -> (str, str):
@@ -91,19 +91,9 @@ class AuthService:
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
         try:
             self.__password_hasher.verify(user.password, password)
-            jwt_token = await self.__generate_token(
-                user.model_dump(
-                    exclude={
-                        "id",
-                        "created_at",
-                        "deleted_at",
-                        "password",
-                        "updated_at",
-                    },
-                )
-            )
+            jwt_token = await self.__generate_token(user.id)
             refresh_token = await self.__generate_token(
-                {"jti": jwt_token.jti}, settings.refresh_token_lifetime
+                user.id, settings.refresh_token_lifetime
             )
             await self.__token_service.create(jwt_token, refresh_token)
             return jwt.encode(jwt_token.model_dump(), settings.jwt_secret), jwt.encode(
@@ -126,7 +116,7 @@ class AuthService:
         await self.__token_service.delete_by_id(jwt_token.jti)
         jwt_token = await self.__generate_token(jwt_token.sub)
         refresh_token = await self.__generate_token(
-            {"jti": jwt_token.jti}, settings.refresh_token_lifetime
+            jwt_token.sub, settings.refresh_token_lifetime
         )
         await self.__token_service.create(jwt_token, refresh_token)
 

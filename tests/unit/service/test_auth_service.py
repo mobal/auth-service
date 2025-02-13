@@ -69,10 +69,7 @@ class TestAuthService:
             **jwt.decode(refresh_token, settings.jwt_secret, ALGORITHMS)
         )
 
-        user_dict = user.model_dump(
-            exclude=["id", "created_at", "deleted_at", "password", "updated_at"]
-        )
-        assert user_dict == decoded_jwt_token.sub
+        assert user.id == decoded_jwt_token.sub
         assert (
             pendulum.from_timestamp(decoded_jwt_token.exp)
             - pendulum.from_timestamp(decoded_jwt_token.iat)

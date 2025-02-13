@@ -119,7 +119,7 @@ def jwt_token(user_model) -> JWTToken:
         iat=iat.int_timestamp,
         iss=None,
         jti=str(uuid.uuid4()),
-        sub=user_model,
+        sub=user_model.id,
     )
 
 
@@ -132,7 +132,7 @@ def refresh_token(jwt_token: JWTToken) -> JWTToken:
         iat=iat.int_timestamp,
         iss=None,
         jti=str(uuid.uuid4()),
-        sub={"jti": jwt_token.jti},
+        sub=jwt_token.sub,
     )
 
 

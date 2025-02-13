@@ -13,7 +13,7 @@ class TestTokenRepository:
         token_repository: TokenRepository,
         tokens_table,
     ):
-        item = await token_repository.get_by_id(refresh_token.sub["jti"])
+        item = await token_repository.get_by_id(jwt_token.jti)
 
         assert item == {
             "jti": jwt_token.jti,
