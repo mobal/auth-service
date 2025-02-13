@@ -20,19 +20,6 @@ def jwt_bearer() -> JWTBearer:
 
 
 @pytest.fixture
-def jwt_token(user_model) -> JWTToken:
-    iat = pendulum.now()
-    exp = iat.add(hours=1)
-    return JWTToken(
-        exp=exp.int_timestamp,
-        iat=iat.int_timestamp,
-        iss=None,
-        jti=str(uuid.uuid4()),
-        sub=user_model,
-    )
-
-
-@pytest.fixture
 def token_repository() -> TokenRepository:
     return TokenRepository()
 

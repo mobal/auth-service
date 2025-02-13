@@ -43,7 +43,7 @@ class TokenRepository:
     async def delete_by_id(self, jti: str) -> Dict[str, Any]:
         return self.__table.delete_item(Key={"jti": jti})
 
-    async def get_token_by_id(self, jti: str) -> Dict[str, Any] | None:
+    async def get_by_id(self, jti: str) -> Dict[str, Any] | None:
         response = self.__table.get_item(
             Key={"jti": jti},
         )

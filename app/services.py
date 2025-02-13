@@ -151,5 +151,5 @@ class TokenService:
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
 
     async def get_by_id(self, jti: str) -> Tuple[JWTToken, JWTToken]:
-        item = await self.__token_repository.get_token_by_id(jti)
+        item = await self.__token_repository.get_by_id(jti)
         return JWTToken(**item["jwt_token"]), JWTToken(**item["refresh_token"])
