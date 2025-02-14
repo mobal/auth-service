@@ -13,7 +13,7 @@ from app import settings
 from app.exceptions import (CacheServiceException, TokenNotFoundException,
                             UserNotFoundException)
 from app.middlewares import correlation_id
-from app.models import JWTToken
+from app.models import JWTToken, User
 from app.repositories import TokenRepository, UserRepository
 
 logger = Logger(utc=True)
@@ -71,7 +71,9 @@ class AuthService:
         self.__token_service = TokenService()
         self.__user_repository = UserRepository()
 
-    async def __generate_token(self, sub: str, exp: int | None = None) -> JWTToken:
+    async def __generate_token(
+        self, sub: str, exp: int | None = None, user: User | None = None
+    ) -> JWTToken:
         iat = pendulum.now()
         exp = (
             iat.add(seconds=settings.jwt_token_lifetime)
@@ -83,6 +85,13 @@ class AuthService:
             iat=iat.int_timestamp,
             jti=str(uuid.uuid4()),
             sub=sub,
+            user=(
+                user.model_dump(
+                    exclude=["password", "created_at", "deleted_at", "updated_at"]
+                )
+                if user
+                else None
+            ),
         )
 
     async def login(self, email: str, password: str) -> tuple[str, str]:
@@ -96,8 +105,10 @@ class AuthService:
                 user.id, settings.refresh_token_lifetime
             )
             await self.__token_service.create(jwt_token, refresh_token)
-            return jwt.encode(jwt_token.model_dump(), settings.jwt_secret), jwt.encode(
-                refresh_token.model_dump(), settings.jwt_secret
+            return jwt.encode(
+                jwt_token.model_dump(exclude_none=True), settings.jwt_secret
+            ), jwt.encode(
+                refresh_token.model_dump(exclude_none=True), settings.jwt_secret
             )
         except (InvalidHash, VerifyMismatchError):
             raise HTTPException(

@@ -64,7 +64,7 @@ def dynamodb_resource(settings):
 
 
 @pytest.fixture
-def initialize_users_table(dynamodb_resource, user_model: User):
+def initialize_users_table(dynamodb_resource, user: User):
     users_table = dynamodb_resource.create_table(
         AttributeDefinitions=[
             {"AttributeName": "id", "AttributeType": "S"},
@@ -85,7 +85,7 @@ def initialize_users_table(dynamodb_resource, user_model: User):
         ],
         ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
     )
-    users_table.put_item(Item=user_model.model_dump())
+    users_table.put_item(Item=user.model_dump())
 
 
 @pytest.fixture
@@ -111,7 +111,7 @@ def initialize_tokens_table(
 
 
 @pytest.fixture
-def jwt_token(user_model) -> JWTToken:
+def jwt_token(user: User) -> JWTToken:
     iat = pendulum.now()
     exp = iat.add(hours=1)
     return JWTToken(
@@ -119,7 +119,10 @@ def jwt_token(user_model) -> JWTToken:
         iat=iat.int_timestamp,
         iss=None,
         jti=str(uuid.uuid4()),
-        sub=user_model.id,
+        sub=user.id,
+        user=user.model_dump(
+            exclude=["password", "created_at", "deleted_at", "updated_at"]
+        ),
     )
 
 
@@ -151,7 +154,7 @@ def user_dict() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def user_model(user_dict: Dict[str, Any]) -> User:
+def user(user_dict: Dict[str, Any]) -> User:
     return User(
         id=str(uuid.uuid4()),
         display_name=user_dict["display_name"],

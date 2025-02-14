@@ -14,21 +14,6 @@ from starlette.testclient import TestClient
 class TestAuthApi:
     BASE_URL = "/api/v1"
 
-    async def __assert_response(
-        self,
-        cache_service_mock: MockRouter,
-        message: str,
-        status_code: int,
-        response: Response,
-    ):
-        assert response.status_code == status_code
-        result = response.json()
-        assert result["status"] == status_code
-        assert result["id"]
-        assert result["message"] == message
-        assert cache_service_mock.called
-        assert cache_service_mock.call_count == 1
-
     async def __generate_jwt_token(self, role: str | None = None, exp: int = 1) -> str:
         iat = pendulum.now()
         exp = iat.add(hours=exp)
@@ -128,7 +113,10 @@ class TestAuthApi:
     ):
         jwt_token = await self.__generate_jwt_token()
         cache_service_get_keyvalue_mock = await self.__generate_respx_mock(
-            "GET", cache_service_response_404, respx_mock, pytest.cache_service_base_url
+            "GET",
+            cache_service_response_404,
+            respx_mock,
+            pytest.cache_service_base_url,
         )
         cache_service_put_keyvalue_mock = await self.__generate_respx_mock(
             "POST",

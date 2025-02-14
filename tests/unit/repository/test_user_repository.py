@@ -9,11 +9,11 @@ from app.repositories import UserRepository
 @pytest.mark.asyncio
 class TestUserRepository:
     async def test_successfully_get_by_email(
-        self, users_table, user_model: User, user_repository: UserRepository
+        self, users_table, user: User, user_repository: UserRepository
     ):
-        item = await user_repository.get_by_email(user_model.email)
+        item = await user_repository.get_by_email(user.email)
 
-        assert user_model == item
+        assert user == item
 
     async def test_successfully_return_none_by_email(
         self, users_table, user_repository: UserRepository
@@ -23,11 +23,11 @@ class TestUserRepository:
         assert item is None
 
     async def test_successfully_get_by_id(
-        self, users_table, user_model: User, user_repository: UserRepository
+        self, users_table, user: User, user_repository: UserRepository
     ):
-        item = await user_repository.get_by_id(user_model.id)
+        item = await user_repository.get_by_id(user.id)
 
-        assert user_model == item
+        assert user == item
 
     async def test_successfully_return_none_by_id(
         self, users_table, user_repository: UserRepository
