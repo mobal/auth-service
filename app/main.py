@@ -57,7 +57,7 @@ async def login(body: Login) -> Dict[str, str]:
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def logout():
-    await auth_service.logout(jwt_bearer.decoded_token.jti)
+    await auth_service.logout(jwt_bearer.decoded_token)
 
 
 @app.get(

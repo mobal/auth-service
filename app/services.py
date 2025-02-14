@@ -85,7 +85,7 @@ class AuthService:
             sub=sub,
         )
 
-    async def login(self, email: str, password: str) -> (str, str):
+    async def login(self, email: str, password: str) -> tuple[str, str]:
         user = await self.__user_repository.get_by_email(email)
         if user is None:
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
@@ -105,8 +105,11 @@ class AuthService:
                 detail=ERROR_MESSAGE_UNAUTHORIZED,
             )
 
-    async def logout(self, jti: str):
-        await self.__token_service.delete_by_id(jti)
+    async def logout(self, jwt_token: JWTToken):
+        await self.__cache_service.put(
+            f"jti_{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
+        )
+        await self.__token_service.delete_by_id(jwt_token.jti)
 
     async def refresh(self, refresh_token: JWTToken):
         jwt_token, _ = await self.__token_service.get_by_id(refresh_token.jti)
