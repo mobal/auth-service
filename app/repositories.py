@@ -4,7 +4,7 @@ import boto3
 from boto3.dynamodb.conditions import Attr, Key
 
 from app import settings
-from app.models import User
+from app.models import JWTToken, User
 
 
 class UserRepository:
@@ -43,8 +43,12 @@ class TokenRepository:
     async def delete_by_id(self, jti: str) -> Dict[str, Any]:
         return self.__table.delete_item(Key={"jti": jti})
 
-    async def get_by_id(self, jti: str) -> Dict[str, Any] | None:
+    async def get_by_id(self, jti: str) -> tuple[JWTToken, JWTToken] | None:
         response = self.__table.get_item(
             Key={"jti": jti},
         )
-        return response["Item"] if "Item" in response else None
+        if "Item" in response:
+            return JWTToken(**response["Item"]["jwt_token"]), JWTToken(
+                **response["Item"]["refresh_token"]
+            )
+        return None

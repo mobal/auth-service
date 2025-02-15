@@ -15,9 +15,4 @@ class TestTokenRepository:
     ):
         item = await token_repository.get_by_id(jwt_token.jti)
 
-        assert item == {
-            "jti": jwt_token.jti,
-            "jwt_token": jwt_token.model_dump(),
-            "refresh_token": refresh_token.model_dump(),
-            "ttl": jwt_token.exp,
-        }
+        assert item == (jwt_token, refresh_token)

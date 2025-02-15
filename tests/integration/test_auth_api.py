@@ -9,23 +9,12 @@ from httpx import Response
 from respx import MockRouter, Route
 from starlette.testclient import TestClient
 
+from app.models import JWTToken
+
 
 @pytest.mark.asyncio
 class TestAuthApi:
     BASE_URL = "/api/v1"
-
-    async def __generate_jwt_token(self, role: str | None = None, exp: int = 1) -> str:
-        iat = pendulum.now()
-        exp = iat.add(hours=exp)
-        return jwt.encode(
-            {
-                "exp": exp.int_timestamp,
-                "iat": iat.int_timestamp,
-                "jti": str(uuid.uuid4()),
-                "sub": str(uuid.uuid4()),
-            },
-            pytest.jwt_secret_ssm_param_value,
-        )
 
     async def __generate_respx_mock(
         self,
@@ -107,17 +96,11 @@ class TestAuthApi:
     async def test_successfully_logout(
         self,
         cache_service_response_201: Response,
-        cache_service_response_404: Response,
+        jwt_token: JWTToken,
         respx_mock: MockRouter,
         test_client: TestClient,
+        tokens_table,
     ):
-        jwt_token = await self.__generate_jwt_token()
-        cache_service_get_keyvalue_mock = await self.__generate_respx_mock(
-            "GET",
-            cache_service_response_404,
-            respx_mock,
-            pytest.cache_service_base_url,
-        )
         cache_service_put_keyvalue_mock = await self.__generate_respx_mock(
             "POST",
             cache_service_response_201,
@@ -126,11 +109,12 @@ class TestAuthApi:
         )
 
         response = test_client.get(
-            f"{self.BASE_URL}/logout", headers={"Authorization": f"Bearer {jwt_token}"}
+            f"{self.BASE_URL}/logout",
+            headers={
+                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(), pytest.jwt_secret_ssm_param_value)}"
+            },
         )
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
-        assert cache_service_get_keyvalue_mock.called
-        assert cache_service_get_keyvalue_mock.call_count == 1
         assert cache_service_put_keyvalue_mock.called
         assert cache_service_put_keyvalue_mock.call_count == 1
