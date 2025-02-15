@@ -1,5 +1,4 @@
-from fastapi import HTTPException
-from starlette import status
+from fastapi import HTTPException, status
 
 
 class CacheServiceException(HTTPException):
@@ -9,6 +8,14 @@ class CacheServiceException(HTTPException):
         )
 
 
-class UserNotFoundException(HTTPException):
+class NotFoundException(HTTPException):
     def __init__(self, detail):
         super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
+
+
+class UserNotFoundException(NotFoundException):
+    pass
+
+
+class TokenNotFoundException(NotFoundException):
+    pass

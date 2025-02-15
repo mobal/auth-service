@@ -1,48 +1,37 @@
-import boto3
+import uuid
+
 import pytest
-from moto import mock_aws
 
 from app.models import User
 from app.repositories import UserRepository
-from app.settings import Settings
 
 
 @pytest.mark.asyncio
 class TestUserRepository:
-    @pytest.fixture
-    def dynamodb_resource(self, settings: Settings):
-        with mock_aws():
-            yield boto3.resource(
-                "dynamodb",
-                region_name="eu-central-1",
-                aws_access_key_id=settings.aws_access_key_id,
-                aws_secret_access_key=settings.aws_secret_access_key,
-            )
-
-    @pytest.fixture
-    def dynamodb_table(self, dynamodb_resource):
-        return dynamodb_resource.Table("test-users")
-
-    @pytest.fixture(autouse=True)
-    def setup_table(self, dynamodb_resource, dynamodb_table, user_model: User):
-        dynamodb_resource.create_table(
-            TableName="test-users",
-            KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
-            AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
-            ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
-        )
-        dynamodb_table.put_item(Item=user_model.model_dump())
-
-    async def test_successfully_get_item_by_email(
-        self, dynamodb_table, user_model: User, user_repository: UserRepository
+    async def test_successfully_get_by_email(
+        self, users_table, user: User, user_repository: UserRepository
     ):
-        item = await user_repository.get_by_email(user_model.email)
+        item = await user_repository.get_by_email(user.email)
 
-        assert user_model == item
+        assert user == item
 
-    async def test_successfully_get_item_by_id(
-        self, dynamodb_table, user_model: User, user_repository: UserRepository
+    async def test_successfully_return_none_by_email(
+        self, users_table, user_repository: UserRepository
     ):
-        item = await user_repository.get_by_id(user_model.id)
+        item = await user_repository.get_by_email("hello@netcode.hu")
 
-        assert user_model == item
+        assert item is None
+
+    async def test_successfully_get_by_id(
+        self, users_table, user: User, user_repository: UserRepository
+    ):
+        item = await user_repository.get_by_id(user.id)
+
+        assert user == item
+
+    async def test_successfully_return_none_by_id(
+        self, users_table, user_repository: UserRepository
+    ):
+        item = await user_repository.get_by_id(str(uuid.uuid4()))
+
+        assert item is None

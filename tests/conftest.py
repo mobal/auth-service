@@ -7,7 +7,7 @@ import pytest
 from argon2 import PasswordHasher
 from moto import mock_aws
 
-from app.models import User
+from app.models import JWTToken, User
 from app.settings import Settings
 
 
@@ -18,12 +18,33 @@ def pytest_configure():
     pytest.aws_region_name = "eu-central-1"
     pytest.aws_secret_access_key = "aws_secret_access_key"
 
+    pytest.cache_service_api_key_ssm_param_name = "/dev/service/api-key"
+    pytest.cache_service_api_key_ssm_param_value = (
+        "a2ce72ae-6e34-4c15-8c5a-cb976d119016"
+    )
     pytest.cache_service_base_url = "https://localhost"
-
-    pytest.jwt_secret = "6fl3AkTFmG2rVveLglUW8DOmp8J4Bvi3"
-
+    pytest.jwt_secret_ssm_param_name = "/dev/secrets/secret"
+    pytest.jwt_secret_ssm_param_value = "94k9yz00rw"
     pytest.service_name = "auth-service"
-    pytest.table_name = f"{pytest.stage}-users"
+    pytest.tokens_table_name = f"{pytest.stage}-tokens"
+    pytest.users_table_name = f"{pytest.stage}-users"
+
+
+@pytest.fixture(autouse=True)
+def setup():
+    with mock_aws():
+        ssm_client = boto3.client("ssm")
+        ssm_client.put_parameter(
+            Name=pytest.cache_service_api_key_ssm_param_name,
+            Value=pytest.cache_service_api_key_ssm_param_value,
+            Type="SecureString",
+        )
+        ssm_client.put_parameter(
+            Name=pytest.jwt_secret_ssm_param_name,
+            Value=pytest.jwt_secret_ssm_param_value,
+            Type="SecureString",
+        )
+        yield
 
 
 @pytest.fixture
@@ -43,17 +64,17 @@ def dynamodb_resource(settings):
 
 
 @pytest.fixture
-def initialize_users_table(dynamodb_resource, user_model: User, users_table):
-    dynamodb_resource.create_table(
+def initialize_users_table(dynamodb_resource, user: User):
+    users_table = dynamodb_resource.create_table(
         AttributeDefinitions=[
             {"AttributeName": "id", "AttributeType": "S"},
             {"AttributeName": "email", "AttributeType": "S"},
         ],
-        TableName="test-users",
+        TableName=pytest.users_table_name,
         KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
         GlobalSecondaryIndexes=[
             {
-                "IndexName": "EmailIindex",
+                "IndexName": "EmailIndex",
                 "KeySchema": [
                     {"AttributeName": "email", "KeyType": "HASH"},
                 ],
@@ -62,9 +83,60 @@ def initialize_users_table(dynamodb_resource, user_model: User, users_table):
                 },
             },
         ],
-        ProvisionedThroughput={"ReadCapacityUnits": 10, "WriteCapacityUnits": 10},
+        ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
     )
-    users_table.put_item(Item=user_model.model_dump())
+    users_table.put_item(Item=user.model_dump())
+
+
+@pytest.fixture
+def initialize_tokens_table(
+    dynamodb_resource, jwt_token: JWTToken, refresh_token: JWTToken
+):
+    tokens_table = dynamodb_resource.create_table(
+        AttributeDefinitions=[
+            {"AttributeName": "jti", "AttributeType": "S"},
+        ],
+        TableName=pytest.tokens_table_name,
+        KeySchema=[{"AttributeName": "jti", "KeyType": "HASH"}],
+        ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
+    )
+    tokens_table.put_item(
+        Item={
+            "jti": jwt_token.jti,
+            "jwt_token": jwt_token.model_dump(),
+            "refresh_token": refresh_token.model_dump(),
+            "ttl": jwt_token.exp,
+        }
+    )
+
+
+@pytest.fixture
+def jwt_token(user: User) -> JWTToken:
+    iat = pendulum.now()
+    exp = iat.add(hours=1)
+    return JWTToken(
+        exp=exp.int_timestamp,
+        iat=iat.int_timestamp,
+        iss=None,
+        jti=str(uuid.uuid4()),
+        sub=user.id,
+        user=user.model_dump(
+            exclude=["password", "created_at", "deleted_at", "updated_at"]
+        ),
+    )
+
+
+@pytest.fixture
+def refresh_token(jwt_token: JWTToken) -> JWTToken:
+    iat = pendulum.now()
+    exp = iat.add(days=1)
+    return JWTToken(
+        exp=exp.int_timestamp,
+        iat=iat.int_timestamp,
+        iss=None,
+        jti=str(uuid.uuid4()),
+        sub=jwt_token.sub,
+    )
 
 
 @pytest.fixture
@@ -82,7 +154,7 @@ def user_dict() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def user_model(user_dict: Dict[str, Any]) -> User:
+def user(user_dict: Dict[str, Any]) -> User:
     return User(
         id=str(uuid.uuid4()),
         display_name=user_dict["display_name"],
@@ -95,5 +167,10 @@ def user_model(user_dict: Dict[str, Any]) -> User:
 
 
 @pytest.fixture
-def users_table(dynamodb_resource):
-    return dynamodb_resource.Table(pytest.table_name)
+def users_table(dynamodb_resource, initialize_users_table):
+    return dynamodb_resource.Table(pytest.users_table_name)
+
+
+@pytest.fixture
+def tokens_table(dynamodb_resource, initialize_tokens_table):
+    return dynamodb_resource.Table(pytest.tokens_table_name)

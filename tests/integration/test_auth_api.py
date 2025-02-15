@@ -4,9 +4,9 @@ from typing import Dict, Optional
 import jwt
 import pendulum
 import pytest
+from fastapi import status
 from httpx import Response
 from respx import MockRouter, Route
-from starlette import status
 from starlette.testclient import TestClient
 
 
@@ -14,22 +14,7 @@ from starlette.testclient import TestClient
 class TestAuthApi:
     BASE_URL = "/api/v1"
 
-    async def _assert_response(
-        self,
-        cache_service_mock: MockRouter,
-        message: str,
-        status_code: int,
-        response: Response,
-    ):
-        assert response.status_code == status_code
-        result = response.json()
-        assert result["status"] == status_code
-        assert result["id"]
-        assert result["message"] == message
-        assert cache_service_mock.called
-        assert cache_service_mock.call_count == 1
-
-    async def _generate_jwt_token(self, role: str | None = None, exp: int = 1) -> str:
+    async def __generate_jwt_token(self, role: str | None = None, exp: int = 1) -> str:
         iat = pendulum.now()
         exp = iat.add(hours=exp)
         return jwt.encode(
@@ -37,12 +22,12 @@ class TestAuthApi:
                 "exp": exp.int_timestamp,
                 "iat": iat.int_timestamp,
                 "jti": str(uuid.uuid4()),
-                "sub": {"id": str(uuid.uuid4()), "roles": [role] if role else None},
+                "sub": str(uuid.uuid4()),
             },
-            pytest.jwt_secret,
+            pytest.jwt_secret_ssm_param_value,
         )
 
-    async def _generate_respx_mock(
+    async def __generate_respx_mock(
         self,
         method: str,
         response: Response,
@@ -88,7 +73,9 @@ class TestAuthApi:
         )
 
     @pytest.fixture
-    def test_client(self, initialize_users_table) -> TestClient:
+    def test_client(
+        self, initialize_tokens_table, initialize_users_table
+    ) -> TestClient:
         from app.main import app
 
         return TestClient(app, raise_server_exceptions=True)
@@ -124,11 +111,14 @@ class TestAuthApi:
         respx_mock: MockRouter,
         test_client: TestClient,
     ):
-        jwt_token = await self._generate_jwt_token()
-        cache_service_get_keyvalue_mock = await self._generate_respx_mock(
-            "GET", cache_service_response_404, respx_mock, pytest.cache_service_base_url
+        jwt_token = await self.__generate_jwt_token()
+        cache_service_get_keyvalue_mock = await self.__generate_respx_mock(
+            "GET",
+            cache_service_response_404,
+            respx_mock,
+            pytest.cache_service_base_url,
         )
-        cache_service_put_keyvalue_mock = await self._generate_respx_mock(
+        cache_service_put_keyvalue_mock = await self.__generate_respx_mock(
             "POST",
             cache_service_response_201,
             respx_mock,

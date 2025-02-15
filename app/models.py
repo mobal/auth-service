@@ -21,6 +21,7 @@ class JWTToken(BaseModel):
     iss: str | None = None
     jti: str
     sub: Any
+    user: dict[str, Any] | None = None
 
 
 class User(CamelModel):

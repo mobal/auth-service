@@ -5,8 +5,8 @@ import pytest as pytest
 
 from app.jwt_bearer import JWTBearer
 from app.models import User
-from app.repositories import UserRepository
-from app.services import CacheService, JWTToken
+from app.repositories import TokenRepository, UserRepository
+from app.services import CacheService, JWTToken, TokenService
 
 
 @pytest.fixture
@@ -20,29 +20,13 @@ def jwt_bearer() -> JWTBearer:
 
 
 @pytest.fixture
-def jwt_token(user_model) -> JWTToken:
-    iat = pendulum.now()
-    exp = iat.add(hours=1)
-    return JWTToken(
-        exp=exp.int_timestamp,
-        iat=iat.int_timestamp,
-        iss=None,
-        jti=str(uuid.uuid4()),
-        sub=user_model,
-    )
+def token_repository() -> TokenRepository:
+    return TokenRepository()
 
 
 @pytest.fixture
-def user_model() -> User:
-    return User(
-        id=str(uuid.uuid4()),
-        display_name="root",
-        email="root@netcode.hu",
-        password="password",
-        roles=["root"],
-        username="root",
-        created_at=pendulum.now().to_iso8601_string(),
-    )
+def token_service() -> TokenService:
+    return TokenService()
 
 
 @pytest.fixture

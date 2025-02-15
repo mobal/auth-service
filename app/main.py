@@ -1,26 +1,23 @@
 import uuid
-from inspect import isclass
 from typing import Dict, Sequence
 
-import botocore
 import uvicorn
 from aws_lambda_powertools import Logger
 from botocore.exceptions import BotoCoreError
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from mangum import Mangum
-from starlette import status
 from starlette.middleware.exceptions import ExceptionMiddleware
 from starlette.middleware.gzip import GZipMiddleware
-from starlette.responses import JSONResponse
 
 from app import settings
 from app.jwt_bearer import JWTBearer
 from app.middlewares import CorrelationIdMiddleware
 from app.models import CamelModel
 from app.schemas import Login
-from app.services import AuthService, Token
+from app.services import AuthService
 
 auth_service = AuthService()
 jwt_bearer = JWTBearer()
@@ -46,9 +43,12 @@ class ValidationErrorResponse(ErrorResponse):
 
 
 @app.post("/api/v1/login", status_code=status.HTTP_200_OK)
-async def login(body: Login) -> Token:
-    jwt_token = await auth_service.login(body.email, body.password)
-    return jwt_token
+async def login(body: Login) -> Dict[str, str]:
+    jwt_token, refresh_token = await auth_service.login(str(body.email), body.password)
+    return {
+        "token": jwt_token,
+        "refresh_token": refresh_token,
+    }
 
 
 @app.get(
@@ -60,13 +60,23 @@ async def logout():
     await auth_service.logout(jwt_bearer.decoded_token)
 
 
+@app.get(
+    "/api/v1/refresh",
+    dependencies=[Depends(jwt_bearer)],
+    status_code=status.HTTP_200_OK,
+)
+async def refresh():
+    await auth_service.refresh(jwt_bearer.decoded_token)
+
+
+@app.exception_handler(BotoCoreError)
 async def botocore_error_handler(
     request: Request, error: BotoCoreError
 ) -> JSONResponse:
     error_id = uuid.uuid4()
     error_message = str(error) if settings.debug else "Internal Server Error"
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-    logger.error(f"{str(error)} with {status_code=} and {error_id=}")
+    logger.exception(f"Received botocore error {error_id=}")
     return JSONResponse(
         content=jsonable_encoder(
             ErrorResponse(status=status_code, id=error_id, message=error_message)
@@ -75,21 +85,12 @@ async def botocore_error_handler(
     )
 
 
-for k, v in sorted(
-    filter(
-        lambda elem: isclass(elem[1]) and issubclass(elem[1], BotoCoreError),
-        botocore.exceptions.__dict__.items(),
-    )
-):
-    app.add_exception_handler(v, botocore_error_handler)
-
-
 @app.exception_handler(HTTPException)
 async def http_exception_handler(
     request: Request, error: HTTPException
 ) -> JSONResponse:
     error_id = uuid.uuid4()
-    logger.error(f"{error.detail} with {error.status_code=} and {error_id=}")
+    logger.exception(f"Received http exception {error_id=}")
     return JSONResponse(
         content=jsonable_encoder(
             ErrorResponse(status=error.status_code, id=error_id, message=error.detail)
@@ -103,9 +104,8 @@ async def request_validation_error_handler(
     request: Request, error: RequestValidationError
 ) -> JSONResponse:
     error_id = uuid.uuid4()
-    error_message = str(error)
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
-    logger.error(f"{error_message} with {status_code=} and {error_id=}")
+    logger.exception(f"Received request validation error {error_id=}")
     return JSONResponse(
         content=jsonable_encoder(
             ValidationErrorResponse(
