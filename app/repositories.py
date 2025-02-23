@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
@@ -37,10 +37,10 @@ class TokenRepository:
             boto3.Session().resource("dynamodb").Table(f"{settings.stage}-tokens")
         )
 
-    async def create_token(self, data: Dict[str, Any]) -> Dict[str, any]:
+    async def create_token(self, data: dict[str, Any]) -> dict[str, any]:
         return self.__table.put_item(Item=data)
 
-    async def delete_by_id(self, jti: str) -> Dict[str, Any]:
+    async def delete_by_id(self, jti: str) -> dict[str, Any]:
         return self.__table.delete_item(Key={"jti": jti})
 
     async def get_by_id(self, jti: str) -> tuple[JWTToken, JWTToken] | None:
@@ -48,7 +48,15 @@ class TokenRepository:
             Key={"jti": jti},
         )
         if "Item" in response:
-            return JWTToken(**response["Item"]["jwt_token"]), JWTToken(
-                **response["Item"]["refresh_token"]
+            return (
+                JWTToken(**response["Item"]["jwt_token"]),
+                response["Item"]["refresh_token"],
             )
         return None
+
+    async def get_by_refresh_token(self, refresh_token: str) -> dict[str, Any] | None:
+        response = self.__table.query(
+            IndexName="RefreshTokenIndex",
+            KeyConditionExpression=Key("refresh_token").eq(refresh_token),
+        )
+        return response["Items"][0] if response["Items"] else None

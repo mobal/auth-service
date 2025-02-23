@@ -135,7 +135,7 @@ class TestJWTAuth:
         mocker.patch.object(
             TokenService,
             "get_by_id",
-            return_value=(jwt_token.model_dump(), refresh_token.model_dump()),
+            return_value=(jwt_token.model_dump(), refresh_token),
         )
 
         result = await jwt_bearer(valid_request)

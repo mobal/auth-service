@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, Dict
+from typing import Any
 
 import boto3
 import pendulum
@@ -89,22 +89,28 @@ def initialize_users_table(dynamodb_resource, user: User):
 
 
 @pytest.fixture
-def initialize_tokens_table(
-    dynamodb_resource, jwt_token: JWTToken, refresh_token: JWTToken
-):
+def initialize_tokens_table(dynamodb_resource, jwt_token: JWTToken, refresh_token: str):
     tokens_table = dynamodb_resource.create_table(
         AttributeDefinitions=[
             {"AttributeName": "jti", "AttributeType": "S"},
+            {"AttributeName": "refresh_token", "AttributeType": "S"},
         ],
         TableName=pytest.tokens_table_name,
         KeySchema=[{"AttributeName": "jti", "KeyType": "HASH"}],
+        GlobalSecondaryIndexes=[
+            {
+                "IndexName": "RefreshTokenIndex",
+                "KeySchema": [{"AttributeName": "refresh_token", "KeyType": "HASH"}],
+                "Projection": {"ProjectionType": "ALL"},
+            },
+        ],
         ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
     )
     tokens_table.put_item(
         Item={
             "jti": jwt_token.jti,
             "jwt_token": jwt_token.model_dump(),
-            "refresh_token": refresh_token.model_dump(),
+            "refresh_token": refresh_token,
             "ttl": jwt_token.exp,
         }
     )
@@ -127,20 +133,12 @@ def jwt_token(user: User) -> JWTToken:
 
 
 @pytest.fixture
-def refresh_token(jwt_token: JWTToken) -> JWTToken:
-    iat = pendulum.now()
-    exp = iat.add(days=1)
-    return JWTToken(
-        exp=exp.int_timestamp,
-        iat=iat.int_timestamp,
-        iss=None,
-        jti=str(uuid.uuid4()),
-        sub=jwt_token.sub,
-    )
+def refresh_token() -> str:
+    return str(uuid.uuid4())
 
 
 @pytest.fixture
-def user_dict() -> Dict[str, Any]:
+def user_dict() -> dict[str, Any]:
     now = pendulum.now()
     return {
         "display_name": "root",
@@ -154,7 +152,7 @@ def user_dict() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def user(user_dict: Dict[str, Any]) -> User:
+def user(user_dict: dict[str, Any]) -> User:
     return User(
         id=str(uuid.uuid4()),
         display_name=user_dict["display_name"],

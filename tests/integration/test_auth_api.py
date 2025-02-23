@@ -1,5 +1,4 @@
 import uuid
-from typing import Dict, Optional
 
 import jwt
 import pendulum
@@ -22,7 +21,7 @@ class TestAuthApi:
         response: Response,
         respx_mock: MockRouter,
         url: str,
-        headers: Optional[Dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
     ) -> Route:
         return respx_mock.route(
             headers=headers, method=method, url__startswith=url
@@ -84,7 +83,7 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.json()["token"]
+        assert list(response.json().keys()) == ["token", "refreshToken"]
 
     async def test_fail_to_logout_due_to_missing_bearer_token(
         self, test_client: TestClient
@@ -99,7 +98,6 @@ class TestAuthApi:
         jwt_token: JWTToken,
         respx_mock: MockRouter,
         test_client: TestClient,
-        tokens_table,
     ):
         cache_service_put_keyvalue_mock = await self.__generate_respx_mock(
             "POST",
@@ -116,5 +114,66 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert cache_service_put_keyvalue_mock.called
+        assert cache_service_put_keyvalue_mock.call_count == 1
+
+    async def test_fail_to_refresh_due_to_jwt_token_not_found(
+        self,
+        jwt_token: JWTToken,
+        refresh_token: str,
+        test_client: TestClient,
+    ):
+        jwt_token.jti = str(uuid.uuid4())
+        response = test_client.post(
+            f"{self.BASE_URL}/refresh",
+            json={"refreshToken": refresh_token},
+            headers={
+                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(), pytest.jwt_secret_ssm_param_value)}"
+            },
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.json()["message"] == "Not authenticated"
+
+    async def test_fail_to_refresh_due_to_refresh_token_not_found(
+        self,
+        jwt_token: JWTToken,
+        test_client: TestClient,
+    ):
+        response = test_client.post(
+            f"{self.BASE_URL}/refresh",
+            json={"refreshToken": str(uuid.uuid4())},
+            headers={
+                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(), pytest.jwt_secret_ssm_param_value)}"
+            },
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json()["message"] == "The requested token was not found"
+
+    async def test_successfully_refresh(
+        self,
+        cache_service_response_201,
+        jwt_token: JWTToken,
+        refresh_token: str,
+        respx_mock: MockRouter,
+        test_client: TestClient,
+    ):
+        cache_service_put_keyvalue_mock = await self.__generate_respx_mock(
+            "POST",
+            cache_service_response_201,
+            respx_mock,
+            pytest.cache_service_base_url,
+        )
+
+        response = test_client.post(
+            f"{self.BASE_URL}/refresh",
+            json={"refreshToken": refresh_token},
+            headers={
+                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(), pytest.jwt_secret_ssm_param_value)}"
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
         assert cache_service_put_keyvalue_mock.called
         assert cache_service_put_keyvalue_mock.call_count == 1

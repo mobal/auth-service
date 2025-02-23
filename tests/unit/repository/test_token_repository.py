@@ -9,7 +9,7 @@ class TestTokenRepository:
     async def test_successfully_get_by_id(
         self,
         jwt_token: JWTToken,
-        refresh_token: JWTToken,
+        refresh_token: str,
         token_repository: TokenRepository,
         tokens_table,
     ):

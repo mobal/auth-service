@@ -65,9 +65,6 @@ class TestAuthService:
         decoded_jwt_token = JWTToken(
             **jwt.decode(jwt_token, settings.jwt_secret, ALGORITHMS)
         )
-        decoded_refresh_token = JWTToken(
-            **jwt.decode(refresh_token, settings.jwt_secret, ALGORITHMS)
-        )
 
         assert user.id == decoded_jwt_token.sub
         assert (
@@ -75,9 +72,7 @@ class TestAuthService:
             - pendulum.from_timestamp(decoded_jwt_token.iat)
         ).in_words() == "1 hour"
         user_repository.get_by_email.assert_called_once_with(user.email)
-        token_service.create.assert_called_once_with(
-            decoded_jwt_token, decoded_refresh_token
-        )
+        token_service.create.assert_called_once_with(decoded_jwt_token, refresh_token)
 
     async def test_fail_to_login_due_user_not_found_by_email(
         self,
