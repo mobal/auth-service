@@ -72,7 +72,10 @@ class AuthService:
         self.__user_repository = UserRepository()
 
     async def __generate_token(
-        self, sub: str, exp: int | None = None, user: User | None = None
+        self,
+        sub: str,
+        exp: int | None = None,
+        user: dict[str, Any] | User | None = None,
     ) -> JWTToken:
         iat = pendulum.now()
         exp = (
@@ -86,8 +89,12 @@ class AuthService:
             jti=str(uuid.uuid4()),
             sub=sub,
             user=(
-                user.model_dump(
-                    exclude=["password", "created_at", "deleted_at", "updated_at"]
+                (
+                    user.model_dump(
+                        exclude=["password", "created_at", "deleted_at", "updated_at"]
+                    )
+                    if type(user) is User
+                    else user
                 )
                 if user
                 else None
@@ -121,28 +128,27 @@ class AuthService:
         )
         await self.__token_service.delete_by_id(jwt_token.jti)
 
-    async def refresh(self, refresh_token: str) -> tuple[JWTToken, str]:
+    async def refresh(
+        self, jwt_token: JWTToken, refresh_token: str
+    ) -> tuple[JWTToken, str]:
         item = await self.__token_service.get_by_refresh_token(refresh_token)
         if item is None:
             logger.warning("The requested token was not found!")
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
+        if jwt_token.model_dump() != item["jwt_token"]:
+            raise Exception("Token mismatch")
         if (
             pendulum.now() - pendulum.from_timestamp(int(item["jwt_token"]["iat"]))
         ).seconds > settings.refresh_token_lifetime:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="asd"
             )
-        jwt_token = JWTToken(**item["jwt_token"])
-        user = await self.__user_repository.get_by_email(jwt_token.user["email"])
-        if user is None:
-            logger.warning("The requested user was not found!")
-            raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
         await self.__token_service.delete_by_id(jwt_token.jti)
         await self.__cache_service.put(
             f"jti{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
         )
         jwt_token = await self.__generate_token(
-            jwt_token.sub, settings.jwt_token_lifetime, user
+            jwt_token.sub, settings.jwt_token_lifetime, jwt_token.user
         )
         refresh_token = str(uuid.uuid4())
         await self.__token_service.create(jwt_token, refresh_token)

@@ -66,7 +66,9 @@ async def logout():
     status_code=status.HTTP_200_OK,
 )
 async def refresh(body: RefreshSchema) -> dict[str, str]:
-    jwt_token, refresh_token = await auth_service.refresh(body.refresh_token)
+    jwt_token, refresh_token = await auth_service.refresh(
+        jwt_bearer.decoded_token, body.refresh_token
+    )
     return {"token": jwt_token, "refreshToken": refresh_token}
 
 
