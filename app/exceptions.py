@@ -10,11 +10,6 @@ class CacheServiceException(HTTPException):
         )
 
 
-class ExpiredRefreshTokenException(HTTPException):
-    def __init__(self, detail: Any):
-        super().__init__(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
-
-
 class NotFoundException(HTTPException):
     def __init__(self, detail):
         super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=detail)

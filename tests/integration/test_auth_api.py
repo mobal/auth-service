@@ -13,6 +13,7 @@ from app.models import JWTToken, User
 BASE_URL = "/api/v1"
 LOGIN_URL = f"{BASE_URL}/login"
 PASSWORD = "12345678"
+REFRESH_URL = f"{BASE_URL}/refresh"
 
 
 @pytest.mark.asyncio
@@ -59,7 +60,7 @@ class TestAuthApi:
             json={
                 "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
                 "id": str(uuid.uuid4()),
-                "message": "Internal server error",
+                "message": "Internal Server Error",
             },
         )
 
@@ -147,8 +148,9 @@ class TestAuthApi:
         test_client: TestClient,
     ):
         jwt_token.jti = str(uuid.uuid4())
+
         response = test_client.post(
-            f"{BASE_URL}/refresh",
+            REFRESH_URL,
             json={"refreshToken": refresh_token},
             headers={
                 "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(), pytest.jwt_secret_ssm_param_value)}"
@@ -158,13 +160,31 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_403_FORBIDDEN
         assert response.json()["message"] == "Not authenticated"
 
+    async def test_fail_to_refresh_due_to_jwt_token_mistmatch(
+        self,
+        jwt_token: JWTToken,
+        refresh_token: str,
+        test_client: TestClient,
+    ):
+        jwt_token.user = {}
+
+        response = test_client.post(
+            REFRESH_URL,
+            json={"refreshToken": refresh_token},
+            headers={
+                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(), pytest.jwt_secret_ssm_param_value)}"
+            },
+        )
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+
     async def test_fail_to_refresh_due_to_refresh_token_not_found(
         self,
         jwt_token: JWTToken,
         test_client: TestClient,
     ):
         response = test_client.post(
-            f"{BASE_URL}/refresh",
+            REFRESH_URL,
             json={"refreshToken": str(uuid.uuid4())},
             headers={
                 "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(), pytest.jwt_secret_ssm_param_value)}"
@@ -190,7 +210,7 @@ class TestAuthApi:
         )
 
         response = test_client.post(
-            f"{BASE_URL}/refresh",
+            REFRESH_URL,
             json={"refreshToken": refresh_token},
             headers={
                 "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(), pytest.jwt_secret_ssm_param_value)}"

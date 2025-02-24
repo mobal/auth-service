@@ -10,8 +10,8 @@ from aws_lambda_powertools import Logger
 from fastapi import HTTPException, status
 
 from app import settings
-from app.exceptions import (CacheServiceException, TokenNotFoundException,
-                            UserNotFoundException)
+from app.exceptions import (CacheServiceException, TokenMistmatchException,
+                            TokenNotFoundException, UserNotFoundException)
 from app.middlewares import correlation_id
 from app.models import JWTToken, User
 from app.repositories import TokenRepository, UserRepository
@@ -136,13 +136,7 @@ class AuthService:
             logger.warning("The requested token was not found!")
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
         if jwt_token.model_dump() != item["jwt_token"]:
-            raise Exception("Token mismatch")
-        if (
-            pendulum.now() - pendulum.from_timestamp(int(item["jwt_token"]["iat"]))
-        ).seconds > settings.refresh_token_lifetime:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="asd"
-            )
+            raise TokenMistmatchException("Internal Server Error")
         await self.__token_service.delete_by_id(jwt_token.jti)
         await self.__cache_service.put(
             f"jti{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
