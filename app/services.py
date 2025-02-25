@@ -66,12 +66,12 @@ class CacheService:
 
 class AuthService:
     def __init__(self):
-        self.__cache_service = CacheService()
-        self.__password_hasher = PasswordHasher()
-        self.__token_service = TokenService()
-        self.__user_repository = UserRepository()
+        self._cache_service = CacheService()
+        self._password_hasher = PasswordHasher()
+        self._token_service = TokenService()
+        self._user_repository = UserRepository()
 
-    async def __generate_token(
+    async def _generate_token(
         self,
         sub: str,
         exp: int | None = None,
@@ -83,33 +83,36 @@ class AuthService:
             if exp is None
             else iat.add(seconds=exp)
         )
+        if user and type(user) == User:
+            user = user.model_dump(
+                exclude=["password", "created_at", "deleted_at", "updated_at"]
+            )
         return JWTToken(
             exp=exp.int_timestamp,
             iat=iat.int_timestamp,
             jti=str(uuid.uuid4()),
             sub=sub,
-            user=(
-                (
-                    user.model_dump(
-                        exclude=["password", "created_at", "deleted_at", "updated_at"]
-                    )
-                    if type(user) is User
-                    else user
-                )
-                if user
-                else None
-            ),
+            user=user,
+        )
+
+    async def _revoke_token(self, jwt_token: JWTToken):
+        logger.info(
+            f"Revoking token with jti={jwt_token.jti}", extra={"jwt_token": jwt_token}
+        )
+        await self._token_service.delete_by_id(jwt_token.jti)
+        await self._cache_service.put(
+            f"jti{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
         )
 
     async def login(self, email: str, password: str) -> tuple[str, str]:
-        user = await self.__user_repository.get_by_email(email)
+        user = await self._user_repository.get_by_email(email)
         if user is None:
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
         try:
-            self.__password_hasher.verify(user.password, password)
-            jwt_token = await self.__generate_token(user.id)
+            self._password_hasher.verify(user.password, password)
+            jwt_token = await self._generate_token(user.id)
             refresh_token = str(uuid.uuid4())
-            await self.__token_service.create(jwt_token, refresh_token)
+            await self._token_service.create(jwt_token, refresh_token)
             return (
                 jwt.encode(
                     jwt_token.model_dump(exclude_none=True), settings.jwt_secret
@@ -123,29 +126,30 @@ class AuthService:
             )
 
     async def logout(self, jwt_token: JWTToken):
-        await self.__cache_service.put(
+        await self._cache_service.put(
             f"jti_{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
         )
-        await self.__token_service.delete_by_id(jwt_token.jti)
+        await self._token_service.delete_by_id(jwt_token.jti)
 
     async def refresh(
         self, jwt_token: JWTToken, refresh_token: str
     ) -> tuple[JWTToken, str]:
-        item = await self.__token_service.get_by_refresh_token(refresh_token)
+        item = await self._token_service.get_by_refresh_token(refresh_token)
         if item is None:
             logger.warning("The requested token was not found!")
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
         if jwt_token.model_dump() != item["jwt_token"]:
             raise TokenMistmatchException("Internal Server Error")
-        await self.__token_service.delete_by_id(jwt_token.jti)
-        await self.__cache_service.put(
-            f"jti{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
+        await self._revoke_token(jwt_token)
+        logger.info(
+            f"Generate new tokens for user={jwt_token.user["id"]}",
+            extra={"user": jwt_token.user},
         )
-        jwt_token = await self.__generate_token(
+        jwt_token = await self._generate_token(
             jwt_token.sub, settings.jwt_token_lifetime, jwt_token.user
         )
         refresh_token = str(uuid.uuid4())
-        await self.__token_service.create(jwt_token, refresh_token)
+        await self._token_service.create(jwt_token, refresh_token)
         return (
             jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
             refresh_token,
