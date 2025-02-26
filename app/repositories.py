@@ -43,7 +43,7 @@ class TokenRepository:
     async def delete_by_id(self, jti: str) -> dict[str, Any]:
         return self.__table.delete_item(Key={"jti": jti})
 
-    async def get_by_id(self, jti: str) -> tuple[JWTToken, JWTToken] | None:
+    async def get_by_id(self, jti: str) -> tuple[JWTToken, str] | None:
         response = self.__table.get_item(
             Key={"jti": jti},
         )
