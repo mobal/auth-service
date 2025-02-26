@@ -14,8 +14,8 @@ resource "aws_dynamodb_table" "users" {
   }
 
   global_secondary_index {
-    name            = "EmailIndex"
     hash_key        = "email"
+    name            = "EmailIndex"
     projection_type = "ALL"
   }
 
@@ -44,5 +44,11 @@ resource "aws_dynamodb_table" "tokens" {
   attribute {
     name = "ttl"
     type = "N"
+  }
+
+  global_secondary_index {
+    hash_key        = "refresh_token"
+    name            = "RefreshTokenIndex"
+    projection_type = "ALL"
   }
 }
