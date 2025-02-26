@@ -32,18 +32,8 @@ resource "aws_dynamodb_table" "tokens" {
   }
 
   attribute {
-    name = "jwt_token"
-    type = "S"
-  }
-
-  attribute {
     name = "refresh_token"
     type = "S"
-  }
-
-  attribute {
-    name = "ttl"
-    type = "N"
   }
 
   global_secondary_index {
