@@ -1,8 +1,10 @@
+from typing import Any
+
 from fastapi import HTTPException, status
 
 
 class CacheServiceException(HTTPException):
-    def __init__(self, detail):
+    def __init__(self, detail: Any):
         super().__init__(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail
         )
@@ -15,6 +17,13 @@ class NotFoundException(HTTPException):
 
 class UserNotFoundException(NotFoundException):
     pass
+
+
+class TokenMistmatchException(HTTPException):
+    def __init__(self, detail: Any):
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail
+        )
 
 
 class TokenNotFoundException(NotFoundException):

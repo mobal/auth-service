@@ -32,6 +32,7 @@ pytest-mock = "~=3.14.0"
 pytest-xdist = "~=3.6.1"
 respx = "~=0.22.0"
 setuptools = "~=75.8.0"
+time-machine = "~=2.16.0"
 
 [requires]
 python_version = "3.12"

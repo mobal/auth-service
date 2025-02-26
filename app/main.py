@@ -16,7 +16,7 @@ from app import settings
 from app.jwt_bearer import JWTBearer
 from app.middlewares import CorrelationIdMiddleware
 from app.models import CamelModel
-from app.schemas import Login
+from app.schemas import LoginSchema, RefreshSchema
 from app.services import AuthService
 
 auth_service = AuthService()
@@ -43,11 +43,11 @@ class ValidationErrorResponse(ErrorResponse):
 
 
 @app.post("/api/v1/login", status_code=status.HTTP_200_OK)
-async def login(body: Login) -> Dict[str, str]:
+async def login(body: LoginSchema) -> dict[str, str]:
     jwt_token, refresh_token = await auth_service.login(str(body.email), body.password)
     return {
         "token": jwt_token,
-        "refresh_token": refresh_token,
+        "refreshToken": refresh_token,
     }
 
 
@@ -60,13 +60,16 @@ async def logout():
     await auth_service.logout(jwt_bearer.decoded_token)
 
 
-@app.get(
+@app.post(
     "/api/v1/refresh",
     dependencies=[Depends(jwt_bearer)],
     status_code=status.HTTP_200_OK,
 )
-async def refresh():
-    await auth_service.refresh(jwt_bearer.decoded_token)
+async def refresh(body: RefreshSchema) -> dict[str, str]:
+    jwt_token, refresh_token = await auth_service.refresh(
+        jwt_bearer.decoded_token, body.refresh_token
+    )
+    return {"token": jwt_token, "refreshToken": refresh_token}
 
 
 @app.exception_handler(BotoCoreError)
