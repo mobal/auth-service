@@ -83,9 +83,9 @@ class AuthService:
             if exp is None
             else iat.add(seconds=exp)
         )
-        if user and type(user) == User:
+        if user and isinstance(user, User):
             user = user.model_dump(
-                exclude=["password", "created_at", "deleted_at", "updated_at"]
+                exclude={"password", "created_at", "deleted_at", "updated_at"}
             )
         return JWTToken(
             exp=exp.int_timestamp,
