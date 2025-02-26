@@ -110,7 +110,7 @@ class AuthService:
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
         try:
             self._password_hasher.verify(user.password, password)
-            jwt_token = await self._generate_token(user.id)
+            jwt_token = await self._generate_token(user.id, user=user)
             refresh_token = str(uuid.uuid4())
             await self._token_service.create(jwt_token, refresh_token)
             return (
