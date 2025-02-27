@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from typing import Any, Tuple
 
@@ -95,13 +96,16 @@ class AuthService:
             user=user,
         )
 
+    async def _generate_refresh_token(self, length: int = 16):
+        return secrets.token_hex(length)
+
     async def _revoke_token(self, jwt_token: JWTToken):
         logger.info(
             f"Revoking token with jti={jwt_token.jti}", extra={"jwt_token": jwt_token}
         )
         await self._token_service.delete_by_id(jwt_token.jti)
         await self._cache_service.put(
-            f"jti{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
+            f"jti_{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
         )
 
     async def login(self, email: str, password: str) -> tuple[str, str]:
@@ -110,8 +114,8 @@ class AuthService:
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
         try:
             self._password_hasher.verify(user.password, password)
-            jwt_token = await self._generate_token(user.id)
-            refresh_token = str(uuid.uuid4())
+            jwt_token = await self._generate_token(user.id, user=user)
+            refresh_token = await self._generate_refresh_token()
             await self._token_service.create(jwt_token, refresh_token)
             return (
                 jwt.encode(
@@ -148,7 +152,7 @@ class AuthService:
         jwt_token = await self._generate_token(
             jwt_token.sub, settings.jwt_token_lifetime, jwt_token.user
         )
-        refresh_token = str(uuid.uuid4())
+        refresh_token = await self._generate_refresh_token()
         await self._token_service.create(jwt_token, refresh_token)
         return (
             jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
@@ -168,13 +172,13 @@ class TokenService:
                 "jwt_token": jwt_token.model_dump(),
                 "refresh_token": refresh_token,
                 "created_at": now.to_iso8601_string(),
-                "ttl": None,
+                "ttl": jwt_token.exp,
             }
         )
 
     async def delete_by_id(self, jti: str):
         response = await self.__token_repository.delete_by_id(jti)
-        if "Attributes" not in response:
+        if response["ResponseMetadata"]["HTTPStatusCode"] != status.HTTP_200_OK:
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
 
     async def get_by_id(self, jti: str) -> Tuple[JWTToken, JWTToken] | None:

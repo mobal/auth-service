@@ -37,6 +37,19 @@ resource "aws_iam_policy" "lambda_policy" {
       {
         Effect   = "Allow"
         Action   = [
+          "dynamodb:DeleteItem",
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:Query",
+        ]
+        Resource = [
+          aws_dynamodb_table.tokens.arn,
+          "${aws_dynamodb_table.tokens.arn}/index/RefreshTokenIndex"
+        ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = [
           "ec2:DescribeNetworkInterfaces",
           "ec2:CreateNetworkInterface",
           "ec2:DeleteNetworkInterface",

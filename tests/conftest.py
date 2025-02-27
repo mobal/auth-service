@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from typing import Any
 
@@ -134,7 +135,7 @@ def jwt_token(user: User) -> JWTToken:
 
 @pytest.fixture
 def refresh_token() -> str:
-    return str(uuid.uuid4())
+    return secrets.token_hex(16)
 
 
 @pytest.fixture
