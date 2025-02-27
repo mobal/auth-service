@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from typing import Any, Tuple
 
@@ -148,7 +149,7 @@ class AuthService:
         jwt_token = await self._generate_token(
             jwt_token.sub, settings.jwt_token_lifetime, jwt_token.user
         )
-        refresh_token = str(uuid.uuid4())
+        refresh_token = secrets.token_hex(16)
         await self._token_service.create(jwt_token, refresh_token)
         return (
             jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
