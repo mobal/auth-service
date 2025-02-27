@@ -168,13 +168,13 @@ class TokenService:
                 "jwt_token": jwt_token.model_dump(),
                 "refresh_token": refresh_token,
                 "created_at": now.to_iso8601_string(),
-                "ttl": None,
+                "ttl": jwt_token.exp,
             }
         )
 
     async def delete_by_id(self, jti: str):
         response = await self.__token_repository.delete_by_id(jti)
-        if "Attributes" not in response:
+        if response['ResponseMetadata']['HTTPStatusCode'] != status.HTTP_200_OK:
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
 
     async def get_by_id(self, jti: str) -> Tuple[JWTToken, JWTToken] | None:
