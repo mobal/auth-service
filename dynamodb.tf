@@ -41,4 +41,9 @@ resource "aws_dynamodb_table" "tokens" {
     name            = "RefreshTokenIndex"
     projection_type = "ALL"
   }
+
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
 }
