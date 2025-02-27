@@ -101,7 +101,7 @@ class AuthService:
         )
         await self._token_service.delete_by_id(jwt_token.jti)
         await self._cache_service.put(
-            f"jti{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
+            f"jti_{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
         )
 
     async def login(self, email: str, password: str) -> tuple[str, str]:
