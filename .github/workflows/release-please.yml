@@ -1,0 +1,22 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Release please
+        uses: google-github-actions/release-please-action@v4
+        with:
+          release-type: python
