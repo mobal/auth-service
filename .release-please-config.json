@@ -1,0 +1,9 @@
+{
+    "release-type": "python",
+    "extra-files": [
+        {
+            "path": "version.txt",
+            "type": "plain-text"
+        }
+    ]
+}
