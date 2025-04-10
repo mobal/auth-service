@@ -29,7 +29,6 @@ class User(CamelModel):
     display_name: str
     email: EmailStr
     password: str
-    roles: list[str]
     username: str
     created_at: str
     deleted_at: str | None = None

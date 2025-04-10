@@ -11,12 +11,8 @@ from aws_lambda_powertools import Logger
 from fastapi import HTTPException, status
 
 from app import settings
-from app.exceptions import (
-    CacheServiceException,
-    TokenMistmatchException,
-    TokenNotFoundException,
-    UserNotFoundException,
-)
+from app.exceptions import (CacheServiceException, TokenMistmatchException,
+                            TokenNotFoundException, UserNotFoundException)
 from app.middlewares import correlation_id
 from app.models import JWTToken, User
 from app.repositories import TokenRepository, UserRepository

@@ -44,7 +44,6 @@ class TestAuthService:
             display_name="root",
             email="root@netcode.hu",
             password=password_hasher.hash(PASSWORD),
-            roles=["root"],
             username="root",
             created_at=pendulum.now().to_iso8601_string(),
         )
