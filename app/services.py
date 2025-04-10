@@ -11,8 +11,12 @@ from aws_lambda_powertools import Logger
 from fastapi import HTTPException, status
 
 from app import settings
-from app.exceptions import (CacheServiceException, TokenMistmatchException,
-                            TokenNotFoundException, UserNotFoundException)
+from app.exceptions import (
+    CacheServiceException,
+    TokenMistmatchException,
+    TokenNotFoundException,
+    UserNotFoundException,
+)
 from app.middlewares import correlation_id
 from app.models import JWTToken, User
 from app.repositories import TokenRepository, UserRepository
@@ -99,6 +103,21 @@ class AuthService:
     async def _generate_refresh_token(self, length: int = 16):
         return secrets.token_hex(length)
 
+    async def _generate_tokens_for_user(
+        self,
+        jwt_token: JWTToken,
+    ) -> tuple[JWTToken, str]:
+        logger.info(
+            f"Generate new tokens for user={jwt_token.user["id"]}",
+            extra={"user": jwt_token.user},
+        )
+        jwt_token = await self._generate_token(
+            jwt_token.sub, settings.jwt_token_lifetime, jwt_token.user
+        )
+        refresh_token = await self._generate_refresh_token()
+        await self._token_service.create(jwt_token, refresh_token)
+        return jwt_token, refresh_token
+
     async def _revoke_token(self, jwt_token: JWTToken):
         logger.info(
             f"Revoking token with jti={jwt_token.jti}", extra={"jwt_token": jwt_token}
@@ -145,15 +164,7 @@ class AuthService:
         if jwt_token.model_dump() != item["jwt_token"]:
             raise TokenMistmatchException("Internal Server Error")
         await self._revoke_token(jwt_token)
-        logger.info(
-            f"Generate new tokens for user={jwt_token.user["id"]}",
-            extra={"user": jwt_token.user},
-        )
-        jwt_token = await self._generate_token(
-            jwt_token.sub, settings.jwt_token_lifetime, jwt_token.user
-        )
-        refresh_token = await self._generate_refresh_token()
-        await self._token_service.create(jwt_token, refresh_token)
+        jwt_token, refresh_token = await self._generate_tokens_for_user(jwt_token)
         return (
             jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
             refresh_token,
