@@ -37,6 +37,10 @@ jobs:
       run: |
         pipenv run pycodestyle --ignore=E501,W503 app/ tests/ || exit 1
 
+    - name: Run Bandit security scanner
+      run: |
+        pipenv run bandit --severity-level high --confidence-level high -r app/
+
     - name: Running tests with Pytest and generate coverage
       run: |
         pipenv run pytest --cov-report=term --cov-report=xml:$Coverage_File --cov=app
