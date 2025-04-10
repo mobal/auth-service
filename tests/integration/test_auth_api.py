@@ -19,7 +19,7 @@ REFRESH_URL = f"{BASE_URL}/refresh"
 @pytest.mark.asyncio
 class TestAuthApi:
 
-    async def __generate_respx_mock(
+    async def _generate_respx_mock(
         self,
         method: str,
         response: Response,
@@ -123,7 +123,7 @@ class TestAuthApi:
         respx_mock: MockRouter,
         test_client: TestClient,
     ):
-        cache_service_put_keyvalue_mock = await self.__generate_respx_mock(
+        cache_service_put_keyvalue_mock = await self._generate_respx_mock(
             "POST",
             cache_service_response_201,
             respx_mock,
@@ -202,7 +202,7 @@ class TestAuthApi:
         respx_mock: MockRouter,
         test_client: TestClient,
     ):
-        cache_service_put_keyvalue_mock = await self.__generate_respx_mock(
+        cache_service_put_keyvalue_mock = await self._generate_respx_mock(
             "POST",
             cache_service_response_201,
             respx_mock,

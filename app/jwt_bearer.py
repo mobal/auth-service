@@ -18,7 +18,7 @@ ERROR_MESSAGE_NOT_AUTHENTICATED = "Not authenticated"
 class HTTPBearer(FastAPIHTTPBearer):
     def __init__(self, auto_error: bool = True):
         super().__init__(auto_error=auto_error)
-        self.__auto_error = auto_error
+        self._auto_error = auto_error
 
     async def __call__(self, request: Request) -> HTTPAuthorizationCredentials | None:
         authorization = request.headers.get("Authorization")
@@ -38,7 +38,7 @@ class HTTPBearer(FastAPIHTTPBearer):
         scheme, credentials = get_authorization_scheme_param(authorization)
         if not (authorization and scheme and credentials):
             logger.warning(f"Missing {authorization=}, {scheme=} or {credentials=}")
-            if self.__auto_error:
+            if self._auto_error:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=ERROR_MESSAGE_NOT_AUTHENTICATED,
@@ -47,7 +47,7 @@ class HTTPBearer(FastAPIHTTPBearer):
                 return None
         if scheme.lower() != "bearer":
             logger.warning(f"Invalid {scheme=}")
-            if self.__auto_error:
+            if self._auto_error:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Invalid authentication credentials",
@@ -60,7 +60,7 @@ class HTTPBearer(FastAPIHTTPBearer):
         self, token: str | None
     ) -> HTTPAuthorizationCredentials | None:
         if not token:
-            if self.__auto_error:
+            if self._auto_error:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=ERROR_MESSAGE_NOT_AUTHENTICATED,
@@ -72,14 +72,14 @@ class HTTPBearer(FastAPIHTTPBearer):
 
 class JWTBearer:
     def __init__(self, auto_error: bool = True):
-        self.__auto_error = auto_error
-        self.__token_service = TokenService()
+        self._auto_error = auto_error
+        self._token_service = TokenService()
 
     async def __call__(self, request: Request) -> JWTToken | None:
-        credentials = await HTTPBearer(self.__auto_error).__call__(request)
+        credentials = await HTTPBearer(self._auto_error).__call__(request)
         if credentials:
             if not await self._validate_token(credentials.credentials):
-                if self.__auto_error:
+                if self._auto_error:
                     logger.warning(f"Invalid authentication token {credentials=}")
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
@@ -96,7 +96,7 @@ class JWTBearer:
             decoded_token = JWTToken(
                 **jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
             )
-            if await self.__token_service.get_by_id(decoded_token.jti):
+            if await self._token_service.get_by_id(decoded_token.jti):
                 logger.debug(f"Token is not blacklisted {decoded_token=}")
                 self.decoded_token = decoded_token
                 return True
