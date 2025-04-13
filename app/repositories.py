@@ -37,7 +37,7 @@ class TokenRepository:
             boto3.Session().resource("dynamodb").Table(f"{settings.stage}-tokens")
         )
 
-    async def create_token(self, data: dict[str, Any]) -> dict[str, any]:
+    async def create_token(self, data: dict[str, Any]) -> dict[str, Any]:
         return self._table.put_item(Item=data)
 
     async def delete_by_id(self, jti: str) -> dict[str, Any]:

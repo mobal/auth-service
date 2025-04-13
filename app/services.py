@@ -156,7 +156,7 @@ class AuthService:
 
     async def refresh(
         self, jwt_token: JWTToken, refresh_token: str
-    ) -> tuple[JWTToken, str]:
+    ) -> tuple[str, str]:
         item = await self._token_service.get_by_refresh_token(refresh_token)
         if item is None:
             logger.warning("The requested token was not found!")

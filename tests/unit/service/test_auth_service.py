@@ -30,7 +30,8 @@ class TestAuthService:
             exp=exp.int_timestamp,
             iat=iat.int_timestamp,
             jti=str(uuid.uuid4()),
-            sub=user,
+            sub=user.id,
+            user=user.model_dump(),
         )
 
     @pytest.fixture
