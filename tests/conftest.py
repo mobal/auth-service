@@ -112,6 +112,7 @@ def initialize_tokens_table(dynamodb_resource, jwt_token: JWTToken, refresh_toke
             "jti": jwt_token.jti,
             "jwt_token": jwt_token.model_dump(),
             "refresh_token": refresh_token,
+            "created_at": pendulum.now().to_iso8601_string(),
             "ttl": jwt_token.exp,
         }
     )

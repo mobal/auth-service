@@ -1,6 +1,4 @@
-from sys import exc_info
 from typing import Any
-from unittest.mock import ANY
 
 import pytest
 
@@ -12,20 +10,6 @@ from app.services import TokenService
 
 @pytest.mark.asyncio
 class TestTokenService:
-    @pytest.fixture
-    def token(self, jwt_token: JWTToken, refresh_token: str) -> dict[str, Any]:
-        return {
-            "jti": jwt_token.jti,
-            "jwt_token": jwt_token.model_dump(),
-            "refresh_token": refresh_token,
-            "created_at": ANY,
-            "ttl": jwt_token.exp,
-        }
-
-    @pytest.fixture
-    def token_service(self) -> TokenService:
-        return TokenService()
-
     async def test_successfully_create_token(
         self,
         mocker,
