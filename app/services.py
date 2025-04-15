@@ -154,9 +154,7 @@ class AuthService:
         )
         await self._token_service.delete_by_id(jwt_token.jti)
 
-    async def refresh(
-        self, jwt_token: JWTToken, refresh_token: str
-    ) -> tuple[str, str]:
+    async def refresh(self, jwt_token: JWTToken, refresh_token: str) -> tuple[str, str]:
         item = await self._token_service.get_by_refresh_token(refresh_token)
         if item is None:
             logger.warning("The requested token was not found!")
@@ -195,5 +193,5 @@ class TokenService:
     async def get_by_id(self, jti: str) -> Tuple[JWTToken, JWTToken] | None:
         return await self._token_repository.get_by_id(jti)
 
-    async def get_by_refresh_token(self, refresh_token: str) -> dict[str, Any]:
+    async def get_by_refresh_token(self, refresh_token: str) -> dict[str, Any] | None:
         return await self._token_repository.get_by_refresh_token(refresh_token)
