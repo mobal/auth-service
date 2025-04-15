@@ -190,7 +190,7 @@ class TokenService:
         if response["ResponseMetadata"]["HTTPStatusCode"] != status.HTTP_200_OK:
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
 
-    async def get_by_id(self, jti: str) -> Tuple[JWTToken, JWTToken] | None:
+    async def get_by_id(self, jti: str) -> Tuple[JWTToken, str] | None:
         return await self._token_repository.get_by_id(jti)
 
     async def get_by_refresh_token(self, refresh_token: str) -> dict[str, Any] | None:
