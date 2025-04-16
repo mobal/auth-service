@@ -210,11 +210,11 @@ class TestAuthService:
     ):
         mocker.patch.object(TokenService, "get_by_refresh_token", return_value=None)
 
-        with pytest.raises(TokenNotFoundException) as exc_info:
+        with pytest.raises(TokenNotFoundException) as excinfo:
             await auth_service.refresh(jwt_token, refresh_token)
 
-        assert TokenNotFoundException.__name__ == exc_info.typename
-        assert "The requested token was not found" == exc_info.value.detail
+        assert TokenNotFoundException.__name__ == excinfo.typename
+        assert "The requested token was not found" == excinfo.value.detail
 
         token_service.get_by_refresh_token.assert_called_once_with(refresh_token)
 
@@ -243,10 +243,10 @@ class TestAuthService:
         }
         mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
 
-        with pytest.raises(TokenMistmatchException) as exc_info:
+        with pytest.raises(TokenMistmatchException) as excinfo:
             await auth_service.refresh(jwt_token, refresh_token)
 
-        assert TokenMistmatchException.__name__ == exc_info.typename
-        assert "Internal Server Error" == exc_info.value.detail
+        assert TokenMistmatchException.__name__ == excinfo.typename
+        assert "Internal Server Error" == excinfo.value.detail
 
         token_service.get_by_refresh_token.assert_called_once_with(refresh_token)

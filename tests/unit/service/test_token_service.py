@@ -55,11 +55,11 @@ class TestTokenService:
             return_value={"ResponseMetadata": {"HTTPStatusCode": 404}},
         )
 
-        with pytest.raises(TokenNotFoundException) as exc_info:
+        with pytest.raises(TokenNotFoundException) as excinfo:
             await token_service.delete_by_id(jwt_token.jti)
 
-        assert TokenNotFoundException.__name__ == exc_info.typename
-        assert "The requested token was not found" == exc_info.value.detail
+        assert TokenNotFoundException.__name__ == excinfo.typename
+        assert "The requested token was not found" == excinfo.value.detail
 
         token_repository.delete_by_id.assert_called_once_with(jwt_token.jti)
 

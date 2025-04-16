@@ -61,12 +61,12 @@ class TestCacheService:
             Response(status_code=status.HTTP_400_BAD_REQUEST)
         )
 
-        with pytest.raises(CacheServiceException) as exc_info:
+        with pytest.raises(CacheServiceException) as excinfo:
             await cache_service.put("", "")
 
-        assert CacheServiceException.__name__ == exc_info.typename
-        assert status.HTTP_500_INTERNAL_SERVER_ERROR == exc_info.value.status_code
-        assert "Internal Server Error" == exc_info.value.detail
+        assert CacheServiceException.__name__ == excinfo.typename
+        assert status.HTTP_500_INTERNAL_SERVER_ERROR == excinfo.value.status_code
+        assert "Internal Server Error" == excinfo.value.detail
         assert 1 == route.call_count
 
     async def test_fail_to_get_key_value_due_invalid_id(
