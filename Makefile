@@ -1,5 +1,8 @@
 all: black flake pycodestyle sort test
 
+bandit:
+	pipenv run bandit --severity-level high --confidence-level high -r app/ -vvv
+
 black:
 	pipenv run black ./
 
@@ -18,5 +21,10 @@ pycodestyle:
 sort:
 	pipenv run python -m isort --atomic app/ tests/
 
-test:
-	pipenv run python -m pytest
+test: unit-test integration-test
+
+unit-test:
+	pipenv run python -m pytest --cov-fail-under=80 tests/unit
+
+integration-test:
+	pipenv run python -m pytest tests/integration
