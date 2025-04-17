@@ -5,6 +5,7 @@ import pendulum
 import pytest
 from fastapi import status
 from httpx import Response
+from moto.ec2.utils import random_spot_fleet_request_id
 from respx import MockRouter, Route
 from starlette.testclient import TestClient
 
@@ -141,6 +142,33 @@ class TestAuthApi:
         assert cache_service_put_keyvalue_mock.called
         assert cache_service_put_keyvalue_mock.call_count == 1
 
+    async def test_fail_to_logout_due_to_cache_service_exception(
+        self,
+        cache_service_response_500: Response,
+        jwt_token: JWTToken,
+        respx_mock: MockRouter,
+        test_client: TestClient,
+    ):
+        cache_service_put_keyvalue_mock = await self._generate_respx_mock(
+            "POST",
+            cache_service_response_500,
+            respx_mock,
+            pytest.cache_service_base_url,
+        )
+
+        response = test_client.get(
+            f"{BASE_URL}/logout",
+            headers={
+                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(), pytest.jwt_secret_ssm_param_value)}"
+            },
+        )
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json()["status"] == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json()["message"] == "Internal Server Error"
+        assert cache_service_put_keyvalue_mock.called
+        assert cache_service_put_keyvalue_mock.call_count == 1
+
     async def test_fail_to_refresh_due_to_jwt_token_not_found(
         self,
         jwt_token: JWTToken,
@@ -160,7 +188,7 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_403_FORBIDDEN
         assert response.json()["message"] == "Not authenticated"
 
-    async def test_fail_to_refresh_due_to_jwt_token_mistmatch(
+    async def test_fail_to_refresh_due_to_jwt_token_mismatch(
         self,
         jwt_token: JWTToken,
         refresh_token: str,

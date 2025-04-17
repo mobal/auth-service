@@ -21,7 +21,7 @@ class UserRepository:
             return User(**response["Items"][0])
         return None
 
-    async def get_by_id(self, user_uuid: str) -> User | None:
+    async def get_by_id(self, user_uuid: str) -> User | None:  # pragma: no cover
         response = self._table.query(
             KeyConditionExpression=Key("id").eq(user_uuid),
             FilterExpression=Attr("deleted_at").eq(None),

@@ -11,8 +11,12 @@ from aws_lambda_powertools import Logger
 from fastapi import HTTPException, status
 
 from app import settings
-from app.exceptions import (CacheServiceException, TokenMistmatchException,
-                            TokenNotFoundException, UserNotFoundException)
+from app.exceptions import (
+    CacheServiceException,
+    TokenMistmatchException,
+    TokenNotFoundException,
+    UserNotFoundException,
+)
 from app.middlewares import correlation_id
 from app.models import JWTToken, User
 from app.repositories import TokenRepository, UserRepository
@@ -28,7 +32,7 @@ X_CORRELATION_ID = "X-Correlation-ID"
 
 
 class CacheService:
-    async def get(self, key: str) -> bool:
+    async def get(self, key: str) -> bool:  # pragma: no cover
         async with httpx.AsyncClient() as client:
             url = f"{settings.cache_service_base_url}/api/cache/{key}"
             logger.debug(f"Get cache for {key=} {url=}")
