@@ -6,11 +6,8 @@ import pytest as pytest
 from argon2 import PasswordHasher
 from fastapi import HTTPException, status
 
-from app.exceptions import (
-    TokenNotFoundException,
-    UserNotFoundException,
-    TokenMistmatchException,
-)
+from app.exceptions import (TokenMistmatchException, TokenNotFoundException,
+                            UserNotFoundException)
 from app.models import User
 from app.repositories import UserRepository
 from app.services import AuthService, CacheService, JWTToken, TokenService

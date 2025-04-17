@@ -4,7 +4,8 @@ from contextvars import ContextVar
 from aws_lambda_powertools import Logger
 from fastapi.requests import Request
 from fastapi.responses import Response
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.middleware.base import (BaseHTTPMiddleware,
+                                       RequestResponseEndpoint)
 from starlette.types import ASGIApp
 
 X_CORRELATION_ID = "X-Correlation-ID"
