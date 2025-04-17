@@ -39,7 +39,7 @@ jobs:
 
     - name: Run Bandit security scanner
       run: |
-        pipenv run bandit --severity-level high --confidence-level high -r app/
+        pipenv run bandit --severity-level high --confidence-level high -r app/ -vvv
 
     - name: Running tests with Pytest and generate coverage
       run: |
