@@ -2,7 +2,6 @@ import secrets
 import uuid
 from typing import Any, Tuple
 
-import httpx
 import jwt
 import pendulum
 from argon2 import PasswordHasher
@@ -12,12 +11,10 @@ from fastapi import HTTPException, status
 
 from app import settings
 from app.exceptions import (
-    CacheServiceException,
     TokenMistmatchException,
     TokenNotFoundException,
     UserNotFoundException,
 )
-from app.middlewares import correlation_id
 from app.models import JWTToken, User
 from app.repositories import TokenRepository, UserRepository
 
@@ -31,47 +28,8 @@ X_API_KEY = "X-Api-Key"
 X_CORRELATION_ID = "X-Correlation-ID"
 
 
-class CacheService:
-    async def get(self, key: str) -> bool:  # pragma: no cover
-        async with httpx.AsyncClient() as client:
-            url = f"{settings.cache_service_base_url}/api/cache/{key}"
-            logger.debug(f"Get cache for {key=} {url=}")
-            response = await client.get(
-                url,
-                headers={
-                    X_CORRELATION_ID: correlation_id.get(),
-                    X_API_KEY: settings.cache_service_api_key,
-                },
-            )
-        if response.is_success:
-            return True
-        elif response.status_code == status.HTTP_404_NOT_FOUND:
-            logger.debug(f"Cache was not found for {key=}")
-            return False
-        logger.error(f"Unexpected error {response=}")
-        raise CacheServiceException(detail=ERROR_MESSAGE_INTERNAL_SERVER_ERROR)
-
-    async def put(self, key: str, value: Any, ttl: int = 0):
-        async with httpx.AsyncClient() as client:
-            url = f"{settings.cache_service_base_url}/api/cache"
-            response = await client.post(
-                url,
-                headers={
-                    X_CORRELATION_ID: correlation_id.get(),
-                    X_API_KEY: settings.cache_service_api_key,
-                },
-                json={"key": key, "value": value, "ttl": ttl},
-            )
-        if response.status_code == status.HTTP_201_CREATED:
-            logger.info(f"Cache successfully created {key=} {value=} {ttl=}")
-        else:
-            logger.error(f"Failed to put cache {key=} {value=} {ttl=}")
-            raise CacheServiceException(detail=ERROR_MESSAGE_INTERNAL_SERVER_ERROR)
-
-
 class AuthService:
     def __init__(self):
-        self._cache_service = CacheService()
         self._password_hasher = PasswordHasher()
         self._token_service = TokenService()
         self._user_repository = UserRepository()
@@ -123,9 +81,6 @@ class AuthService:
             f"Revoking token with jti={jwt_token.jti}", extra={"jwt_token": jwt_token}
         )
         await self._token_service.delete_by_id(jwt_token.jti)
-        await self._cache_service.put(
-            f"jti_{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
-        )
 
     async def login(self, email: str, password: str) -> tuple[str, str]:
         user = await self._user_repository.get_by_email(email)
@@ -149,9 +104,6 @@ class AuthService:
             )
 
     async def logout(self, jwt_token: JWTToken):
-        await self._cache_service.put(
-            f"jti_{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
-        )
         await self._token_service.delete_by_id(jwt_token.jti)
 
     async def refresh(self, jwt_token: JWTToken, refresh_token: str) -> tuple[str, str]:

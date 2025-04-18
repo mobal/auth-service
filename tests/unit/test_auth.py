@@ -7,7 +7,7 @@ from pytest_mock import MockFixture
 from starlette.requests import Request
 
 from app.jwt_bearer import JWTBearer
-from app.services import CacheService, JWTToken, TokenService
+from app.services import JWTToken, TokenService
 from app.settings import Settings
 
 NOT_AUTHENTICATED = "Not authenticated"
@@ -98,7 +98,6 @@ class TestJWTAuth:
     async def test_fail_to_authorize_request_due_to_blacklisted_token(
         self,
         mocker,
-        cache_service: CacheService,
         jwt_bearer: JWTBearer,
         jwt_token: JWTToken,
         token_service: TokenService,

@@ -6,12 +6,7 @@ import pytest as pytest
 from app.jwt_bearer import JWTBearer
 from app.models import JWTToken
 from app.repositories import TokenRepository, UserRepository
-from app.services import CacheService, TokenService
-
-
-@pytest.fixture
-def cache_service() -> CacheService:
-    return CacheService()
+from app.services import TokenService
 
 
 @pytest.fixture
