@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.2.0](https://github.com/mobal/auth-service/compare/v0.1.0...v0.2.0) (2025-04-18)
+
+
+### Features
+
+* added bandit ([0b11bb8](https://github.com/mobal/auth-service/commit/0b11bb88c18b3ff4121bdffcb08cfb8263156db9))
+* added jwt auth test ([c409bf5](https://github.com/mobal/auth-service/commit/c409bf56c5bed9817593c6aef9dd681aea436bd8))
+* added jwt bearer tests ([0edbfa8](https://github.com/mobal/auth-service/commit/0edbfa8b3d4edd7a1ad10f3e054b0ec2f5fdd930))
+* added missing auth service unit tests ([a9b3258](https://github.com/mobal/auth-service/commit/a9b3258af9aa55df7b56196c81ccbf14a9499e04))
+* added missing integration tests ([7c6d72d](https://github.com/mobal/auth-service/commit/7c6d72d8c06efbcccb763913419fb52b8c98caf0))
+* added token repository unit tests ([5f608c2](https://github.com/mobal/auth-service/commit/5f608c22a0c8447eccb30c25e4d3b8df28e21667))
+* added token service unit tests ([21ebc8f](https://github.com/mobal/auth-service/commit/21ebc8ff1608a0dce08d3f9c3ea062324b97c1d0))
+* added verbose to bandit ([809d86c](https://github.com/mobal/auth-service/commit/809d86cd6af6f22ec6e74e257d9ce5d95de83b92))
+* removed user roles ([aa5a34d](https://github.com/mobal/auth-service/commit/aa5a34d5be23e2cad3d5938f8664328762867239))
+* separate test tasks ([2604d15](https://github.com/mobal/auth-service/commit/2604d15a7b85ddd2d864af8bbfce437e3b9b6496))
+* updated workflow.yml ([1605348](https://github.com/mobal/auth-service/commit/160534859b94cc1c4dcaaed576423f9cad41064a))
+
+
+### Bug Fixes
+
+* fixed mypy errors ([7435208](https://github.com/mobal/auth-service/commit/7435208c6467e14964e6d3f3a0b82e4beaaf1eec))
+
 ## 0.1.0 (2025-02-28)
 
 
