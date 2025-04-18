@@ -13,9 +13,8 @@ from app.exceptions import (
 )
 from app.models import User
 from app.repositories import UserRepository
-from app.services import AuthService, CacheService, JWTToken, TokenService
+from app.services import AuthService, JWTToken, TokenService
 from app.settings import Settings
-from tests.unit.conftest import cache_service
 
 ALGORITHMS = ["HS256"]
 PASSWORD = "123456"
@@ -119,30 +118,23 @@ class TestAuthService:
         self,
         mocker,
         auth_service: AuthService,
-        cache_service: CacheService,
         jwt_token: JWTToken,
         token_service: TokenService,
     ):
-        mocker.patch.object(CacheService, "put")
         mocker.patch.object(TokenService, "delete_by_id")
 
         await auth_service.logout(jwt_token)
 
-        cache_service.put.assert_called_once_with(
-            f"jti_{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
-        )
         token_service.delete_by_id.assert_called_once_with(jwt_token.jti)
 
     async def test_fail_to_logout_due_to_token_service_exception(
         self,
         mocker,
         auth_service: AuthService,
-        cache_service: CacheService,
         jwt_token: JWTToken,
         token_service: TokenService,
     ):
         error_message = "The requested token was not found"
-        mocker.patch.object(CacheService, "put")
         mocker.patch.object(
             TokenService,
             "delete_by_id",
@@ -154,16 +146,12 @@ class TestAuthService:
 
         assert status.HTTP_404_NOT_FOUND == excinfo.value.status_code
         assert error_message == excinfo.value.detail
-        cache_service.put.assert_called_once_with(
-            f"jti_{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
-        )
         token_service.delete_by_id.assert_called_once_with(jwt_token.jti)
 
     async def test_successfully_refresh_tokens(
         self,
         mocker,
         auth_service: AuthService,
-        cache_service: CacheService,
         jwt_token: JWTToken,
         refresh_token: str,
         token_service: TokenService,
@@ -178,7 +166,6 @@ class TestAuthService:
         mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
         mocker.patch.object(TokenService, "create")
         mocker.patch.object(TokenService, "delete_by_id")
-        mocker.patch.object(CacheService, "put")
 
         new_jwt_token, new_refresh_token = await auth_service.refresh(
             jwt_token, refresh_token
@@ -196,9 +183,6 @@ class TestAuthService:
             new_refresh_token,
         )
         token_service.delete_by_id.assert_called_once_with(jwt_token.jti)
-        cache_service.put.assert_called_once_with(
-            f"jti_{jwt_token.jti}", jwt_token.model_dump(), jwt_token.exp
-        )
 
     async def test_fail_to_refresh_due_to_missing_token(
         self,

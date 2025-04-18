@@ -33,39 +33,6 @@ class TestAuthApi:
         ).mock(response)
 
     @pytest.fixture
-    def cache_service_response_201(self) -> Response:
-        return Response(
-            status_code=status.HTTP_201_CREATED,
-            json={
-                "key": "jti_",
-                "value": "value",
-                "createdAt": pendulum.now().to_iso8601_string(),
-            },
-        )
-
-    @pytest.fixture
-    def cache_service_response_404(self) -> Response:
-        return Response(
-            status_code=status.HTTP_404_NOT_FOUND,
-            json={
-                "status": status.HTTP_404_NOT_FOUND,
-                "id": str(uuid.uuid4()),
-                "message": "Not found",
-            },
-        )
-
-    @pytest.fixture
-    def cache_service_response_500(self) -> Response:
-        return Response(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            json={
-                "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
-                "id": str(uuid.uuid4()),
-                "message": "Internal Server Error",
-            },
-        )
-
-    @pytest.fixture
     def test_client(
         self, initialize_tokens_table, initialize_users_table
     ) -> TestClient:
@@ -119,18 +86,10 @@ class TestAuthApi:
 
     async def test_successfully_logout(
         self,
-        cache_service_response_201: Response,
         jwt_token: JWTToken,
         respx_mock: MockRouter,
         test_client: TestClient,
     ):
-        cache_service_put_keyvalue_mock = await self._generate_respx_mock(
-            "POST",
-            cache_service_response_201,
-            respx_mock,
-            pytest.cache_service_base_url,
-        )
-
         response = test_client.get(
             f"{BASE_URL}/logout",
             headers={
@@ -139,35 +98,6 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
-        assert cache_service_put_keyvalue_mock.called
-        assert cache_service_put_keyvalue_mock.call_count == 1
-
-    async def test_fail_to_logout_due_to_cache_service_exception(
-        self,
-        cache_service_response_500: Response,
-        jwt_token: JWTToken,
-        respx_mock: MockRouter,
-        test_client: TestClient,
-    ):
-        cache_service_put_keyvalue_mock = await self._generate_respx_mock(
-            "POST",
-            cache_service_response_500,
-            respx_mock,
-            pytest.cache_service_base_url,
-        )
-
-        response = test_client.get(
-            f"{BASE_URL}/logout",
-            headers={
-                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(), pytest.jwt_secret_ssm_param_value)}"
-            },
-        )
-
-        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json()["status"] == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert response.json()["message"] == "Internal Server Error"
-        assert cache_service_put_keyvalue_mock.called
-        assert cache_service_put_keyvalue_mock.call_count == 1
 
     async def test_fail_to_refresh_due_to_jwt_token_not_found(
         self,
@@ -224,19 +154,11 @@ class TestAuthApi:
 
     async def test_successfully_refresh(
         self,
-        cache_service_response_201,
         jwt_token: JWTToken,
         refresh_token: str,
         respx_mock: MockRouter,
         test_client: TestClient,
     ):
-        cache_service_put_keyvalue_mock = await self._generate_respx_mock(
-            "POST",
-            cache_service_response_201,
-            respx_mock,
-            pytest.cache_service_base_url,
-        )
-
         response = test_client.post(
             REFRESH_URL,
             json={"refreshToken": refresh_token},
@@ -246,5 +168,3 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_200_OK
-        assert cache_service_put_keyvalue_mock.called
-        assert cache_service_put_keyvalue_mock.call_count == 1

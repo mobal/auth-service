@@ -11,17 +11,9 @@ class Settings(BaseSettings):
     aws_access_key_id: str
     aws_secret_access_key: str
     jwt_token_lifetime: int = 3600
-    cache_service_base_url: str
     debug: bool = False
     refresh_token_lifetime: int = 1209600
     stage: str
-
-    @computed_field
-    @property
-    def cache_service_api_key(self) -> str:
-        return parameters.get_parameter(
-            os.environ.get("CACHE_SERVICE_API_KEY_SSM_PARAM_NAME"), decrypt=True
-        )
 
     @computed_field
     @property

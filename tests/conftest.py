@@ -19,11 +19,6 @@ def pytest_configure():
     pytest.aws_region_name = "eu-central-1"
     pytest.aws_secret_access_key = "aws_secret_access_key"
 
-    pytest.cache_service_api_key_ssm_param_name = "/dev/service/api-key"
-    pytest.cache_service_api_key_ssm_param_value = (
-        "a2ce72ae-6e34-4c15-8c5a-cb976d119016"
-    )
-    pytest.cache_service_base_url = "https://localhost"
     pytest.jwt_secret_ssm_param_name = "/dev/secrets/secret"
     pytest.jwt_secret_ssm_param_value = "94k9yz00rw"
     pytest.service_name = "auth-service"
@@ -35,11 +30,6 @@ def pytest_configure():
 def setup():
     with mock_aws():
         ssm_client = boto3.client("ssm")
-        ssm_client.put_parameter(
-            Name=pytest.cache_service_api_key_ssm_param_name,
-            Value=pytest.cache_service_api_key_ssm_param_value,
-            Type="SecureString",
-        )
         ssm_client.put_parameter(
             Name=pytest.jwt_secret_ssm_param_name,
             Value=pytest.jwt_secret_ssm_param_value,

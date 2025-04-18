@@ -24,7 +24,7 @@ sort:
 test: unit-test integration-test
 
 unit-test:
-	pipenv run python -m pytest --cov-fail-under=80 tests/unit
+	pipenv run python -m pytest tests/unit
 
 integration-test:
-	pipenv run python -m pytest tests/integration
+	pipenv run python -m pytest --cov-fail-under=90 tests/integration

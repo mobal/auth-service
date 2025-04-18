@@ -8,13 +8,6 @@ class CamelModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
-class Cache(CamelModel):
-    key: str
-    value: Any
-    created_at: str
-    ttl: int
-
-
 class JWTToken(BaseModel):
     exp: int
     iat: int
