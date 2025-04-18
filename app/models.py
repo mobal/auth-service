@@ -21,7 +21,7 @@ class JWTToken(BaseModel):
     iss: str | None = None
     jti: str
     sub: Any
-    user: dict[str, Any] | None = None
+    user: dict[str, Any]
 
 
 class User(CamelModel):
@@ -29,7 +29,6 @@ class User(CamelModel):
     display_name: str
     email: EmailStr
     password: str
-    roles: list[str]
     username: str
     created_at: str
     deleted_at: str | None = None

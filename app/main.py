@@ -3,7 +3,7 @@ from typing import Dict, Sequence
 
 import uvicorn
 from aws_lambda_powertools import Logger
-from botocore.exceptions import BotoCoreError
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -73,6 +73,7 @@ async def refresh(body: RefreshSchema) -> dict[str, str]:
 
 
 @app.exception_handler(BotoCoreError)
+@app.exception_handler(ClientError)
 async def botocore_error_handler(
     request: Request, error: BotoCoreError
 ) -> JSONResponse:

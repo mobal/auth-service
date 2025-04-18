@@ -3,6 +3,7 @@ from unittest.mock import Mock
 import jwt
 import pytest
 from fastapi import HTTPException, status
+from pytest_mock import MockFixture
 from starlette.requests import Request
 
 from app.jwt_bearer import JWTBearer
@@ -86,6 +87,14 @@ class TestJWTAuth:
         assert NOT_AUTHENTICATED == excinfo.value.detail
         assert status.HTTP_403_FORBIDDEN == excinfo.value.status_code
 
+    async def test_fail_to_authorize_request_due_to_bearer_token_is_missing_with_auto_error_false(
+        self, empty_request: Mock, jwt_bearer: JWTBearer
+    ):
+        empty_request.headers = {"Authorization": "Bearer "}
+        jwt_bearer = JWTBearer(auto_error=False)
+
+        assert await jwt_bearer(empty_request) is None
+
     async def test_fail_to_authorize_request_due_to_blacklisted_token(
         self,
         mocker,
@@ -103,6 +112,37 @@ class TestJWTAuth:
         assert NOT_AUTHENTICATED == excinfo.value.detail
         assert status.HTTP_403_FORBIDDEN == excinfo.value.status_code
         token_service.get_by_id.assert_called_once_with(jwt_token.jti)
+
+    async def test_fail_to_authorize_request_due_to_invalid_scheme(
+        self,
+        empty_request,
+        jwt_bearer: JWTBearer,
+        jwt_token: JWTToken,
+        settings: Settings,
+    ):
+        empty_request.headers = {
+            "Authorization": f"Bear {jwt.encode(jwt_token.model_dump(), settings.jwt_secret)}"
+        }
+
+        with pytest.raises(HTTPException) as excinfo:
+            await jwt_bearer(empty_request)
+
+        assert excinfo.typename == HTTPException.__name__
+        assert excinfo.value.status_code == status.HTTP_403_FORBIDDEN
+        assert excinfo.value.detail == "Invalid authentication credentials"
+
+    async def test_fail_to_authorize_request_due_to_invalid_scheme_with_auto_error_false(
+        self,
+        empty_request,
+        jwt_token: JWTToken,
+        settings: Settings,
+    ):
+        empty_request.headers = {
+            "Authorization": f"Bear {jwt.encode(jwt_token.model_dump(), settings.jwt_secret)}"
+        }
+        jwt_bearer = JWTBearer(auto_error=False)
+
+        assert await jwt_bearer(empty_request) is None
 
     async def test_fail_to_authorize_request_due_to_missing_credentials(
         self, empty_request: Mock
@@ -128,7 +168,7 @@ class TestJWTAuth:
         mocker,
         jwt_bearer: JWTBearer,
         jwt_token: JWTToken,
-        refresh_token: JWTToken,
+        refresh_token: str,
         token_service: TokenService,
         valid_request: Request,
     ):
@@ -139,6 +179,30 @@ class TestJWTAuth:
         )
 
         result = await jwt_bearer(valid_request)
+
+        assert jwt_token.model_dump() == result.model_dump()
+        token_service.get_by_id.assert_called_once_with(jwt_token.jti)
+
+    async def test_successfully_authorize_request_from_query_param(
+        self,
+        mocker,
+        empty_request: Request,
+        jwt_bearer: JWTBearer,
+        jwt_token: JWTToken,
+        refresh_token: str,
+        settings: Settings,
+        token_service: TokenService,
+    ):
+        mocker.patch.object(
+            TokenService,
+            "get_by_id",
+            return_value=(jwt_token.model_dump(), refresh_token),
+        )
+        empty_request.query_params = {
+            "token": f"{jwt.encode(jwt_token.model_dump(), settings.jwt_secret)}"
+        }
+
+        result = await jwt_bearer(empty_request)
 
         assert jwt_token.model_dump() == result.model_dump()
         token_service.get_by_id.assert_called_once_with(jwt_token.jti)
