@@ -18,7 +18,7 @@ jobs:
     - name: Cache venv
       uses: actions/cache@v4
       with:
-        path: ~/.local/share/virtualenvs
+        path: .venv
         key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') }}
 
     - name: Set up Python
