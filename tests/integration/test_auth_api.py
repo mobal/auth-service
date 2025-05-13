@@ -1,11 +1,9 @@
 import uuid
 
 import jwt
-import pendulum
 import pytest
 from fastapi import status
 from httpx import Response
-from moto.ec2.utils import random_spot_fleet_request_id
 from respx import MockRouter, Route
 from starlette.testclient import TestClient
 
@@ -17,10 +15,8 @@ PASSWORD = "12345678"
 REFRESH_URL = f"{BASE_URL}/refresh"
 
 
-@pytest.mark.asyncio
 class TestAuthApi:
-
-    async def _generate_respx_mock(
+    def _generate_respx_mock(
         self,
         method: str,
         response: Response,
@@ -40,7 +36,7 @@ class TestAuthApi:
 
         return TestClient(app, raise_server_exceptions=True)
 
-    async def test_fail_to_login_due_to_empty_body(self, test_client: TestClient):
+    def test_fail_to_login_due_to_empty_body(self, test_client: TestClient):
         response = test_client.post(
             f"{BASE_URL}/login",
             json={},
@@ -48,7 +44,7 @@ class TestAuthApi:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
-    async def test_fail_to_login_due_to_invalid_password(
+    def test_fail_to_login_due_to_invalid_password(
         self, test_client: TestClient, user: User
     ):
         response = test_client.post(
@@ -58,7 +54,7 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert response.json()["message"] == "Unauthorized"
 
-    async def test_fail_to_login_due_to_user_not_found(
+    def test_fail_to_login_due_to_user_not_found(
         self, test_client: TestClient, user: User
     ):
         response = test_client.post(
@@ -68,7 +64,7 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert response.json()["message"] == "The requested user was not found"
 
-    async def test_successfully_login(self, test_client: TestClient):
+    def test_successfully_login(self, test_client: TestClient):
         response = test_client.post(
             LOGIN_URL,
             json={"email": "root@netcode.hu", "password": PASSWORD},
@@ -77,14 +73,12 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_200_OK
         assert list(response.json().keys()) == ["token", "refreshToken"]
 
-    async def test_fail_to_logout_due_to_missing_bearer_token(
-        self, test_client: TestClient
-    ):
+    def test_fail_to_logout_due_to_missing_bearer_token(self, test_client: TestClient):
         response = test_client.get(f"{BASE_URL}/logout")
 
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    async def test_successfully_logout(
+    def test_successfully_logout(
         self,
         jwt_token: JWTToken,
         respx_mock: MockRouter,
@@ -99,7 +93,7 @@ class TestAuthApi:
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
-    async def test_fail_to_refresh_due_to_jwt_token_not_found(
+    def test_fail_to_refresh_due_to_jwt_token_not_found(
         self,
         jwt_token: JWTToken,
         refresh_token: str,
@@ -118,7 +112,7 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_403_FORBIDDEN
         assert response.json()["message"] == "Not authenticated"
 
-    async def test_fail_to_refresh_due_to_jwt_token_mismatch(
+    def test_fail_to_refresh_due_to_jwt_token_mismatch(
         self,
         jwt_token: JWTToken,
         refresh_token: str,
@@ -136,7 +130,7 @@ class TestAuthApi:
 
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
 
-    async def test_fail_to_refresh_due_to_refresh_token_not_found(
+    def test_fail_to_refresh_due_to_refresh_token_not_found(
         self,
         jwt_token: JWTToken,
         test_client: TestClient,
@@ -152,7 +146,7 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert response.json()["message"] == "The requested token was not found"
 
-    async def test_successfully_refresh(
+    def test_successfully_refresh(
         self,
         jwt_token: JWTToken,
         refresh_token: str,

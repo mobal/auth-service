@@ -13,7 +13,7 @@ class UserRepository:
             boto3.Session().resource("dynamodb").Table(f"{settings.stage}-users")
         )
 
-    async def get_by_email(self, email: str) -> User | None:
+    def get_by_email(self, email: str) -> User | None:
         response = self._table.scan(
             FilterExpression=Attr("deleted_at").eq(None) & Attr("email").eq(email)
         )
@@ -21,7 +21,7 @@ class UserRepository:
             return User(**response["Items"][0])
         return None
 
-    async def get_by_id(self, user_uuid: str) -> User | None:  # pragma: no cover
+    def get_by_id(self, user_uuid: str) -> User | None:  # pragma: no cover
         response = self._table.query(
             KeyConditionExpression=Key("id").eq(user_uuid),
             FilterExpression=Attr("deleted_at").eq(None),
@@ -37,13 +37,13 @@ class TokenRepository:
             boto3.Session().resource("dynamodb").Table(f"{settings.stage}-tokens")
         )
 
-    async def create_token(self, data: dict[str, Any]) -> dict[str, Any]:
+    def create_token(self, data: dict[str, Any]) -> dict[str, Any]:
         return self._table.put_item(Item=data)
 
-    async def delete_by_id(self, jti: str) -> dict[str, Any]:
+    def delete_by_id(self, jti: str) -> dict[str, Any]:
         return self._table.delete_item(Key={"jti": jti})
 
-    async def get_by_id(self, jti: str) -> tuple[JWTToken, str] | None:
+    def get_by_id(self, jti: str) -> tuple[JWTToken, str] | None:
         response = self._table.get_item(
             Key={"jti": jti},
         )
@@ -54,7 +54,7 @@ class TokenRepository:
             )
         return None
 
-    async def get_by_refresh_token(self, refresh_token: str) -> dict[str, Any] | None:
+    def get_by_refresh_token(self, refresh_token: str) -> dict[str, Any] | None:
         response = self._table.query(
             IndexName="RefreshTokenIndex",
             KeyConditionExpression=Key("refresh_token").eq(refresh_token),

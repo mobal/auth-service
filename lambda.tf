@@ -63,10 +63,11 @@ resource "terraform_data" "requirements_lambda_layer" {
 
   provisioner "local-exec" {
     command = <<EOT
-      DOCKER_DEFAULT_PLATFORM=linux/amd64 docker run --rm -v ${abspath(path.module)}:/workspace -w /workspace public.ecr.aws/sam/build-python3.12 bash -c "
-      pip install pipenv && \
-      pipenv requirements > requirements.txt && \
-      pip install -r requirements.txt -t python/lib/python3.12/site-packages --platform manylinux2014_x86_64 --python-version 3.12 --only-binary=:all: && \
+      DOCKER_DEFAULT_PLATFORM=linux/amd64 docker run --rm -v ${abspath(path.module)}:/workspace -w /workspace public.ecr.aws/sam/build-python3.13 bash -c "
+      curl -Ls https://astral.sh/uv/install.sh | sh
+      ~/.cargo/bin/uv sync --no-dev
+      ~/.cargo/bin/uv pip freeze > requirements.txt
+      pip install -r requirements.txt -t python/lib/python3.13/site-packages --platform manylinux2014_x86_64 --python-version 3.13 --only-binary=:all: && \
       zip -r requirements.zip python
       "
     EOT
