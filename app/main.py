@@ -44,7 +44,7 @@ class ValidationErrorResponse(ErrorResponse):
 
 @app.post("/api/v1/login", status_code=status.HTTP_200_OK)
 async def login(body: LoginSchema) -> dict[str, str]:
-    jwt_token, refresh_token = await auth_service.login(str(body.email), body.password)
+    jwt_token, refresh_token = auth_service.login(str(body.email), body.password)
     return {
         "token": jwt_token,
         "refreshToken": refresh_token,
@@ -57,7 +57,7 @@ async def login(body: LoginSchema) -> dict[str, str]:
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def logout():
-    await auth_service.logout(jwt_bearer.decoded_token)
+    auth_service.logout(jwt_bearer.decoded_token)
 
 
 @app.post(
@@ -66,7 +66,7 @@ async def logout():
     status_code=status.HTTP_200_OK,
 )
 async def refresh(body: RefreshSchema) -> dict[str, str]:
-    jwt_token, refresh_token = await auth_service.refresh(
+    jwt_token, refresh_token = auth_service.refresh(
         jwt_bearer.decoded_token, body.refresh_token
     )
     return {"token": jwt_token, "refreshToken": refresh_token}

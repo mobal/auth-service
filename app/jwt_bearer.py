@@ -20,19 +20,19 @@ class HTTPBearer(FastAPIHTTPBearer):
         super().__init__(auto_error=auto_error)
         self._auto_error = auto_error
 
-    async def __call__(self, request: Request) -> HTTPAuthorizationCredentials | None:
+    def __call__(self, request: Request) -> HTTPAuthorizationCredentials | None:
         authorization = request.headers.get("Authorization")
         if authorization is not None:
-            return await self._get_authorization_credentials_from_header(authorization)
+            return self._get_authorization_credentials_from_header(authorization)
         else:
             logger.info(
                 "Missing authentication header, attempt to use token query param"
             )
-            return await self._get_authorization_credentials_from_token(
+            return self._get_authorization_credentials_from_token(
                 request.query_params.get("token")
             )
 
-    async def _get_authorization_credentials_from_header(
+    def _get_authorization_credentials_from_header(
         self, authorization: str
     ) -> HTTPAuthorizationCredentials | None:
         scheme, credentials = get_authorization_scheme_param(authorization)
@@ -56,7 +56,7 @@ class HTTPBearer(FastAPIHTTPBearer):
                 return None
         return HTTPAuthorizationCredentials(scheme=scheme, credentials=credentials)
 
-    async def _get_authorization_credentials_from_token(
+    def _get_authorization_credentials_from_token(
         self, token: str | None
     ) -> HTTPAuthorizationCredentials | None:
         if not token:
@@ -75,10 +75,10 @@ class JWTBearer:
         self._auto_error = auto_error
         self._token_service = TokenService()
 
-    async def __call__(self, request: Request) -> JWTToken | None:
-        credentials = await HTTPBearer(self._auto_error).__call__(request)
+    def __call__(self, request: Request) -> JWTToken | None:
+        credentials = HTTPBearer(self._auto_error).__call__(request)
         if credentials:
-            if not await self._validate_token(credentials.credentials):
+            if not self._validate_token(credentials.credentials):
                 if self._auto_error:
                     logger.warning(f"Invalid authentication token {credentials=}")
                     raise HTTPException(
@@ -91,12 +91,12 @@ class JWTBearer:
         else:
             return None
 
-    async def _validate_token(self, token: str) -> bool:
+    def _validate_token(self, token: str) -> bool:
         try:
             decoded_token = JWTToken(
                 **jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
             )
-            if await self._token_service.get_by_id(decoded_token.jti):
+            if self._token_service.get_by_id(decoded_token.jti):
                 logger.debug(f"Token is not blacklisted {decoded_token=}")
                 self.decoded_token = decoded_token
                 return True

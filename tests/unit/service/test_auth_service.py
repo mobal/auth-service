@@ -6,11 +6,8 @@ import pytest as pytest
 from argon2 import PasswordHasher
 from fastapi import HTTPException, status
 
-from app.exceptions import (
-    TokenMistmatchException,
-    TokenNotFoundException,
-    UserNotFoundException,
-)
+from app.exceptions import (TokenMismatchException, TokenNotFoundException,
+                            UserNotFoundException)
 from app.models import User
 from app.repositories import UserRepository
 from app.services import AuthService, JWTToken, TokenService
@@ -20,7 +17,6 @@ ALGORITHMS = ["HS256"]
 PASSWORD = "123456"
 
 
-@pytest.mark.asyncio
 class TestAuthService:
     @pytest.fixture
     def auth_service(self) -> AuthService:
@@ -53,7 +49,7 @@ class TestAuthService:
             created_at=pendulum.now().to_iso8601_string(),
         )
 
-    async def test_successfully_login(
+    def test_successfully_login(
         self,
         mocker,
         auth_service: AuthService,
@@ -65,7 +61,7 @@ class TestAuthService:
         mocker.patch.object(UserRepository, "get_by_email", return_value=user)
         mocker.patch.object(TokenService, "create")
 
-        jwt_token, refresh_token = await auth_service.login(user.email, PASSWORD)
+        jwt_token, refresh_token = auth_service.login(user.email, PASSWORD)
         decoded_jwt_token = JWTToken(
             **jwt.decode(jwt_token, settings.jwt_secret, ALGORITHMS)
         )
@@ -78,7 +74,7 @@ class TestAuthService:
         user_repository.get_by_email.assert_called_once_with(user.email)
         token_service.create.assert_called_once_with(decoded_jwt_token, refresh_token)
 
-    async def test_fail_to_login_due_user_not_found_by_email(
+    def test_fail_to_login_due_user_not_found_by_email(
         self,
         mocker,
         auth_service: AuthService,
@@ -89,13 +85,13 @@ class TestAuthService:
         mocker.patch.object(UserRepository, "get_by_email", return_value=None)
 
         with pytest.raises(UserNotFoundException) as excinfo:
-            await auth_service.login(user.email, PASSWORD)
+            auth_service.login(user.email, PASSWORD)
 
         assert status.HTTP_404_NOT_FOUND == excinfo.value.status_code
         assert error_message == excinfo.value.detail
         user_repository.get_by_email.assert_called_once_with(user.email)
 
-    async def test_fail_to_login_due_password_does_not_match(
+    def test_fail_to_login_due_password_does_not_match(
         self,
         mocker,
         auth_service: AuthService,
@@ -106,15 +102,13 @@ class TestAuthService:
         mocker.patch.object(UserRepository, "get_by_email", return_value=user)
 
         with pytest.raises(HTTPException) as excinfo:
-            await auth_service.login(
-                user.email, password_hasher.hash("doest_not_match")
-            )
+            auth_service.login(user.email, password_hasher.hash("doest_not_match"))
 
         assert status.HTTP_401_UNAUTHORIZED == excinfo.value.status_code
         assert "Unauthorized" == excinfo.value.detail
         user_repository.get_by_email.assert_called_once_with(user.email)
 
-    async def test_successfully_logout(
+    def test_successfully_logout(
         self,
         mocker,
         auth_service: AuthService,
@@ -123,11 +117,11 @@ class TestAuthService:
     ):
         mocker.patch.object(TokenService, "delete_by_id")
 
-        await auth_service.logout(jwt_token)
+        auth_service.logout(jwt_token)
 
         token_service.delete_by_id.assert_called_once_with(jwt_token.jti)
 
-    async def test_fail_to_logout_due_to_token_service_exception(
+    def test_fail_to_logout_due_to_token_service_exception(
         self,
         mocker,
         auth_service: AuthService,
@@ -142,13 +136,13 @@ class TestAuthService:
         )
 
         with pytest.raises(TokenNotFoundException) as excinfo:
-            await auth_service.logout(jwt_token)
+            auth_service.logout(jwt_token)
 
         assert status.HTTP_404_NOT_FOUND == excinfo.value.status_code
         assert error_message == excinfo.value.detail
         token_service.delete_by_id.assert_called_once_with(jwt_token.jti)
 
-    async def test_successfully_refresh_tokens(
+    def test_successfully_refresh_tokens(
         self,
         mocker,
         auth_service: AuthService,
@@ -167,7 +161,7 @@ class TestAuthService:
         mocker.patch.object(TokenService, "create")
         mocker.patch.object(TokenService, "delete_by_id")
 
-        new_jwt_token, new_refresh_token = await auth_service.refresh(
+        new_jwt_token, new_refresh_token = auth_service.refresh(
             jwt_token, refresh_token
         )
 
@@ -184,7 +178,7 @@ class TestAuthService:
         )
         token_service.delete_by_id.assert_called_once_with(jwt_token.jti)
 
-    async def test_fail_to_refresh_due_to_missing_token(
+    def test_fail_to_refresh_due_to_missing_token(
         self,
         mocker,
         auth_service: AuthService,
@@ -195,14 +189,14 @@ class TestAuthService:
         mocker.patch.object(TokenService, "get_by_refresh_token", return_value=None)
 
         with pytest.raises(TokenNotFoundException) as excinfo:
-            await auth_service.refresh(jwt_token, refresh_token)
+            auth_service.refresh(jwt_token, refresh_token)
 
         assert TokenNotFoundException.__name__ == excinfo.typename
         assert "The requested token was not found" == excinfo.value.detail
 
         token_service.get_by_refresh_token.assert_called_once_with(refresh_token)
 
-    async def test_fail_to_refresh_token_due_to_token_mismatch(
+    def test_fail_to_refresh_token_due_to_token_mismatch(
         self,
         mocker,
         auth_service: AuthService,
@@ -227,10 +221,10 @@ class TestAuthService:
         }
         mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
 
-        with pytest.raises(TokenMistmatchException) as excinfo:
-            await auth_service.refresh(jwt_token, refresh_token)
+        with pytest.raises(TokenMismatchException) as excinfo:
+            auth_service.refresh(jwt_token, refresh_token)
 
-        assert TokenMistmatchException.__name__ == excinfo.typename
+        assert TokenMismatchException.__name__ == excinfo.typename
         assert "Internal Server Error" == excinfo.value.detail
 
         token_service.get_by_refresh_token.assert_called_once_with(refresh_token)
