@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/mobal/auth-service/compare/v0.2.0...v0.3.0) (2025-05-13)
+
+
+### Features
+
+* removed unnecessary async functions and replaced pipenv with uv ([bbae3c0](https://github.com/mobal/auth-service/commit/bbae3c00204699b8515d7e60c51d8940ae6baff7))
+
 ## [0.2.0](https://github.com/mobal/auth-service/compare/v0.1.0...v0.2.0) (2025-04-18)
 
 
