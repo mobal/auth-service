@@ -3,9 +3,9 @@ import uuid
 import jwt
 import pytest
 from fastapi import status
+from fastapi.testclient import TestClient
 from httpx import Response
 from respx import MockRouter, Route
-from starlette.testclient import TestClient
 
 from app.models import JWTToken, User
 

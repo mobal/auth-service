@@ -7,10 +7,10 @@ from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import UJSONResponse
 from mangum import Mangum
 from starlette.middleware.exceptions import ExceptionMiddleware
-from starlette.middleware.gzip import GZipMiddleware
 
 from app import settings
 from app.jwt_bearer import JWTBearer
