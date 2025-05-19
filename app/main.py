@@ -43,7 +43,7 @@ class ValidationErrorResponse(ErrorResponse):
 
 
 @app.post("/api/v1/login", status_code=status.HTTP_200_OK)
-async def login(body: LoginSchema) -> dict[str, str]:
+def login(body: LoginSchema) -> dict[str, str]:
     jwt_token, refresh_token = auth_service.login(str(body.email), body.password)
     return {
         "token": jwt_token,
@@ -56,7 +56,7 @@ async def login(body: LoginSchema) -> dict[str, str]:
     dependencies=[Depends(jwt_bearer)],
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def logout():
+def logout():
     auth_service.logout(jwt_bearer.decoded_token)
 
 
@@ -65,7 +65,7 @@ async def logout():
     dependencies=[Depends(jwt_bearer)],
     status_code=status.HTTP_200_OK,
 )
-async def refresh(body: RefreshSchema) -> dict[str, str]:
+def refresh(body: RefreshSchema) -> dict[str, str]:
     jwt_token, refresh_token = auth_service.refresh(
         jwt_bearer.decoded_token, body.refresh_token
     )
@@ -74,9 +74,7 @@ async def refresh(body: RefreshSchema) -> dict[str, str]:
 
 @app.exception_handler(BotoCoreError)
 @app.exception_handler(ClientError)
-async def botocore_error_handler(
-    request: Request, error: BotoCoreError
-) -> UJSONResponse:
+def botocore_error_handler(request: Request, error: BotoCoreError) -> UJSONResponse:
     error_id = uuid.uuid4()
     error_message = str(error) if settings.debug else "Internal Server Error"
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -90,9 +88,7 @@ async def botocore_error_handler(
 
 
 @app.exception_handler(HTTPException)
-async def http_exception_handler(
-    request: Request, error: HTTPException
-) -> UJSONResponse:
+def http_exception_handler(request: Request, error: HTTPException) -> UJSONResponse:
     error_id = uuid.uuid4()
     logger.exception(f"Received http exception {error_id=}")
     return UJSONResponse(
@@ -104,7 +100,7 @@ async def http_exception_handler(
 
 
 @app.exception_handler(RequestValidationError)
-async def request_validation_error_handler(
+def request_validation_error_handler(
     request: Request, error: RequestValidationError
 ) -> UJSONResponse:
     error_id = uuid.uuid4()
