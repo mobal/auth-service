@@ -67,14 +67,14 @@ resource "terraform_data" "requirements_lambda_layer" {
 
   provisioner "local-exec" {
     command = <<EOT
-      DOCKER_DEFAULT_PLATFORM=linux/amd64 docker run --rm -v ${abspath(path.module)}:/workspace -w /workspace public.ecr.aws/sam/build-python3.13 bash -c "
+      DOCKER_DEFAULT_PLATFORM=linux/amd64 docker run --rm -v ${abspath(path.module)}:/workspace -w /workspace public.ecr.aws/sam/build-python3.12 bash -c "
       export UV_INSTALL_DIR=/tmp/uv
       mkdir -p \$UV_INSTALL_DIR
       curl -Ls https://astral.sh/uv/install.sh | sh
       export PATH=\$UV_INSTALL_DIR:\$PATH
       uv sync --no-dev
       uv export --locked --no-dev --format requirements.txt > requirements.txt
-      pip install -r requirements.txt -t python/lib/python3.13/site-packages --platform manylinux2014_x86_64 --python-version 3.13 --only-binary=:all: && \
+      pip install -r requirements.txt -t python/lib/python3.12/site-packages --platform manylinux2014_x86_64 --python-version 3.12 --only-binary=:all: && \
       zip -r requirements.zip python
       "
     EOT
