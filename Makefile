@@ -18,6 +18,9 @@ mypy:
 pycodestyle:
 	uv run -m pycodestyle --ignore=E501,W503 app/ tests/
 
+ruff:
+	uv run -m ruff check app/ tests/ --fix
+
 sort:
 	uv run -m isort --atomic app/ tests/
 
