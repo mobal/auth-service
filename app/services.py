@@ -10,8 +10,11 @@ from aws_lambda_powertools import Logger
 from fastapi import HTTPException, status
 
 from app import settings
-from app.exceptions import (TokenMismatchException, TokenNotFoundException,
-                            UserNotFoundException)
+from app.exceptions import (
+    TokenMismatchException,
+    TokenNotFoundException,
+    UserNotFoundException,
+)
 from app.models import JWTToken, User
 from app.repositories import TokenRepository, UserRepository
 
@@ -63,7 +66,7 @@ class AuthService:
         jwt_token: JWTToken,
     ) -> tuple[JWTToken, str]:
         logger.info(
-            f"Generate new tokens for user={jwt_token.user["id"]}",
+            f"Generate new tokens for user={jwt_token.user['id']}",
             extra={"user": jwt_token.user},
         )
         jwt_token = self._generate_token(
