@@ -1,6 +1,6 @@
 import secrets
 import uuid
-from typing import Any, Tuple
+from typing import Any
 
 import jwt
 import pendulum
@@ -142,7 +142,7 @@ class TokenService:
         if response["ResponseMetadata"]["HTTPStatusCode"] != status.HTTP_200_OK:
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
 
-    def get_by_id(self, jti: str) -> Tuple[JWTToken, str] | None:
+    def get_by_id(self, jti: str) -> tuple[JWTToken, str] | None:
         return self._token_repository.get_by_id(jti)
 
     def get_by_refresh_token(self, refresh_token: str) -> dict[str, Any] | None:

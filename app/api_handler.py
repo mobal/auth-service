@@ -1,5 +1,5 @@
 import uuid
-from typing import Dict, Sequence
+from collections.abc import Sequence
 
 import uvicorn
 from aws_lambda_powertools import Logger
@@ -39,7 +39,7 @@ class ErrorResponse(CamelModel):
 
 
 class ValidationErrorResponse(ErrorResponse):
-    errors: Sequence[Dict]
+    errors: Sequence[dict]
 
 
 @app.post("/api/v1/login", status_code=status.HTTP_200_OK)
