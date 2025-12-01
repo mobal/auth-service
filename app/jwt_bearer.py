@@ -1,8 +1,10 @@
 import jwt
 from aws_lambda_powertools import Logger
 from fastapi import HTTPException, Request, status
-from fastapi.security.http import HTTPAuthorizationCredentials
-from fastapi.security.http import HTTPBearer as FastAPIHTTPBearer
+from fastapi.security.http import (
+    HTTPAuthorizationCredentials,
+    HTTPBearer as FastAPIHTTPBearer,
+)
 from fastapi.security.utils import get_authorization_scheme_param
 from jwt import DecodeError, ExpiredSignatureError
 
@@ -37,7 +39,7 @@ class HTTPBearer(FastAPIHTTPBearer):
     ) -> HTTPAuthorizationCredentials | None:
         scheme, credentials = get_authorization_scheme_param(authorization)
         if not (authorization and scheme and credentials):
-            logger.warning(f"Missing {authorization=}, {scheme=} or {credentials=}")
+            logger.warning("Missing authorization, scheme or credentials")
             if self._auto_error:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/mobal/auth-service/compare/v0.3.0...v0.4.0) (2025-05-14)
+
+
+### Features
+
+* replaced json response with ujson response ([8be89dc](https://github.com/mobal/auth-service/commit/8be89dc6487cbec35ee1f55ad64c176f154c0bd6))
+
 ## [0.5.0](https://github.com/mobal/auth-service/compare/v0.4.0...v0.5.0) (2025-05-16)
 
 

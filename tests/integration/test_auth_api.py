@@ -32,7 +32,7 @@ class TestAuthApi:
     def test_client(
         self, initialize_tokens_table, initialize_users_table
     ) -> TestClient:
-        from app.main import app
+        from app.api_handler import app
 
         return TestClient(app, raise_server_exceptions=True)
 
