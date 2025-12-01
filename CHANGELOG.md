@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/mobal/auth-service/compare/v0.5.0...v0.5.1) (2025-12-01)
+
+
+### Bug Fixes
+
+* logging ([5786dc1](https://github.com/mobal/auth-service/commit/5786dc1c6aac0805062c7afc0362a7c44b793b64))
+* run GH workflow on pull request ([1a73dad](https://github.com/mobal/auth-service/commit/1a73dada30401adaf9acd0cfe3392a644e3987b0))
+
 ## [0.4.0](https://github.com/mobal/auth-service/compare/v0.3.0...v0.4.0) (2025-05-14)
 
 
