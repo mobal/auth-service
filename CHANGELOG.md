@@ -7,6 +7,25 @@
 
 * replaced json response with ujson response ([8be89dc](https://github.com/mobal/auth-service/commit/8be89dc6487cbec35ee1f55ad64c176f154c0bd6))
 
+## [0.5.0](https://github.com/mobal/auth-service/compare/v0.4.0...v0.5.0) (2025-05-16)
+
+
+### Features
+
+* use aws context id if available and x-correlation-id is not set ([50087c9](https://github.com/mobal/auth-service/commit/50087c95335df898abf3b6964d44581a40cdfe75))
+
+
+### Bug Fixes
+
+* replaced Pipfile.lock with uv.lock (oops) ([69d1cd4](https://github.com/mobal/auth-service/commit/69d1cd4bdaac18e8c403bbe5ec53b8427ed528a5))
+
+## [0.4.0](https://github.com/mobal/auth-service/compare/v0.3.0...v0.4.0) (2025-05-14)
+
+
+### Features
+
+* replaced json response with ujson response ([8be89dc](https://github.com/mobal/auth-service/commit/8be89dc6487cbec35ee1f55ad64c176f154c0bd6))
+
 ## [0.3.0](https://github.com/mobal/auth-service/compare/v0.2.0...v0.3.0) (2025-05-13)
 
 
