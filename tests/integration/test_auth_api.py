@@ -87,7 +87,7 @@ class TestAuthApi:
         response = test_client.get(
             f"{BASE_URL}/logout",
             headers={
-                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(), pytest.jwt_secret_ssm_param_value)}"
+                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(exclude_none=True), pytest.jwt_secret_ssm_param_value)}"
             },
         )
 
@@ -105,7 +105,7 @@ class TestAuthApi:
             REFRESH_URL,
             json={"refreshToken": refresh_token},
             headers={
-                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(), pytest.jwt_secret_ssm_param_value)}"
+                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(exclude_none=True), pytest.jwt_secret_ssm_param_value)}"
             },
         )
 
@@ -124,7 +124,7 @@ class TestAuthApi:
             REFRESH_URL,
             json={"refreshToken": refresh_token},
             headers={
-                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(), pytest.jwt_secret_ssm_param_value)}"
+                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(exclude_none=True), pytest.jwt_secret_ssm_param_value)}"
             },
         )
 
@@ -139,7 +139,7 @@ class TestAuthApi:
             REFRESH_URL,
             json={"refreshToken": str(uuid.uuid4())},
             headers={
-                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(), pytest.jwt_secret_ssm_param_value)}"
+                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(exclude_none=True), pytest.jwt_secret_ssm_param_value)}"
             },
         )
 
@@ -157,7 +157,7 @@ class TestAuthApi:
             REFRESH_URL,
             json={"refreshToken": refresh_token},
             headers={
-                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(), pytest.jwt_secret_ssm_param_value)}"
+                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(exclude_none=True), pytest.jwt_secret_ssm_param_value)}"
             },
         )
 
