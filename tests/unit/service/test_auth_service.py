@@ -151,6 +151,7 @@ class TestAuthService:
         self,
         mocker,
         auth_service: AuthService,
+        jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         refresh_token: str,
         token_service: TokenService,
@@ -175,7 +176,7 @@ class TestAuthService:
             JWTToken(
                 **jwt.decode(
                     new_jwt_token,
-                    pytest.jwt_secret_ssm_param_value,
+                    jwt_secret_ssm_param_value,
                     algorithms=["HS256"],
                 )
             ),

@@ -37,6 +37,13 @@ class TestAuthApi:
 
         return TestClient(app, raise_server_exceptions=True)
 
+    def _auth_header(
+        self, jwt_token: JWTToken, jwt_secret_ssm_param_value: str
+    ) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(exclude_none=True), jwt_secret_ssm_param_value)}"
+        }
+
     def test_fail_to_login_due_to_empty_body(self, test_client: TestClient):
         response = test_client.post(
             f"{BASE_URL}/login",
@@ -84,12 +91,11 @@ class TestAuthApi:
         jwt_token: JWTToken,
         respx_mock: MockRouter,
         test_client: TestClient,
+        jwt_secret_ssm_param_value: str,
     ):
         response = test_client.get(
             f"{BASE_URL}/logout",
-            headers={
-                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(exclude_none=True), pytest.jwt_secret_ssm_param_value)}"
-            },
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
@@ -99,15 +105,14 @@ class TestAuthApi:
         jwt_token: JWTToken,
         refresh_token: str,
         test_client: TestClient,
+        jwt_secret_ssm_param_value: str,
     ):
         jwt_token.jti = str(uuid.uuid4())
 
         response = test_client.post(
             REFRESH_URL,
             json={"refreshToken": refresh_token},
-            headers={
-                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(exclude_none=True), pytest.jwt_secret_ssm_param_value)}"
-            },
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
 
         assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -118,15 +123,14 @@ class TestAuthApi:
         jwt_token: JWTToken,
         refresh_token: str,
         test_client: TestClient,
+        jwt_secret_ssm_param_value: str,
     ):
         jwt_token.user = {}
 
         response = test_client.post(
             REFRESH_URL,
             json={"refreshToken": refresh_token},
-            headers={
-                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(exclude_none=True), pytest.jwt_secret_ssm_param_value)}"
-            },
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
 
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -135,13 +139,12 @@ class TestAuthApi:
         self,
         jwt_token: JWTToken,
         test_client: TestClient,
+        jwt_secret_ssm_param_value: str,
     ):
         response = test_client.post(
             REFRESH_URL,
             json={"refreshToken": str(uuid.uuid4())},
-            headers={
-                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(exclude_none=True), pytest.jwt_secret_ssm_param_value)}"
-            },
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
@@ -153,13 +156,12 @@ class TestAuthApi:
         refresh_token: str,
         respx_mock: MockRouter,
         test_client: TestClient,
+        jwt_secret_ssm_param_value: str,
     ):
         response = test_client.post(
             REFRESH_URL,
             json={"refreshToken": refresh_token},
-            headers={
-                "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(exclude_none=True), pytest.jwt_secret_ssm_param_value)}"
-            },
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
 
         assert response.status_code == status.HTTP_200_OK
