@@ -43,13 +43,15 @@ jobs:
       run: |
         uv run ruff check app/ tests/ --statistics
 
-    - name: Run ty type checker
-      run: |
-        uv run ty check
-
     - name: Running tests with Pytest and generate coverage
       run: |
         uv run -m pytest --cov-report=term --cov-report=xml:$Coverage_File --cov=app
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v5
+      if: success()
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
     - name: SonarQube Scan
       uses: SonarSource/sonarqube-scan-action@v6

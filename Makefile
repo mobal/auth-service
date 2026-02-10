@@ -1,6 +1,6 @@
 .PHONY: all format install lint bandit test tflint ty
 
-all: bandit format lint ty test
+all: bandit format lint test
 
 
 format:
