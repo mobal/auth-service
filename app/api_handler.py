@@ -15,7 +15,7 @@ from starlette.middleware.exceptions import ExceptionMiddleware
 from app import settings
 from app.api.v1.api import router as api_v1_router
 from app.middlewares import CorrelationIdMiddleware
-from app.models import CamelModel
+from app.models.models import CamelModel
 
 logger = Logger()
 

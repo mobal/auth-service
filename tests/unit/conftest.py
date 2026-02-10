@@ -4,9 +4,10 @@ from unittest.mock import ANY
 import pytest as pytest
 
 from app.jwt_bearer import JWTBearer
-from app.models import JWTToken
-from app.repositories import TokenRepository, UserRepository
-from app.services import TokenService
+from app.models.jwt import JWTToken
+from app.repositories.token_repository import TokenRepository
+from app.repositories.user_repository import UserRepository
+from app.services.token_service import TokenService
 
 
 @pytest.fixture

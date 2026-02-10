@@ -7,29 +7,24 @@ import pendulum
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerifyMismatchError
 from aws_lambda_powertools import Logger
-from fastapi import HTTPException, status
+from fastapi import HTTPException
+from starlette import status
 
 from app import settings
-from app.exceptions import (
-    TokenMismatchException,
-    TokenNotFoundException,
-    UserNotFoundException,
-)
-from app.models import JWTToken, User
-from app.repositories import TokenRepository, UserRepository
+from app.exceptions import UserNotFoundException, TokenNotFoundException, TokenMismatchException
+from app.models.jwt import JWTToken
+from app.models.user import User
+from app.repositories.user_repository import UserRepository
+from app.services.token_service import TokenService
 
-logger = Logger(utc=True)
 
-ERROR_MESSAGE_INTERNAL_SERVER_ERROR = "Internal Server Error"
-ERROR_MESSAGE_TOKEN_NOT_FOUND = "The requested token was not found"
 ERROR_MESSAGE_UNAUTHORIZED = "Unauthorized"
+ERROR_MESSAGE_TOKEN_NOT_FOUND = "The requested token was not found"
 ERROR_MESSAGE_USER_NOT_FOUND = "The requested user was not found"
-X_API_KEY = "X-Api-Key"
-X_CORRELATION_ID = "X-Correlation-ID"
-
 
 class AuthService:
     def __init__(self):
+        self._logger = Logger()
         self._password_hasher = PasswordHasher()
         self._token_service = TokenService()
         self._user_repository = UserRepository()
@@ -65,7 +60,7 @@ class AuthService:
         self,
         jwt_token: JWTToken,
     ) -> tuple[JWTToken, str]:
-        logger.info(
+        self._logger.info(
             f"Generate new tokens for user={jwt_token.user['id']}",
             extra={"user": jwt_token.user},
         )
@@ -77,7 +72,7 @@ class AuthService:
         return jwt_token, refresh_token
 
     def _revoke_token(self, jwt_token: JWTToken):
-        logger.info(
+        self._logger.info(
             f"Revoking token with jti={jwt_token.jti}", extra={"jwt_token": jwt_token}
         )
         self._token_service.delete_by_id(jwt_token.jti)
@@ -109,7 +104,7 @@ class AuthService:
     def refresh(self, jwt_token: JWTToken, refresh_token: str) -> tuple[str, str]:
         item = self._token_service.get_by_refresh_token(refresh_token)
         if item is None:
-            logger.warning("The requested token was not found!")
+            self._logger.warning("The requested token was not found!")
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
         if jwt_token.model_dump() != item["jwt_token"]:
             raise TokenMismatchException("Internal Server Error")
@@ -119,31 +114,3 @@ class AuthService:
             jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
             refresh_token,
         )
-
-
-class TokenService:
-    def __init__(self):
-        self._token_repository = TokenRepository()
-
-    def create(self, jwt_token: JWTToken, refresh_token: str):
-        now = pendulum.now()
-        self._token_repository.create_token(
-            {
-                "jti": jwt_token.jti,
-                "jwt_token": jwt_token.model_dump(),
-                "refresh_token": refresh_token,
-                "created_at": now.to_iso8601_string(),
-                "ttl": jwt_token.exp,
-            }
-        )
-
-    def delete_by_id(self, jti: str):
-        response = self._token_repository.delete_by_id(jti)
-        if response["ResponseMetadata"]["HTTPStatusCode"] != status.HTTP_200_OK:
-            raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
-
-    def get_by_id(self, jti: str) -> tuple[JWTToken, str] | None:
-        return self._token_repository.get_by_id(jti)
-
-    def get_by_refresh_token(self, refresh_token: str) -> dict[str, Any] | None:
-        return self._token_repository.get_by_refresh_token(refresh_token)

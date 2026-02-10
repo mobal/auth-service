@@ -6,7 +6,8 @@ from fastapi import HTTPException, status
 from fastapi.requests import Request
 
 from app.jwt_bearer import JWTBearer
-from app.services import JWTToken, TokenService
+from app.services.token_service import TokenService
+from app.models.jwt import JWTToken
 from app.settings import Settings
 
 NOT_AUTHENTICATED = "Not authenticated"

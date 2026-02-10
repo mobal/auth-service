@@ -3,8 +3,8 @@ from typing import Any
 
 import pendulum
 
-from app.models import JWTToken
-from app.repositories import TokenRepository
+from app.models.jwt import JWTToken
+from app.repositories.token_repository import TokenRepository
 
 
 class TestTokenRepository:

@@ -1,7 +1,7 @@
 import uuid
 
-from app.models import User
-from app.repositories import UserRepository
+from app.models.user import User
+from app.repositories.user_repository import UserRepository
 
 
 class TestUserRepository:

@@ -9,8 +9,8 @@ from fastapi.security.utils import get_authorization_scheme_param
 from jwt import DecodeError, ExpiredSignatureError
 
 from app import settings
-from app.models import JWTToken
-from app.services import TokenService
+from app.models.jwt import JWTToken
+from app.services.token_service import TokenService
 
 logger = Logger(utc=True)
 

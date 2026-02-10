@@ -2,8 +2,9 @@ from aws_lambda_powertools import Logger
 from fastapi import APIRouter, status, Depends
 
 from app.jwt_bearer import JWTBearer
-from app.schemas import LoginSchema, RefreshSchema
-from app.services import AuthService
+from app.models.request.login import LoginSchema
+from app.models.request.refresh import RefreshSchema
+from app.services.auth_service import AuthService
 
 logger = Logger()
 
@@ -11,7 +12,7 @@ auth_service = AuthService()
 jwt_bearer = JWTBearer()
 router = APIRouter()
 
-@router.post("/api/v1/login", status_code=status.HTTP_200_OK)
+@router.post("/login", status_code=status.HTTP_200_OK)
 def login(body: LoginSchema) -> dict[str, str]:
     jwt_token, refresh_token = auth_service.login(str(body.email), body.password)
     return {
@@ -21,7 +22,7 @@ def login(body: LoginSchema) -> dict[str, str]:
 
 
 @router.get(
-    "/api/v1/logout",
+    "/logout",
     dependencies=[Depends(jwt_bearer)],
     status_code=status.HTTP_204_NO_CONTENT,
 )
@@ -30,7 +31,7 @@ def logout():
 
 
 @router.post(
-    "/api/v1/refresh",
+    "/refresh",
     dependencies=[Depends(jwt_bearer)],
     status_code=status.HTTP_200_OK,
 )

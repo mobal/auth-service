@@ -7,7 +7,8 @@ from fastapi.testclient import TestClient
 from httpx import Response
 from respx import MockRouter, Route
 
-from app.models import JWTToken, User
+from app.models.jwt import JWTToken
+from app.models.user import User
 
 BASE_URL = "/api/v1"
 LOGIN_URL = f"{BASE_URL}/login"
