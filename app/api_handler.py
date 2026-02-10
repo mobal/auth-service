@@ -4,7 +4,7 @@ from collections.abc import Sequence
 import uvicorn
 from aws_lambda_powertools import Logger
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
@@ -13,20 +13,17 @@ from mangum import Mangum
 from starlette.middleware.exceptions import ExceptionMiddleware
 
 from app import settings
-from app.jwt_bearer import JWTBearer
+from app.api.v1.api import router as api_v1_router
 from app.middlewares import CorrelationIdMiddleware
 from app.models import CamelModel
-from app.schemas import LoginSchema, RefreshSchema
-from app.services import AuthService
 
-auth_service = AuthService()
-jwt_bearer = JWTBearer()
-logger = Logger(utc=True)
+logger = Logger()
 
 app = FastAPI(debug=settings.debug, title="AuthApp", version="1.0.0")
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(GZipMiddleware)
 app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
+app.include_router(api_v1_router)
 
 handler = Mangum(app)
 handler = logger.inject_lambda_context(handler, clear_state=True, log_event=True)
@@ -40,36 +37,6 @@ class ErrorResponse(CamelModel):
 
 class ValidationErrorResponse(ErrorResponse):
     errors: Sequence[dict]
-
-
-@app.post("/api/v1/login", status_code=status.HTTP_200_OK)
-def login(body: LoginSchema) -> dict[str, str]:
-    jwt_token, refresh_token = auth_service.login(str(body.email), body.password)
-    return {
-        "token": jwt_token,
-        "refreshToken": refresh_token,
-    }
-
-
-@app.get(
-    "/api/v1/logout",
-    dependencies=[Depends(jwt_bearer)],
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-def logout():
-    auth_service.logout(jwt_bearer.decoded_token)
-
-
-@app.post(
-    "/api/v1/refresh",
-    dependencies=[Depends(jwt_bearer)],
-    status_code=status.HTTP_200_OK,
-)
-def refresh(body: RefreshSchema) -> dict[str, str]:
-    jwt_token, refresh_token = auth_service.refresh(
-        jwt_bearer.decoded_token, body.refresh_token
-    )
-    return {"token": jwt_token, "refreshToken": refresh_token}
 
 
 @app.exception_handler(BotoCoreError)
