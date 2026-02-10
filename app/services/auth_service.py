@@ -45,10 +45,12 @@ class AuthService:
             if exp is None
             else iat.add(seconds=exp)
         )
+
         if user and isinstance(user, User):
             user = user.model_dump(
                 exclude={"password", "created_at", "deleted_at", "updated_at"}
             )
+
         return JWTToken(
             exp=exp.int_timestamp,
             iat=iat.int_timestamp,
@@ -68,11 +70,13 @@ class AuthService:
             f"Generate new tokens for user={jwt_token.user['id']}",
             extra={"user": jwt_token.user},
         )
+
         jwt_token = self._generate_token(
             jwt_token.sub, settings.jwt_token_lifetime, jwt_token.user
         )
         refresh_token = self._generate_refresh_token()
         self._token_service.create(jwt_token, refresh_token)
+
         return jwt_token, refresh_token
 
     def _revoke_token(self, jwt_token: JWTToken):
@@ -81,20 +85,25 @@ class AuthService:
         )
         self._token_service.delete_by_id(jwt_token.jti)
 
-    def login(self, email: str, password: str) -> tuple[str, str]:
+    def login(self, email: str, password: str) -> tuple[str, str, int]:
         user = self._user_repository.get_by_email(email)
+
         if user is None:
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
         try:
             self._password_hasher.verify(user.password, password)
+
             jwt_token = self._generate_token(user.id, user=user)
             refresh_token = self._generate_refresh_token()
+
             self._token_service.create(jwt_token, refresh_token)
+
             return (
                 jwt.encode(
                     jwt_token.model_dump(exclude_none=True), settings.jwt_secret
                 ),
                 refresh_token,
+                settings.jwt_token_lifetime,
             )
         except (InvalidHash, VerifyMismatchError):
             raise HTTPException(
@@ -105,16 +114,21 @@ class AuthService:
     def logout(self, jwt_token: JWTToken):
         self._token_service.delete_by_id(jwt_token.jti)
 
-    def refresh(self, jwt_token: JWTToken, refresh_token: str) -> tuple[str, str]:
+    def refresh(self, jwt_token: JWTToken, refresh_token: str) -> tuple[str, str, int]:
         item = self._token_service.get_by_refresh_token(refresh_token)
+
         if item is None:
             self._logger.warning("The requested token was not found!")
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
+
         if jwt_token.model_dump() != item["jwt_token"]:
             raise TokenMismatchException("Internal Server Error")
         self._revoke_token(jwt_token)
+
         jwt_token, refresh_token = self._generate_tokens_for_user(jwt_token)
+
         return (
             jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
             refresh_token,
+            settings.jwt_token_lifetime,
         )

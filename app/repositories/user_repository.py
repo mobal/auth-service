@@ -12,8 +12,11 @@ class UserRepository:
         )
 
     def get_by_email(self, email: str) -> User | None:
-        response = self._table.scan(
-            FilterExpression=Attr("deleted_at").eq(None) & Attr("email").eq(email)
+        response = self._table.query(
+            IndexName="EmailIndex",
+            KeyConditionExpression=Key("email").eq(email),
+            FilterExpression=Attr("deleted_at").not_exists()
+            | Attr("deleted_at").eq(None),
         )
         if response["Items"]:
             return User(**response["Items"][0])
@@ -22,7 +25,8 @@ class UserRepository:
     def get_by_id(self, user_uuid: str) -> User | None:  # pragma: no cover
         response = self._table.query(
             KeyConditionExpression=Key("id").eq(user_uuid),
-            FilterExpression=Attr("deleted_at").eq(None),
+            FilterExpression=Attr("deleted_at").not_exists()
+            | Attr("deleted_at").eq(None),
         )
         if response["Items"]:
             return User(**response["Items"][0])
