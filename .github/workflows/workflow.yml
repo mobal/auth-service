@@ -1,10 +1,10 @@
-name: Workflow
+name: Build and test
 
-on: [push, pull_request]
+on: [push]
 
 jobs:
   build-and-test:
-    name: Build
+    name: Build and test
     runs-on: ubuntu-24.04
     env:
       Coverage_File: coverage.xml
@@ -39,12 +39,20 @@ jobs:
       run: |
         uv run -m bandit --severity-level high --confidence-level high -r app/ -vvv
 
+    - name: Run ruff linter
+      run: |
+        uv run ruff check app/ tests/ --statistics
+
+    - name: Run ty type checker
+      run: |
+        uv run ty check
+
     - name: Running tests with Pytest and generate coverage
       run: |
         uv run -m pytest --cov-report=term --cov-report=xml:$Coverage_File --cov=app
 
-    - name: Scan with SonarCloud
-      uses: sonarsource/sonarcloud-github-action@v5
+    - name: SonarQube Scan
+      uses: SonarSource/sonarqube-scan-action@v6
       with:
         args: >
           -Dsonar.language=python
@@ -56,4 +64,3 @@ jobs:
           -Dsonar.verbose=true
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
