@@ -60,7 +60,7 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        assert response.json()["message"] == "Unauthorized"
+        assert response.json()["error"] == "Unauthorized"
 
     def test_fail_to_login_due_to_user_not_found(
         self, test_client: TestClient, user: User
@@ -70,7 +70,7 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json()["message"] == "The requested user was not found"
+        assert response.json()["error"] == "The requested user was not found"
 
     def test_successfully_login(self, test_client: TestClient):
         response = test_client.post(
@@ -79,7 +79,12 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_200_OK
-        assert list(response.json().keys()) == ["token", "refreshToken"]
+        assert list(response.json().keys()) == [
+            "access_token",
+            "refresh_token",
+            "token_type",
+            "expires_in",
+        ]
 
     def test_fail_to_logout_due_to_missing_bearer_token(self, test_client: TestClient):
         response = test_client.get(f"{BASE_URL}/logout")
@@ -116,7 +121,7 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert response.json()["message"] == "Not authenticated"
+        assert response.json()["error"] == "Not authenticated"
 
     def test_fail_to_refresh_due_to_jwt_token_mismatch(
         self,
@@ -148,7 +153,7 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json()["message"] == "The requested token was not found"
+        assert response.json()["error"] == "The requested token was not found"
 
     def test_successfully_refresh(
         self,

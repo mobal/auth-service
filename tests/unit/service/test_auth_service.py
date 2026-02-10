@@ -66,7 +66,7 @@ class TestAuthService:
         mocker.patch.object(UserRepository, "get_by_email", return_value=user)
         mocker.patch.object(TokenService, "create")
 
-        jwt_token, refresh_token = auth_service.login(user.email, PASSWORD)
+        jwt_token, refresh_token, _ = auth_service.login(user.email, PASSWORD)
         decoded_jwt_token = JWTToken(
             **jwt.decode(jwt_token, settings.jwt_secret, ALGORITHMS)
         )
@@ -167,7 +167,7 @@ class TestAuthService:
         mocker.patch.object(TokenService, "create")
         mocker.patch.object(TokenService, "delete_by_id")
 
-        new_jwt_token, new_refresh_token = auth_service.refresh(
+        new_jwt_token, new_refresh_token, _ = auth_service.refresh(
             jwt_token, refresh_token
         )
 

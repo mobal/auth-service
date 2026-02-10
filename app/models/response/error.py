@@ -7,7 +7,7 @@ from app.models.models import CamelModel
 class ErrorResponse(CamelModel):
     status: int
     error: str
-    timestamp: float = time.time()
+    timestamp: int = int(time.time())
 
 
 class ValidationErrorResponse(ErrorResponse):
