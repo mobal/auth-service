@@ -42,7 +42,7 @@ def botocore_error_handler(request: Request, error: BotoCoreError) -> UJSONRespo
     logger.exception(f"Received botocore error {error_id=}")
     return UJSONResponse(
         content=jsonable_encoder(
-            ErrorResponse(status=status_code, id=error_id, message=error_message)
+            ErrorResponse(status=status_code, error=error_message)
         ),
         status_code=status_code,
     )
@@ -54,7 +54,7 @@ def http_exception_handler(request: Request, error: HTTPException) -> UJSONRespo
     logger.exception(f"Received http exception {error_id=}")
     return UJSONResponse(
         content=jsonable_encoder(
-            ErrorResponse(status=error.status_code, id=error_id, message=error.detail)
+            ErrorResponse(status=error.status_code, error=error.detail)
         ),
         status_code=error.status_code,
     )
@@ -71,8 +71,7 @@ def request_validation_error_handler(
         content=jsonable_encoder(
             ValidationErrorResponse(
                 status=status_code,
-                id=error_id,
-                message=str(error),
+                error=str(error),
                 errors=error.errors(),
             )
         ),
@@ -81,4 +80,4 @@ def request_validation_error_handler(
 
 
 if __name__ == "__main__":
-    uvicorn.run("app.api_handler:app", host="localhost", port=3000, reload=True)
+    uvicorn.run("app.api_handler:app", host="localhost", port=8080, reload=True)
