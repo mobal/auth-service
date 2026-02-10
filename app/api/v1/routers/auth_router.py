@@ -1,5 +1,5 @@
 from aws_lambda_powertools import Logger
-from fastapi import APIRouter, status, Depends
+from fastapi import APIRouter, Depends, status
 
 from app.jwt_bearer import JWTBearer
 from app.models.request.login import LoginSchema
@@ -11,6 +11,7 @@ logger = Logger()
 auth_service = AuthService()
 jwt_bearer = JWTBearer()
 router = APIRouter()
+
 
 @router.post("/login", status_code=status.HTTP_200_OK)
 def login(body: LoginSchema) -> dict[str, str]:

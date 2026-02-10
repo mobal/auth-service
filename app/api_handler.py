@@ -1,5 +1,4 @@
 import uuid
-from collections.abc import Sequence
 
 import uvicorn
 from aws_lambda_powertools import Logger
@@ -15,7 +14,7 @@ from starlette.middleware.exceptions import ExceptionMiddleware
 from app import settings
 from app.api.v1.api import router as api_v1_router
 from app.middlewares import CorrelationIdMiddleware
-from app.models.models import CamelModel
+from app.models.response.error import ErrorResponse, ValidationErrorResponse
 
 logger = Logger()
 
@@ -29,14 +28,9 @@ handler = Mangum(app)
 handler = logger.inject_lambda_context(handler, clear_state=True, log_event=True)
 
 
-class ErrorResponse(CamelModel):
-    status: int
-    id: uuid.UUID
-    message: str
-
-
-class ValidationErrorResponse(ErrorResponse):
-    errors: Sequence[dict]
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
 
 
 @app.exception_handler(BotoCoreError)

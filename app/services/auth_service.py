@@ -11,16 +11,20 @@ from fastapi import HTTPException
 from starlette import status
 
 from app import settings
-from app.exceptions import UserNotFoundException, TokenNotFoundException, TokenMismatchException
+from app.exceptions import (
+    TokenMismatchException,
+    TokenNotFoundException,
+    UserNotFoundException,
+)
 from app.models.jwt import JWTToken
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.services.token_service import TokenService
 
-
 ERROR_MESSAGE_UNAUTHORIZED = "Unauthorized"
 ERROR_MESSAGE_TOKEN_NOT_FOUND = "The requested token was not found"
 ERROR_MESSAGE_USER_NOT_FOUND = "The requested user was not found"
+
 
 class AuthService:
     def __init__(self):

@@ -11,11 +11,11 @@ from app.exceptions import (
     TokenNotFoundException,
     UserNotFoundException,
 )
+from app.models.jwt import JWTToken
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
 from app.services.token_service import TokenService
-from app.models.jwt import JWTToken
 from app.settings import Settings
 
 ALGORITHMS = ["HS256"]

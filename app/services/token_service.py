@@ -9,6 +9,7 @@ from app.repositories.token_repository import TokenRepository
 
 ERROR_MESSAGE_TOKEN_NOT_FOUND = "The requested token was not found"
 
+
 class TokenService:
     def __init__(self):
         self._token_repository = TokenRepository()
