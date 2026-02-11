@@ -66,3 +66,17 @@ class TestUserRepository:
         item = user_repository.get_by_id(str(uuid.uuid4()))
 
         assert item is None
+
+    def test_successfully_get_by_username(
+        self, users_table, user: User, user_repository: UserRepository
+    ):
+        item = user_repository.get_by_username(user.username)
+
+        assert user == item
+
+    def test_successfully_return_none_by_username(
+        self, users_table, user_repository: UserRepository
+    ):
+        item = user_repository.get_by_username("nonexistentuser")
+
+        assert item is None

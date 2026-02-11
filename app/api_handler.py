@@ -35,9 +35,10 @@ def botocore_error_handler(request: Request, error: BotoCoreError) -> UJSONRespo
     error_message = str(error) if settings.debug else "Internal Server Error"
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     logger.exception(f"Received botocore error {error_id=}")
+
     return UJSONResponse(
-        content=jsonable_encoder(
-            ErrorResponse(status=status_code, error=error_message)
+        content=ErrorResponse(status=status_code, error=error_message).model_dump(
+            by_alias=True
         ),
         status_code=status_code,
     )
@@ -47,9 +48,10 @@ def botocore_error_handler(request: Request, error: BotoCoreError) -> UJSONRespo
 def http_exception_handler(request: Request, error: HTTPException) -> UJSONResponse:
     error_id = uuid.uuid4()
     logger.exception(f"Received http exception {error_id=}")
+
     return UJSONResponse(
-        content=jsonable_encoder(
-            ErrorResponse(status=error.status_code, error=error.detail)
+        content=ErrorResponse(status=error.status_code, error=error.detail).model_dump(
+            by_alias=True
         ),
         status_code=error.status_code,
     )
@@ -62,14 +64,13 @@ def request_validation_error_handler(
     error_id = uuid.uuid4()
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
     logger.exception(f"Received request validation error {error_id=}")
+
     return UJSONResponse(
-        content=jsonable_encoder(
-            ValidationErrorResponse(
-                status=status_code,
-                error=str(error),
-                errors=error.errors(),
-            )
-        ),
+        content=ValidationErrorResponse(
+            status=status_code,
+            error="Validation Error",
+            errors=jsonable_encoder(error.errors()),
+        ).model_dump(by_alias=True),
         status_code=status_code,
     )
 

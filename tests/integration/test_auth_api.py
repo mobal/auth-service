@@ -180,6 +180,7 @@ class TestAuthApi:
                 "email": "newuser@netcode.hu",
                 "username": "newuser",
                 "password": "password123",
+                "confirmPassword": "password123",
                 "displayName": "New User",
             },
         )
@@ -213,6 +214,7 @@ class TestAuthApi:
                 "email": user.email,
                 "username": "newusername",
                 "password": "password123",
+                "confirmPassword": "password123",
                 "displayName": "New User",
             },
             headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
@@ -221,6 +223,31 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_409_CONFLICT
         assert (
             response.json()["error"] == f"User with email {user.email} already exists"
+        )
+
+    def test_fail_to_register_due_to_username_already_exists(
+        self,
+        jwt_token: JWTToken,
+        test_client: TestClient,
+        user: User,
+        jwt_secret_ssm_param_value: str,
+    ):
+        response = test_client.post(
+            f"{BASE_URL}/register",
+            json={
+                "email": "newemail@netcode.hu",
+                "username": user.username,
+                "password": "password123",
+                "confirmPassword": "password123",
+                "displayName": "New User",
+            },
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
+        )
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert (
+            response.json()["error"]
+            == "User with email newemail@netcode.hu already exists"
         )
 
     def test_successfully_register(
@@ -235,6 +262,7 @@ class TestAuthApi:
                 "email": "newuser@netcode.hu",
                 "username": "newuser",
                 "password": "password123",
+                "confirmPassword": "password123",
                 "displayName": "New User",
             },
             headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
@@ -243,3 +271,24 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_201_CREATED
         assert "Location" in response.headers
         assert response.headers["Location"].startswith("/api/v1/users/")
+
+    def test_fail_to_register_due_to_password_mismatch(
+        self,
+        jwt_token: JWTToken,
+        test_client: TestClient,
+        jwt_secret_ssm_param_value: str,
+    ):
+        response = test_client.post(
+            f"{BASE_URL}/register",
+            json={
+                "email": "user@netcode.hu",
+                "username": "user",
+                "password": "password123",
+                "confirmPassword": "password321",
+                "displayName": "User",
+            },
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.json()["error"] == "Validation Error"

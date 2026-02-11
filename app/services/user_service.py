@@ -1,6 +1,7 @@
 import uuid
 
 import pendulum
+from argon2 import PasswordHasher
 from aws_lambda_powertools import Logger
 
 from app.exceptions import UserAlreadyExistsException
@@ -11,6 +12,7 @@ from app.repositories.user_repository import UserRepository
 class UserService:
     def __init__(self):
         self._logger = Logger()
+        self._password_hasher = PasswordHasher()
         self._user_repository = UserRepository()
 
     def register(
@@ -21,7 +23,9 @@ class UserService:
             extra={"email": email, "username": username, "display_name": display_name},
         )
 
-        if self._user_repository.get_by_email(email):
+        if self._user_repository.get_by_email(
+            email
+        ) or self._user_repository.get_by_username(username):
             self._logger.warning(
                 f"User with email {email} already exists", extra={"email": email}
             )
@@ -31,7 +35,7 @@ class UserService:
             id=str(uuid.uuid4()),
             display_name=display_name if display_name else username,
             email=email,
-            password=password,
+            password=self._password_hasher.hash(password),
             username=username,
             created_at=pendulum.now().to_iso8601_string(),
         )

@@ -28,6 +28,7 @@ class UserRepository:
         )
         if response["Items"]:
             return User(**response["Items"][0])
+
         return None
 
     def get_by_id(self, user_uuid: str) -> User | None:  # pragma: no cover
@@ -38,4 +39,17 @@ class UserRepository:
         )
         if response["Items"]:
             return User(**response["Items"][0])
+
+        return None
+
+    def get_by_username(self, username: str) -> User | None:
+        response = self._table.query(
+            IndexName="UsernameIndex",
+            KeyConditionExpression=Key("username").eq(username),
+            FilterExpression=Attr("deleted_at").not_exists()
+            | Attr("deleted_at").eq(None),
+        )
+        if response["Items"]:
+            return User(**response["Items"][0])
+
         return None
