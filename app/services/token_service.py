@@ -15,13 +15,12 @@ class TokenService:
         self._token_repository = TokenRepository()
 
     def create(self, jwt_token: JWTToken, refresh_token: str):
-        now = pendulum.now()
         self._token_repository.create_token(
             {
                 "jti": jwt_token.jti,
                 "jwt_token": jwt_token.model_dump(),
                 "refresh_token": refresh_token,
-                "created_at": now.to_iso8601_string(),
+                "created_at": pendulum.now().to_iso8601_string(),
                 "ttl": jwt_token.exp,
             }
         )

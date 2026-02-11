@@ -28,11 +28,6 @@ handler = Mangum(app)
 handler = logger.inject_lambda_context(handler, clear_state=True, log_event=True)
 
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
-
-
 @app.exception_handler(BotoCoreError)
 @app.exception_handler(ClientError)
 def botocore_error_handler(request: Request, error: BotoCoreError) -> UJSONResponse:
@@ -77,6 +72,11 @@ def request_validation_error_handler(
         ),
         status_code=status_code,
     )
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
 
 
 if __name__ == "__main__":

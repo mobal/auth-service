@@ -1,3 +1,5 @@
+from typing import Any
+
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
 
@@ -10,6 +12,12 @@ class UserRepository:
         self._table = (
             boto3.Session().resource("dynamodb").Table(f"{settings.stage}-users")
         )
+
+    def create_user(self, data: dict[str, Any]) -> dict[str, Any]:
+        return self._table.put_item(Item=data)
+
+    def delete_user(self, user_uuid: str) -> dict[str, Any]:
+        return self._table.delete_item(Key={"id": user_uuid})
 
     def get_by_email(self, email: str) -> User | None:
         response = self._table.query(

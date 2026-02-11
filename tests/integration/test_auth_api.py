@@ -170,3 +170,76 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_200_OK
+
+    def test_fail_to_register_due_to_missing_bearer_token(
+        self, test_client: TestClient
+    ):
+        response = test_client.post(
+            f"{BASE_URL}/register",
+            json={
+                "email": "newuser@netcode.hu",
+                "username": "newuser",
+                "password": "password123",
+                "displayName": "New User",
+            },
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_fail_to_register_due_to_empty_body(
+        self,
+        jwt_token: JWTToken,
+        test_client: TestClient,
+        jwt_secret_ssm_param_value: str,
+    ):
+        response = test_client.post(
+            f"{BASE_URL}/register",
+            json={},
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def test_fail_to_register_due_to_user_already_exists(
+        self,
+        jwt_token: JWTToken,
+        test_client: TestClient,
+        user: User,
+        jwt_secret_ssm_param_value: str,
+    ):
+        response = test_client.post(
+            f"{BASE_URL}/register",
+            json={
+                "email": user.email,
+                "username": "newusername",
+                "password": "password123",
+                "displayName": "New User",
+            },
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
+        )
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert (
+            response.json()["error"] == f"User with email {user.email} already exists"
+        )
+
+    def test_successfully_register(
+        self,
+        jwt_token: JWTToken,
+        test_client: TestClient,
+        jwt_secret_ssm_param_value: str,
+    ):
+        response = test_client.post(
+            f"{BASE_URL}/register",
+            json={
+                "email": "newuser@netcode.hu",
+                "username": "newuser",
+                "password": "password123",
+                "displayName": "New User",
+            },
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert "Location" in response.headers
+        assert response.headers["Location"].startswith("/api/v1/users/")
