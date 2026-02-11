@@ -193,15 +193,15 @@ wheels = [
 
 [[package]]
 name = "boto3-stubs"
-version = "1.42.45"
+version = "1.42.46"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "botocore-stubs" },
     { name = "types-s3transfer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6a/14/1f1c512c123bcb355962ea9cb248030ada7ce66161ca554ac7ef45a6cbce/boto3_stubs-1.42.45.tar.gz", hash = "sha256:5161eb107ac39df588d244d905f537e42f95ed0dde2d3b957353406660aad60b", size = 100877, upload-time = "2026-02-09T21:58:18.303Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/68/85/e2c27ede57e001bdb0d50b50f02ee433922b064ffe0c35d0e042b97ce382/boto3_stubs-1.42.46.tar.gz", hash = "sha256:a398929609fc8cd7f7bc4fb17eeaf612d72a7a8264ec7f18b579ca498e492d00", size = 100864, upload-time = "2026-02-10T21:02:01.141Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d5/36/1024ae7599bf8ba4ea2737956d365b7601c56142ac19e9bb4a6d0ca99823/boto3_stubs-1.42.45-py3-none-any.whl", hash = "sha256:92e4eee99ec5e23b088281ccb4650a07c6c37c8fce202e79436193c6b9020b57", size = 69780, upload-time = "2026-02-09T21:58:14.112Z" },
+    { url = "https://files.pythonhosted.org/packages/0c/73/cbaa118a3b116239dd77f044a8dc471e98167b522d692e949d0e40ffd17d/boto3_stubs-1.42.46-py3-none-any.whl", hash = "sha256:f9e46bc2bfb5d0999ad5d2cfdd7221a6c2fed98b393401bf879a734189769f62", size = 69781, upload-time = "2026-02-10T21:01:53.775Z" },
 ]
 
 [[package]]
@@ -443,7 +443,7 @@ wheels = [
 
 [[package]]
 name = "fastapi"
-version = "0.128.7"
+version = "0.128.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
@@ -452,9 +452,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a0/fc/af386750b3fd8d8828167e4c82b787a8eeca2eca5c5429c9db8bb7c70e04/fastapi-0.128.7.tar.gz", hash = "sha256:783c273416995486c155ad2c0e2b45905dedfaf20b9ef8d9f6a9124670639a24", size = 375325, upload-time = "2026-02-10T12:26:40.968Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/01/72/0df5c58c954742f31a7054e2dd1143bae0b408b7f36b59b85f928f9b456c/fastapi-0.128.8.tar.gz", hash = "sha256:3171f9f328c4a218f0a8d2ba8310ac3a55d1ee12c28c949650288aee25966007", size = 375523, upload-time = "2026-02-11T15:19:36.69Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/af/1a/f983b45661c79c31be575c570d46c437a5409b67a939c1b3d8d6b3ed7a7f/fastapi-0.128.7-py3-none-any.whl", hash = "sha256:6bd9bd31cb7047465f2d3fa3ba3f33b0870b17d4eaf7cdb36d1576ab060ad662", size = 103630, upload-time = "2026-02-10T12:26:39.414Z" },
+    { url = "https://files.pythonhosted.org/packages/9f/37/37b07e276f8923c69a5df266bfcb5bac4ba8b55dfe4a126720f8c48681d1/fastapi-0.128.8-py3-none-any.whl", hash = "sha256:5618f492d0fe973a778f8fec97723f598aa9deee495040a8d51aaf3cf123ecf1", size = 103630, upload-time = "2026-02-11T15:19:35.209Z" },
 ]
 
 [[package]]
@@ -798,14 +798,15 @@ wheels = [
 
 [[package]]
 name = "pytest-env"
-version = "1.2.0"
+version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pytest" },
+    { name = "python-dotenv" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/13/12/9c87d0ca45d5992473208bcef2828169fa7d39b8d7fc6e3401f5c08b8bf7/pytest_env-1.2.0.tar.gz", hash = "sha256:475e2ebe8626cee01f491f304a74b12137742397d6c784ea4bc258f069232b80", size = 8973, upload-time = "2025-10-09T19:15:47.42Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/25/74/d03592dcf502ba32d1199c7e1bb9330c2bb92510e6d65957bef9af15b57c/pytest_env-1.3.0.tar.gz", hash = "sha256:967a28495dd0fb60b8bfe684c57c7f2804a5ba11764d89ba9c310ab97b1fdf94", size = 11819, upload-time = "2026-02-11T17:37:07.253Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/27/98/822b924a4a3eb58aacba84444c7439fce32680592f394de26af9c76e2569/pytest_env-1.2.0-py3-none-any.whl", hash = "sha256:d7e5b7198f9b83c795377c09feefa45d56083834e60d04767efd64819fc9da00", size = 6251, upload-time = "2025-10-09T19:15:46.077Z" },
+    { url = "https://files.pythonhosted.org/packages/8d/fc/2dfd4cf9b82fd768c8fe52bff4cb732aac707a7708cf862ef416203fd421/pytest_env-1.3.0-py3-none-any.whl", hash = "sha256:ffe08c3a709775e59afd252100f521ecb53090e459b1e83e9e1be039010e2edb", size = 7860, upload-time = "2026-02-11T17:37:05.804Z" },
 ]
 
 [[package]]
