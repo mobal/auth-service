@@ -9,8 +9,8 @@ from fastapi.security.utils import get_authorization_scheme_param
 from jwt import DecodeError, ExpiredSignatureError
 
 from app import settings
-from app.models import JWTToken
-from app.services import TokenService
+from app.models.jwt import JWTToken
+from app.services.token_service import TokenService
 
 logger = Logger(utc=True)
 
@@ -24,12 +24,14 @@ class HTTPBearer(FastAPIHTTPBearer):
 
     def __call__(self, request: Request) -> HTTPAuthorizationCredentials | None:
         authorization = request.headers.get("Authorization")
+
         if authorization is not None:
             return self._get_authorization_credentials_from_header(authorization)
         else:
             logger.info(
                 "Missing authentication header, attempt to use token query param"
             )
+
             return self._get_authorization_credentials_from_token(
                 request.query_params.get("token")
             )
@@ -40,6 +42,7 @@ class HTTPBearer(FastAPIHTTPBearer):
         scheme, credentials = get_authorization_scheme_param(authorization)
         if not (authorization and scheme and credentials):
             logger.warning("Missing authorization, scheme or credentials")
+
             if self._auto_error:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -49,6 +52,7 @@ class HTTPBearer(FastAPIHTTPBearer):
                 return None
         if scheme.lower() != "bearer":
             logger.warning(f"Invalid {scheme=}")
+
             if self._auto_error:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -56,6 +60,7 @@ class HTTPBearer(FastAPIHTTPBearer):
                 )
             else:
                 return None
+
         return HTTPAuthorizationCredentials(scheme=scheme, credentials=credentials)
 
     def _get_authorization_credentials_from_token(
@@ -69,6 +74,7 @@ class HTTPBearer(FastAPIHTTPBearer):
                 )
             else:
                 return None
+
         return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
 
@@ -83,12 +89,14 @@ class JWTBearer:
             if not self._validate_token(credentials.credentials):
                 if self._auto_error:
                     logger.warning(f"Invalid authentication token {credentials=}")
+
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail=ERROR_MESSAGE_NOT_AUTHENTICATED,
                     )
                 else:
                     return None
+
             return self.decoded_token
         else:
             return None
@@ -100,11 +108,14 @@ class JWTBearer:
             )
             if self._token_service.get_by_id(decoded_token.jti):
                 logger.debug(f"Token is not blacklisted {decoded_token=}")
+
                 self.decoded_token = decoded_token
+
                 return True
             logger.debug(f"Token blacklisted {decoded_token=}")
         except DecodeError as err:
             logger.exception(f"Error occurred during token decoding {err=}")
         except ExpiredSignatureError as err:
             logger.exception(f"Expired signature {err=}")
+
         return False

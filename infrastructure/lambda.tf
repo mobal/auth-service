@@ -74,7 +74,7 @@ resource "terraform_data" "requirements_lambda_layer" {
       export PATH=\$UV_INSTALL_DIR:\$PATH
       uv sync --no-dev
       uv export --locked --no-dev --format requirements.txt > requirements.txt
-      pip install -r requirements.txt -t python/lib/python3.13/site-packages --platform manylinux2014_x86_64 --python-version 3.12 --only-binary=:all: && \
+      pip install -r requirements.txt -t python/lib/python3.13/site-packages --platform manylinux2014_x86_64 --python-version 3.13 --only-binary=:all: && \
       zip -r requirements.zip python
       "
     EOT

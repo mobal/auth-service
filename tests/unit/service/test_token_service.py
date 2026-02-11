@@ -3,9 +3,9 @@ from typing import Any
 import pytest
 
 from app.exceptions import TokenNotFoundException
-from app.models import JWTToken
-from app.repositories import TokenRepository
-from app.services import TokenService
+from app.models.jwt import JWTToken
+from app.repositories.token_repository import TokenRepository
+from app.services.token_service import TokenService
 
 
 class TestTokenService:

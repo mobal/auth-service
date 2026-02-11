@@ -11,9 +11,11 @@ from app.exceptions import (
     TokenNotFoundException,
     UserNotFoundException,
 )
-from app.models import User
-from app.repositories import UserRepository
-from app.services import AuthService, JWTToken, TokenService
+from app.models.jwt import JWTToken
+from app.models.user import User
+from app.repositories.user_repository import UserRepository
+from app.services.auth_service import AuthService
+from app.services.token_service import TokenService
 from app.settings import Settings
 
 ALGORITHMS = ["HS256"]
@@ -64,7 +66,7 @@ class TestAuthService:
         mocker.patch.object(UserRepository, "get_by_email", return_value=user)
         mocker.patch.object(TokenService, "create")
 
-        jwt_token, refresh_token = auth_service.login(user.email, PASSWORD)
+        jwt_token, refresh_token, _ = auth_service.login(user.email, PASSWORD)
         decoded_jwt_token = JWTToken(
             **jwt.decode(jwt_token, settings.jwt_secret, ALGORITHMS)
         )
@@ -149,6 +151,7 @@ class TestAuthService:
         self,
         mocker,
         auth_service: AuthService,
+        jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         refresh_token: str,
         token_service: TokenService,
@@ -164,7 +167,7 @@ class TestAuthService:
         mocker.patch.object(TokenService, "create")
         mocker.patch.object(TokenService, "delete_by_id")
 
-        new_jwt_token, new_refresh_token = auth_service.refresh(
+        new_jwt_token, new_refresh_token, _ = auth_service.refresh(
             jwt_token, refresh_token
         )
 
@@ -173,7 +176,7 @@ class TestAuthService:
             JWTToken(
                 **jwt.decode(
                     new_jwt_token,
-                    pytest.jwt_secret_ssm_param_value,
+                    jwt_secret_ssm_param_value,
                     algorithms=["HS256"],
                 )
             ),

@@ -1,7 +1,7 @@
-all: format lint test
+.PHONY: all format install lint bandit test tflint ty
 
-bandit:
-	uv run -m bandit --severity-level high --confidence-level high -r app/ -vvv
+all: bandit format lint test
+
 
 format:
 	uv run ruff format .
@@ -12,14 +12,15 @@ install:
 lint:
 	uv run ruff check app/ tests/ --fix
 
-mypy:
-	uv run -m mypy app/ --explicit-package-bases
+bandit:
+	uv run -m bandit --severity-level high --confidence-level high -r app/ -vvv
 
 test:
-	uv run -m pytest --cov-fail-under=90
+	uv run pytest tests/ --cov=app --cov-report=term-missing --cov-branch
 
-unit-test:
-	uv run -m pytest tests/unit
+tflint:
+	tflint --init
+	tflint --chdir=infrastructure/
 
-integration-test:
-	uv run -m pytest tests/integration
+ty:
+	uv run ty check

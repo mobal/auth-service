@@ -1,10 +1,9 @@
 import uuid
-from collections.abc import Sequence
 
 import uvicorn
 from aws_lambda_powertools import Logger
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
@@ -13,63 +12,20 @@ from mangum import Mangum
 from starlette.middleware.exceptions import ExceptionMiddleware
 
 from app import settings
-from app.jwt_bearer import JWTBearer
+from app.api.v1.api import router as api_v1_router
 from app.middlewares import CorrelationIdMiddleware
-from app.models import CamelModel
-from app.schemas import LoginSchema, RefreshSchema
-from app.services import AuthService
+from app.models.response.error import ErrorResponse, ValidationErrorResponse
 
-auth_service = AuthService()
-jwt_bearer = JWTBearer()
-logger = Logger(utc=True)
+logger = Logger()
 
 app = FastAPI(debug=settings.debug, title="AuthApp", version="1.0.0")
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(GZipMiddleware)
 app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
+app.include_router(api_v1_router)
 
 handler = Mangum(app)
 handler = logger.inject_lambda_context(handler, clear_state=True, log_event=True)
-
-
-class ErrorResponse(CamelModel):
-    status: int
-    id: uuid.UUID
-    message: str
-
-
-class ValidationErrorResponse(ErrorResponse):
-    errors: Sequence[dict]
-
-
-@app.post("/api/v1/login", status_code=status.HTTP_200_OK)
-def login(body: LoginSchema) -> dict[str, str]:
-    jwt_token, refresh_token = auth_service.login(str(body.email), body.password)
-    return {
-        "token": jwt_token,
-        "refreshToken": refresh_token,
-    }
-
-
-@app.get(
-    "/api/v1/logout",
-    dependencies=[Depends(jwt_bearer)],
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-def logout():
-    auth_service.logout(jwt_bearer.decoded_token)
-
-
-@app.post(
-    "/api/v1/refresh",
-    dependencies=[Depends(jwt_bearer)],
-    status_code=status.HTTP_200_OK,
-)
-def refresh(body: RefreshSchema) -> dict[str, str]:
-    jwt_token, refresh_token = auth_service.refresh(
-        jwt_bearer.decoded_token, body.refresh_token
-    )
-    return {"token": jwt_token, "refreshToken": refresh_token}
 
 
 @app.exception_handler(BotoCoreError)
@@ -79,9 +35,10 @@ def botocore_error_handler(request: Request, error: BotoCoreError) -> UJSONRespo
     error_message = str(error) if settings.debug else "Internal Server Error"
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     logger.exception(f"Received botocore error {error_id=}")
+
     return UJSONResponse(
-        content=jsonable_encoder(
-            ErrorResponse(status=status_code, id=error_id, message=error_message)
+        content=ErrorResponse(status=status_code, error=error_message).model_dump(
+            by_alias=True
         ),
         status_code=status_code,
     )
@@ -91,9 +48,10 @@ def botocore_error_handler(request: Request, error: BotoCoreError) -> UJSONRespo
 def http_exception_handler(request: Request, error: HTTPException) -> UJSONResponse:
     error_id = uuid.uuid4()
     logger.exception(f"Received http exception {error_id=}")
+
     return UJSONResponse(
-        content=jsonable_encoder(
-            ErrorResponse(status=error.status_code, id=error_id, message=error.detail)
+        content=ErrorResponse(status=error.status_code, error=error.detail).model_dump(
+            by_alias=True
         ),
         status_code=error.status_code,
     )
@@ -106,18 +64,21 @@ def request_validation_error_handler(
     error_id = uuid.uuid4()
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
     logger.exception(f"Received request validation error {error_id=}")
+
     return UJSONResponse(
-        content=jsonable_encoder(
-            ValidationErrorResponse(
-                status=status_code,
-                id=error_id,
-                message=str(error),
-                errors=error.errors(),
-            )
-        ),
+        content=ValidationErrorResponse(
+            status=status_code,
+            error="Validation Error",
+            errors=jsonable_encoder(error.errors()),
+        ).model_dump(by_alias=True),
         status_code=status_code,
     )
 
 
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
+
 if __name__ == "__main__":
-    uvicorn.run("app.api_handler:app", host="localhost", port=3000, reload=True)
+    uvicorn.run("app.api_handler:app", host="localhost", port=8080, reload=True)

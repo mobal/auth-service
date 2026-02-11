@@ -1,3 +1,4 @@
+import os
 import secrets
 import uuid
 from typing import Any
@@ -8,31 +9,26 @@ import pytest
 from argon2 import PasswordHasher
 from moto import mock_aws
 
-from app.models import JWTToken, User
+from app.models.jwt import JWTToken
+from app.models.user import User
 from app.settings import Settings
 
 
-def pytest_configure():
-    pytest.stage = "test"
-
-    pytest.aws_access_key_id = "aws_access_key_id"
-    pytest.aws_region_name = "eu-central-1"
-    pytest.aws_secret_access_key = "aws_secret_access_key"
-
-    pytest.jwt_secret_ssm_param_name = "/dev/secrets/secret"
-    pytest.jwt_secret_ssm_param_value = "94k9yz00rw"
-    pytest.service_name = "auth-service"
-    pytest.tokens_table_name = f"{pytest.stage}-tokens"
-    pytest.users_table_name = f"{pytest.stage}-users"
-
-
 @pytest.fixture(autouse=True)
-def setup():
+def setup(monkeypatch):
     with mock_aws():
-        ssm_client = boto3.client("ssm")
+        monkeypatch.setenv(
+            "JWT_SECRET_SSM_PARAM_NAME", os.getenv("JWT_SECRET_SSM_PARAM_NAME")
+        )
+        ssm_client = boto3.client(
+            "ssm",
+            region_name=os.getenv("AWS_REGION_NAME"),
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        )
         ssm_client.put_parameter(
-            Name=pytest.jwt_secret_ssm_param_name,
-            Value=pytest.jwt_secret_ssm_param_value,
+            Name=os.getenv("JWT_SECRET_SSM_PARAM_NAME"),
+            Value=os.getenv("JWT_SECRET_SSM_PARAM_VALUE"),
             Type="SecureString",
         )
         yield
@@ -40,7 +36,13 @@ def setup():
 
 @pytest.fixture
 def settings() -> Settings:
-    return Settings()
+    return Settings(
+        app_name=os.getenv("APP_NAME"),
+        default_timezone=os.getenv("DEFAULT_TIMEZONE"),
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        stage=os.getenv("STAGE"),
+    )
 
 
 @pytest.fixture
@@ -48,26 +50,36 @@ def dynamodb_resource(settings):
     with mock_aws():
         yield boto3.Session().resource(
             "dynamodb",
-            region_name="eu-central-1",
+            region_name=os.getenv("AWS_REGION_NAME"),
             aws_access_key_id=settings.aws_access_key_id,
             aws_secret_access_key=settings.aws_secret_access_key,
         )
 
 
 @pytest.fixture
-def initialize_users_table(dynamodb_resource, user: User):
+def initialize_users_table(dynamodb_resource, user: User, users_table_name: str):
     users_table = dynamodb_resource.create_table(
         AttributeDefinitions=[
             {"AttributeName": "id", "AttributeType": "S"},
             {"AttributeName": "email", "AttributeType": "S"},
+            {"AttributeName": "username", "AttributeType": "S"},
         ],
-        TableName=pytest.users_table_name,
+        TableName=users_table_name,
         KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
         GlobalSecondaryIndexes=[
             {
                 "IndexName": "EmailIndex",
                 "KeySchema": [
                     {"AttributeName": "email", "KeyType": "HASH"},
+                ],
+                "Projection": {
+                    "ProjectionType": "ALL",
+                },
+            },
+            {
+                "IndexName": "UsernameIndex",
+                "KeySchema": [
+                    {"AttributeName": "username", "KeyType": "HASH"},
                 ],
                 "Projection": {
                     "ProjectionType": "ALL",
@@ -80,13 +92,15 @@ def initialize_users_table(dynamodb_resource, user: User):
 
 
 @pytest.fixture
-def initialize_tokens_table(dynamodb_resource, jwt_token: JWTToken, refresh_token: str):
+def initialize_tokens_table(
+    dynamodb_resource, jwt_token: JWTToken, refresh_token: str, tokens_table_name: str
+):
     tokens_table = dynamodb_resource.create_table(
         AttributeDefinitions=[
             {"AttributeName": "jti", "AttributeType": "S"},
             {"AttributeName": "refresh_token", "AttributeType": "S"},
         ],
-        TableName=pytest.tokens_table_name,
+        TableName=tokens_table_name,
         KeySchema=[{"AttributeName": "jti", "KeyType": "HASH"}],
         GlobalSecondaryIndexes=[
             {
@@ -119,7 +133,7 @@ def jwt_token(user: User) -> JWTToken:
         jti=str(uuid.uuid4()),
         sub=user.id,
         user=user.model_dump(
-            exclude=["password", "created_at", "deleted_at", "updated_at"]
+            exclude={"password", "created_at", "deleted_at", "updated_at"}
         ),
     )
 
@@ -127,6 +141,11 @@ def jwt_token(user: User) -> JWTToken:
 @pytest.fixture
 def refresh_token() -> str:
     return secrets.token_hex(16)
+
+
+@pytest.fixture
+def tokens_table_name() -> str:
+    return f"{os.getenv('STAGE')}-tokens"
 
 
 @pytest.fixture
@@ -155,10 +174,20 @@ def user(user_dict: dict[str, Any]) -> User:
 
 
 @pytest.fixture
-def users_table(dynamodb_resource, initialize_users_table):
-    return dynamodb_resource.Table(pytest.users_table_name)
+def users_table(dynamodb_resource, initialize_users_table, users_table_name: str):
+    return dynamodb_resource.Table(users_table_name)
 
 
 @pytest.fixture
-def tokens_table(dynamodb_resource, initialize_tokens_table):
-    return dynamodb_resource.Table(pytest.tokens_table_name)
+def users_table_name() -> str:
+    return f"{os.getenv('STAGE')}-users"
+
+
+@pytest.fixture
+def tokens_table(dynamodb_resource, initialize_tokens_table, tokens_table_name: str):
+    return dynamodb_resource.Table(tokens_table_name)
+
+
+@pytest.fixture
+def jwt_secret_ssm_param_value() -> str:
+    return os.getenv("JWT_SECRET_SSM_PARAM_VALUE")
