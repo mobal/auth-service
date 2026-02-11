@@ -1,10 +1,10 @@
-from pydantic import ValidationInfo, field_validator
+from pydantic import EmailStr, ValidationInfo, field_validator
 
 from app.models.models import CamelModel
 
 
 class RegistrationRequest(CamelModel):
-    email: str
+    email: EmailStr
     username: str
     password: str
     confirm_password: str

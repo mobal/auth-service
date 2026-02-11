@@ -5,7 +5,7 @@ from app.models.models import CamelModel
 
 class User(CamelModel):
     id: str
-    display_name: str
+    display_name: str | None = None
     email: EmailStr
     password: str
     username: str

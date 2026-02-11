@@ -247,7 +247,7 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_409_CONFLICT
         assert (
             response.json()["error"]
-            == "User with email newemail@netcode.hu already exists"
+            == f"User with username {user.username} already exists"
         )
 
     def test_successfully_register(
@@ -286,6 +286,67 @@ class TestAuthApi:
                 "password": "password123",
                 "confirmPassword": "password321",
                 "displayName": "User",
+            },
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.json()["error"] == "Validation Error"
+
+    def test_fail_to_register_due_to_invalid_email(
+        self,
+        jwt_token: JWTToken,
+        test_client: TestClient,
+        jwt_secret_ssm_param_value: str,
+    ):
+        response = test_client.post(
+            f"{BASE_URL}/register",
+            json={
+                "email": "invalidemail",
+                "username": "newuser",
+                "password": "password123",
+                "confirmPassword": "password123",
+                "displayName": "New User",
+            },
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.json()["error"] == "Validation Error"
+
+    def test_fail_to_register_due_to_missing_username(
+        self,
+        jwt_token: JWTToken,
+        test_client: TestClient,
+        jwt_secret_ssm_param_value: str,
+    ):
+        response = test_client.post(
+            f"{BASE_URL}/register",
+            json={
+                "email": "user@netcode.hu",
+                "password": "password123",
+                "confirmPassword": "password123",
+                "displayName": "New User",
+            },
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.json()["error"] == "Validation Error"
+
+    def test_fail_to_register_due_to_missing_email(
+        self,
+        jwt_token: JWTToken,
+        test_client: TestClient,
+        jwt_secret_ssm_param_value: str,
+    ):
+        response = test_client.post(
+            f"{BASE_URL}/register",
+            json={
+                "username": "newuser",
+                "password": "password123",
+                "confirmPassword": "password123",
+                "displayName": "New User",
             },
             headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )

@@ -46,7 +46,7 @@ class TestUserService:
         mocker.patch.object(UserRepository, "get_by_username", return_value=None)
         mocker.patch.object(UserRepository, "create_user")
 
-        user_id = user_service.register(user.email, user.password, user.username, "")
+        user_id = user_service.register(user.email, user.password, user.username, None)
 
         assert isinstance(user_id, str)
         assert uuid.UUID(user_id)
@@ -55,7 +55,7 @@ class TestUserService:
         user_repository.create_user.assert_called_once()
 
         call_args = user_repository.create_user.call_args[0][0]
-        assert call_args["display_name"] == user.username
+        assert "display_name" not in call_args
 
     def test_fail_to_register_user_due_to_user_already_exists(
         self,
@@ -84,7 +84,7 @@ class TestUserService:
         user_repository: UserRepository,
         user_service: UserService,
     ):
-        error_message = f"User with email {user.email} already exists"
+        error_message = f"User with username {user.username} already exists"
         mocker.patch.object(UserRepository, "get_by_email", return_value=None)
         mocker.patch.object(UserRepository, "get_by_username", return_value=user)
 
