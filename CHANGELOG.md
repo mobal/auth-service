@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.6.0](https://github.com/mobal/auth-service/compare/v0.5.1...v0.6.0) (2026-02-11)
+
+
+### Features
+
+* add support for multiple .env files ([7fbb0f3](https://github.com/mobal/auth-service/commit/7fbb0f390f145b3b4b8106864ebb6e7e6d737561))
+* added .env.example ([a288b04](https://github.com/mobal/auth-service/commit/a288b04ce4c3065bbfb5e3ea950b38b34be25e45))
+* added /register endpoint ([5e3ef14](https://github.com/mobal/auth-service/commit/5e3ef14730495f44edfe1b058271c35dfe636c91))
+* added Dockerfile ([c0b349e](https://github.com/mobal/auth-service/commit/c0b349ee12ab075b69c7d1ca8012ab4eca3c5c14))
+* added TokenResponse ([11b0af2](https://github.com/mobal/auth-service/commit/11b0af2f96886a8e99fde4000feca6c8bdfb336a))
+* refreshed workflow.yml ([bb903f3](https://github.com/mobal/auth-service/commit/bb903f378499b915740d2714074639f0db397a69))
+* replaced mypy with ty, added tflint and minor refactors ([9bdc0fe](https://github.com/mobal/auth-service/commit/9bdc0fe7a4878e118c787f1c72ce056f4ec9c9f8))
+* set display_name to optional ([d6b5183](https://github.com/mobal/auth-service/commit/d6b5183528d19a7623e1ef6c5f669b875e893930))
+* updated error format (renamed message to error and added timestamp) ([187b544](https://github.com/mobal/auth-service/commit/187b544ae413a2c0b01c055291ce109a022efb4a))
+
+
+### Bug Fixes
+
+* added password handling during registration ([39ab82b](https://github.com/mobal/auth-service/commit/39ab82bb6b37bb9c59e298dfd9d504621069ec2e))
+* python version number ([1737593](https://github.com/mobal/auth-service/commit/17375934747783b795faf80a0c62184ad767dd12))
+
 ## [0.5.1](https://github.com/mobal/auth-service/compare/v0.5.0...v0.5.1) (2025-12-01)
 
 
