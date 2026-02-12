@@ -1,5 +1,3 @@
-import uuid
-
 import uvicorn
 from aws_lambda_powertools import Logger
 from botocore.exceptions import BotoCoreError, ClientError
@@ -31,10 +29,9 @@ handler = logger.inject_lambda_context(handler, clear_state=True, log_event=True
 @app.exception_handler(BotoCoreError)
 @app.exception_handler(ClientError)
 def botocore_error_handler(request: Request, error: BotoCoreError) -> UJSONResponse:
-    error_id = uuid.uuid4()
+    logger.exception(error)
     error_message = str(error) if settings.debug else "Internal Server Error"
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-    logger.exception(f"Received botocore error {error_id=}")
 
     return UJSONResponse(
         content=ErrorResponse(status=status_code, error=error_message).model_dump(
@@ -46,8 +43,7 @@ def botocore_error_handler(request: Request, error: BotoCoreError) -> UJSONRespo
 
 @app.exception_handler(HTTPException)
 def http_exception_handler(request: Request, error: HTTPException) -> UJSONResponse:
-    error_id = uuid.uuid4()
-    logger.exception(f"Received http exception {error_id=}")
+    logger.exception(error)
 
     return UJSONResponse(
         content=ErrorResponse(status=error.status_code, error=error.detail).model_dump(
@@ -61,9 +57,8 @@ def http_exception_handler(request: Request, error: HTTPException) -> UJSONRespo
 def request_validation_error_handler(
     request: Request, error: RequestValidationError
 ) -> UJSONResponse:
-    error_id = uuid.uuid4()
+    logger.exception(error)
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
-    logger.exception(f"Received request validation error {error_id=}")
 
     return UJSONResponse(
         content=ValidationErrorResponse(
