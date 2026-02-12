@@ -1,7 +1,14 @@
-.PHONY: all format install lint bandit test tflint ty
+.PHONY: all build build-layer build-lambda format install lint bandit test tflint ty
 
-all: bandit format lint test
+all: build bandit format lint test
 
+build: build-layer build-lambda
+
+build-layer:
+	./scripts/build_requirements_layer.sh
+
+build-lambda:
+	./scripts/build_api.sh
 
 format:
 	uv run ruff format .
