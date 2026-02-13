@@ -45,6 +45,21 @@ variable "log_level" {
   type    = string
 }
 
+variable "memory_size" {
+  default = 768
+  type    = number
+}
+
+variable "powertools_debug" {
+  default = false
+  type    = bool
+}
+
+variable "powertools_logger_log_event" {
+  default = true
+  type    = bool
+}
+
 variable "power_tools_service_name" {
   default = "auth-service"
   type    = string
@@ -55,5 +70,14 @@ variable "requirements_layer_hash" {
 }
 
 variable "tags" {
+  default = {
+    Environment = "dev"
+    Project     = "auth-service"
+  }
   type = map(string)
+}
+
+variable "timeout" {
+  default = 15
+  type    = number
 }

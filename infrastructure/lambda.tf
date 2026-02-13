@@ -9,8 +9,8 @@ resource "aws_lambda_function" "fastapi" {
 
   source_code_hash = base64encode(var.lambda_hash)
 
-  timeout     = 15
-  memory_size = 512
+  timeout     = var.timeout
+  memory_size = var.memory_size
 
   layers = [
     aws_lambda_layer_version.requirements_lambda_layer.arn,
@@ -24,9 +24,9 @@ resource "aws_lambda_function" "fastapi" {
       DEFAULT_TIMEZONE                     = var.default_timezone
       JWT_SECRET_SSM_PARAM_NAME            = var.jwt_secret_ssm_param_name
       LOG_LEVEL                            = var.log_level
-      POWERTOOLS_LOGGER_LOG_EVENT          = "true"
+      POWERTOOLS_LOGGER_LOG_EVENT          = var.powertools_logger_log_event
       POWERTOOLS_SERVICE_NAME              = var.power_tools_service_name
-      POWERTOOLS_DEBUG                     = "false"
+      POWERTOOLS_DEBUG                     = var.powertools_debug
       STAGE                                = var.stage
     }
   }
