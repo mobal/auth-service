@@ -139,6 +139,10 @@ def jwt_token(user: User) -> JWTToken:
 
 
 @pytest.fixture
+def password() -> str:
+    return "not_so_secure_password"
+
+@pytest.fixture
 def refresh_token() -> str:
     return secrets.token_hex(16)
 
@@ -149,12 +153,12 @@ def tokens_table_name() -> str:
 
 
 @pytest.fixture
-def user_dict() -> dict[str, Any]:
+def user_dict(password: str) -> dict[str, Any]:
     now = pendulum.now()
     return {
         "display_name": "root",
         "email": "root@netcode.hu",
-        "password": PasswordHasher().hash("12345678"),
+        "password": PasswordHasher().hash(password),
         "username": "root",
         "roles": ["root"],
         "created_at": now.to_iso8601_string(),

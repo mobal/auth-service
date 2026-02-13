@@ -11,7 +11,7 @@ from starlette.middleware.exceptions import ExceptionMiddleware
 
 from app import settings
 from app.api.v1.api import router as api_v1_router
-from app.middlewares import CorrelationIdMiddleware
+from app.middlewares import CorrelationIdMiddleware, RateLimitingMiddleware
 from app.models.response.error import ErrorResponse, ValidationErrorResponse
 
 logger = Logger()
@@ -20,6 +20,7 @@ app = FastAPI(debug=settings.debug, title="AuthApp", version="1.0.0")
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(GZipMiddleware)
 app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
+app.add_middleware(RateLimitingMiddleware)
 app.include_router(api_v1_router)
 
 handler = Mangum(app)

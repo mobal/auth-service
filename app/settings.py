@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     debug: bool = False
     refresh_token_lifetime: int = 1209600
     stage: str
+    rate_limiting: bool = False
+    rate_limit_requests: int = 100
+    rate_limit_duration_in_seconds: int = 60
 
     @computed_field
     @property
