@@ -156,6 +156,7 @@ def user_dict() -> dict[str, Any]:
         "email": "root@netcode.hu",
         "password": PasswordHasher().hash("12345678"),
         "username": "root",
+        "roles": ["root"],
         "created_at": now.to_iso8601_string(),
         "updated_at": now.to_iso8601_string(),
     }
@@ -169,6 +170,7 @@ def user(user_dict: dict[str, Any]) -> User:
         email=user_dict["email"],
         password=user_dict["password"],
         username=user_dict["username"],
+        roles=user_dict.get("roles", []),
         created_at=user_dict["created_at"],
     )
 

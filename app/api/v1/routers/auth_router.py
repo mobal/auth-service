@@ -6,6 +6,7 @@ from app.models.request.login import LoginRequest
 from app.models.request.refresh import RefreshRequest
 from app.models.request.register import RegistrationRequest
 from app.models.response.token import TokenResponse
+from app.security.authorization import pre_authorize
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
 
@@ -56,6 +57,7 @@ def refresh(body: RefreshRequest) -> TokenResponse:
     "/register",
     dependencies=[Depends(jwt_bearer)],
 )
+@pre_authorize("root")
 def register(body: RegistrationRequest):
     user_id = user_service.register(
         body.email, body.password, body.username, body.display_name

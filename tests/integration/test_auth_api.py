@@ -1,11 +1,10 @@
 import uuid
 
 import jwt
+import pendulum
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from httpx import Response
-from respx import MockRouter, Route
 
 from app.models.jwt import JWTToken
 from app.models.user import User
@@ -17,18 +16,6 @@ REFRESH_URL = f"{BASE_URL}/refresh"
 
 
 class TestAuthApi:
-    def _generate_respx_mock(
-        self,
-        method: str,
-        response: Response,
-        respx_mock: MockRouter,
-        url: str,
-        headers: dict[str, str] | None = None,
-    ) -> Route:
-        return respx_mock.route(
-            headers=headers, method=method, url__startswith=url
-        ).mock(response)
-
     @pytest.fixture
     def test_client(
         self, initialize_tokens_table, initialize_users_table
@@ -94,7 +81,6 @@ class TestAuthApi:
     def test_successfully_logout(
         self,
         jwt_token: JWTToken,
-        respx_mock: MockRouter,
         test_client: TestClient,
         jwt_secret_ssm_param_value: str,
     ):
@@ -159,7 +145,6 @@ class TestAuthApi:
         self,
         jwt_token: JWTToken,
         refresh_token: str,
-        respx_mock: MockRouter,
         test_client: TestClient,
         jwt_secret_ssm_param_value: str,
     ):
@@ -334,11 +319,61 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
         assert response.json()["error"] == "Validation Error"
 
+    def test_fail_to_admin_register_due_to_missing_required_role(
+        self,
+        jwt_secret_ssm_param_value: str,
+        test_client: TestClient,
+        tokens_table,
+    ):
+        iat = pendulum.now()
+        exp = iat.add(hours=1)
+        jwt_token_without_roles = JWTToken(
+            exp=exp.int_timestamp,
+            iat=iat.int_timestamp,
+            iss=None,
+            jti=str(uuid.uuid4()),
+            sub="user-id",
+            user={
+                "id": "user-id",
+                "email": "user@netcode.hu",
+                "username": "user",
+                "roles": [],
+                "created_at": iat.to_iso8601_string(),
+            },
+        )
+
+        tokens_table.put_item(
+            Item={
+                "jti": jwt_token_without_roles.jti,
+                "jwt_token": jwt_token_without_roles.model_dump(),
+                "refresh_token": str(uuid.uuid4()),
+                "created_at": pendulum.now().to_iso8601_string(),
+                "ttl": jwt_token_without_roles.exp,
+            }
+        )
+
+        response = test_client.post(
+            f"{BASE_URL}/register",
+            json={
+                "email": "newuser@netcode.hu",
+                "username": "newuser",
+                "password": "password123",
+                "confirmPassword": "password123",
+                "displayName": "New User",
+            },
+            headers=self._auth_header(
+                jwt_token_without_roles, jwt_secret_ssm_param_value
+            ),
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.json()["error"] == "Insufficient permissions"
+
     def test_fail_to_register_due_to_missing_email(
         self,
+        jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
-        jwt_secret_ssm_param_value: str,
     ):
         response = test_client.post(
             f"{BASE_URL}/register",
@@ -353,3 +388,25 @@ class TestAuthApi:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
         assert response.json()["error"] == "Validation Error"
+
+    def test_successfully_admin_register_with_required_role(
+        self,
+        jwt_secret_ssm_param_value: str,
+        jwt_token: JWTToken,
+        test_client: TestClient,
+    ):
+        response = test_client.post(
+            f"{BASE_URL}/register",
+            json={
+                "email": "rootuser@netcode.hu",
+                "username": "rootuser",
+                "password": "password123",
+                "confirmPassword": "password123",
+                "displayName": "Root User",
+            },
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert "Location" in response.headers
+        assert response.headers["Location"].startswith("/api/v1/users/")
