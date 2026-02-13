@@ -1,26 +1,21 @@
-from functools import wraps
+import functools
 
+from aws_lambda_powertools import Logger
 from fastapi import HTTPException, status
 
+logger = Logger()
 
-def pre_authorize(required_role: str):
-    def decorator(func):
-        @wraps(func)
+
+def pre_authorize(roles: list[str]):
+    def decorator_wrapper(func):
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            from app.api.v1.routers.auth_router import jwt_bearer
+            token = kwargs.get("token")
 
-            if (
-                not hasattr(jwt_bearer, "decoded_token")
-                or jwt_bearer.decoded_token is None
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, detail="Not authenticated"
-                )
+            user_roles = token.user.get("roles", [])
 
-            user_data = jwt_bearer.decoded_token.user
-            roles = user_data.get("roles", [])
-
-            if required_role not in roles:
+            if not any(role in user_roles for role in roles):
+                logger.warning("User does not have required roles: %s", roles)
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Insufficient permissions",
@@ -30,4 +25,4 @@ def pre_authorize(required_role: str):
 
         return wrapper
 
-    return decorator
+    return decorator_wrapper

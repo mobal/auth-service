@@ -410,3 +410,104 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_201_CREATED
         assert "Location" in response.headers
         assert response.headers["Location"].startswith("/api/v1/users/")
+
+    def test_fail_to_register_due_to_missing_all_required_roles(
+        self,
+        jwt_secret_ssm_param_value: str,
+        test_client: TestClient,
+        tokens_table,
+    ):
+        iat = pendulum.now()
+        exp = iat.add(hours=1)
+        jwt_token_with_other_roles = JWTToken(
+            exp=exp.int_timestamp,
+            iat=iat.int_timestamp,
+            iss=None,
+            jti=str(uuid.uuid4()),
+            sub="user-id",
+            user={
+                "id": "user-id",
+                "email": "user@netcode.hu",
+                "username": "user",
+                "roles": ["moderator", "viewer"],
+                "created_at": iat.to_iso8601_string(),
+            },
+        )
+
+        tokens_table.put_item(
+            Item={
+                "jti": jwt_token_with_other_roles.jti,
+                "jwt_token": jwt_token_with_other_roles.model_dump(),
+                "refresh_token": str(uuid.uuid4()),
+                "created_at": pendulum.now().to_iso8601_string(),
+                "ttl": jwt_token_with_other_roles.exp,
+            }
+        )
+
+        response = test_client.post(
+            f"{BASE_URL}/register",
+            json={
+                "email": "newuser@netcode.hu",
+                "username": "newuser",
+                "password": "password123",
+                "confirmPassword": "password123",
+                "displayName": "New User",
+            },
+            headers=self._auth_header(
+                jwt_token_with_other_roles, jwt_secret_ssm_param_value
+            ),
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.json()["error"] == "Insufficient permissions"
+
+    def test_successfully_register_with_multiple_roles_including_required(
+        self,
+        jwt_secret_ssm_param_value: str,
+        test_client: TestClient,
+        tokens_table,
+    ):
+        iat = pendulum.now()
+        exp = iat.add(hours=1)
+        jwt_token_with_multiple_roles = JWTToken(
+            exp=exp.int_timestamp,
+            iat=iat.int_timestamp,
+            iss=None,
+            jti=str(uuid.uuid4()),
+            sub="admin-id",
+            user={
+                "id": "admin-id",
+                "email": "admin@netcode.hu",
+                "username": "admin",
+                "roles": ["user", "root", "moderator"],
+                "created_at": iat.to_iso8601_string(),
+            },
+        )
+
+        tokens_table.put_item(
+            Item={
+                "jti": jwt_token_with_multiple_roles.jti,
+                "jwt_token": jwt_token_with_multiple_roles.model_dump(),
+                "refresh_token": str(uuid.uuid4()),
+                "created_at": pendulum.now().to_iso8601_string(),
+                "ttl": jwt_token_with_multiple_roles.exp,
+            }
+        )
+
+        response = test_client.post(
+            f"{BASE_URL}/register",
+            json={
+                "email": "multiuser@netcode.hu",
+                "username": "multiuser",
+                "password": "password123",
+                "confirmPassword": "password123",
+                "displayName": "Multi User",
+            },
+            headers=self._auth_header(
+                jwt_token_with_multiple_roles, jwt_secret_ssm_param_value
+            ),
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert "Location" in response.headers
+        assert response.headers["Location"].startswith("/api/v1/users/")
