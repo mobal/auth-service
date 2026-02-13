@@ -26,7 +26,9 @@ class TestAuthApi:
             "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(exclude_none=True), jwt_secret_ssm_param_value)}"
         }
 
-    def test_fail_to_login_due_to_empty_body(self, base_url: str, test_client: TestClient):
+    def test_fail_to_login_due_to_empty_body(
+        self, base_url: str, test_client: TestClient
+    ):
         response = test_client.post(
             f"{base_url}/login",
             json={},
@@ -54,7 +56,9 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert response.json()["error"] == "The requested user was not found"
 
-    def test_successfully_login(self, login_url: str, password: str, test_client: TestClient):
+    def test_successfully_login(
+        self, login_url: str, password: str, test_client: TestClient
+    ):
         response = test_client.post(
             login_url,
             json={"email": "root@netcode.hu", "password": password},
@@ -68,7 +72,9 @@ class TestAuthApi:
             "expires_in",
         ]
 
-    def test_fail_to_logout_due_to_missing_bearer_token(self, base_url: str, test_client: TestClient):
+    def test_fail_to_logout_due_to_missing_bearer_token(
+        self, base_url: str, test_client: TestClient
+    ):
         response = test_client.get(f"{base_url}/logout")
 
         assert response.status_code == status.HTTP_403_FORBIDDEN

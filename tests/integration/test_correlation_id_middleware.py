@@ -57,4 +57,6 @@ class TestCorrelationIdMiddleware:
         try:
             uuid.UUID(correlation_id_value)
         except ValueError:
-            pytest.fail(f"Invalid UUID format for correlation ID: {correlation_id_value}")
+            pytest.fail(
+                f"Invalid UUID format for correlation ID: {correlation_id_value}"
+            )

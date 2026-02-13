@@ -1,10 +1,9 @@
 import pytest
-from fastapi.testclient import TestClient
 from fastapi import status
+from fastapi.testclient import TestClient
 
 
 class TestRateLimitingMiddleware:
-
     @pytest.fixture
     def test_client_with_rate_limiting(
         self, initialize_tokens_table, initialize_users_table, monkeypatch
@@ -31,7 +30,10 @@ class TestRateLimitingMiddleware:
         return TestClient(app, raise_server_exceptions=True)
 
     def test_rate_limiting_disabled_allows_unlimited_requests(
-        self, login_url: str, password: str, test_client_without_rate_limiting: TestClient
+        self,
+        login_url: str,
+        password: str,
+        test_client_without_rate_limiting: TestClient,
     ):
         for _ in range(10):
             response = test_client_without_rate_limiting.post(
@@ -109,10 +111,15 @@ class TestRateLimitingMiddleware:
         assert response.headers["X-RateLimit-Remaining"] == "0"
 
     def test_rate_limit_reset_after_window(
-        self, login_url: str, password: str, test_client_with_rate_limiting: TestClient, monkeypatch
+        self,
+        login_url: str,
+        password: str,
+        test_client_with_rate_limiting: TestClient,
+        monkeypatch,
     ):
-        from app.middlewares import clients
         from datetime import datetime, timedelta
+
+        from app.middlewares import clients
 
         # Make 5 requests to hit the limit
         for _ in range(5):
@@ -138,7 +145,12 @@ class TestRateLimitingMiddleware:
         assert response.headers["X-RateLimit-Remaining"] == "4"
 
     def test_rate_limit_per_client_ip(
-        self, initialize_tokens_table, initialize_users_table, login_url: str, monkeypatch, password: str
+        self,
+        initialize_tokens_table,
+        initialize_users_table,
+        login_url: str,
+        monkeypatch,
+        password: str,
     ):
         monkeypatch.setattr("app.settings.rate_limiting", True)
         monkeypatch.setattr("app.settings.rate_limit_requests", 2)
@@ -163,4 +175,3 @@ class TestRateLimitingMiddleware:
             json={"email": "root@netcode.hu", "password": password},
         )
         assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
-

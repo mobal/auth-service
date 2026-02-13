@@ -142,6 +142,7 @@ def jwt_token(user: User) -> JWTToken:
 def password() -> str:
     return "not_so_secure_password"
 
+
 @pytest.fixture
 def refresh_token() -> str:
     return secrets.token_hex(16)
