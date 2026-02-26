@@ -12,11 +12,12 @@ from starlette import status
 
 from app import settings
 from app.exceptions import (
+    TokenExpiredException,
     TokenMismatchException,
     TokenNotFoundException,
     UserNotFoundException,
 )
-from app.models.jwt import JWTToken
+from app.models.jwt import JWTToken, RefreshToken
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.services.token_service import TokenService
@@ -64,17 +65,18 @@ class AuthService:
 
     def _generate_tokens_for_user(
         self,
-        jwt_token: JWTToken,
-    ) -> tuple[JWTToken, str]:
+        user: dict[str, Any],
+    ) -> tuple[JWTToken, RefreshToken]:
         self._logger.info(
-            f"Generate new tokens for user={jwt_token.user['id']}",
-            extra={"user": jwt_token.user},
+            f"Generate new tokens for user={user['id']}",
+            extra={"user": user},
         )
 
-        jwt_token = self._generate_token(
-            jwt_token.sub, settings.jwt_token_lifetime, jwt_token.user
+        jwt_token = self._generate_token(user["id"], settings.jwt_token_lifetime, user)
+        refresh_token = RefreshToken(
+            token=self._generate_refresh_token(),
+            ttl=jwt_token.iat + settings.refresh_token_lifetime,
         )
-        refresh_token = self._generate_refresh_token()
         self._token_service.create(jwt_token, refresh_token)
 
         return jwt_token, refresh_token
@@ -93,16 +95,17 @@ class AuthService:
         try:
             self._password_hasher.verify(user.password, password)
 
-            jwt_token = self._generate_token(user.id, user=user)
-            refresh_token = self._generate_refresh_token()
-
-            self._token_service.create(jwt_token, refresh_token)
+            jwt_token, refresh_token = self._generate_tokens_for_user(
+                user.model_dump(
+                    exclude={"password", "created_at", "deleted_at", "updated_at"}
+                )
+            )
 
             return (
                 jwt.encode(
                     jwt_token.model_dump(exclude_none=True), settings.jwt_secret
                 ),
-                refresh_token,
+                refresh_token.token,
                 settings.jwt_token_lifetime,
             )
         except (InvalidHash, VerifyMismatchError):
@@ -123,12 +126,18 @@ class AuthService:
 
         if jwt_token.model_dump() != item["jwt_token"]:
             raise TokenMismatchException("Internal Server Error")
+
+        if item["ttl"] < pendulum.now().int_timestamp:
+            raise TokenExpiredException("The requested token has expired")
+
         self._revoke_token(jwt_token)
 
-        jwt_token, refresh_token = self._generate_tokens_for_user(jwt_token)
+        jwt_token, refresh_token = self._generate_tokens_for_user(
+            item["jwt_token"]["user"]
+        )
 
         return (
             jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
-            refresh_token,
+            refresh_token.token,
             settings.jwt_token_lifetime,
         )

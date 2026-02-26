@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pendulum
 from dotenv import load_dotenv
 
 from app.settings import Settings
@@ -18,3 +19,5 @@ def load_env_files():
 load_env_files()
 
 settings = Settings()
+
+pendulum.set_local_timezone(pendulum.timezone(settings.default_timezone))

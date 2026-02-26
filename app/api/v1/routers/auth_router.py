@@ -2,10 +2,12 @@ from aws_lambda_powertools import Logger
 from fastapi import APIRouter, Depends, Response, status
 
 from app.jwt_bearer import JWTBearer
+from app.models.jwt import JWTToken
 from app.models.request.login import LoginRequest
 from app.models.request.refresh import RefreshRequest
 from app.models.request.register import RegistrationRequest
 from app.models.response.token import TokenResponse
+from app.security.authorization import pre_authorize
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
 
@@ -52,11 +54,9 @@ def refresh(body: RefreshRequest) -> TokenResponse:
     )
 
 
-@router.post(
-    "/register",
-    dependencies=[Depends(jwt_bearer)],
-)
-def register(body: RegistrationRequest):
+@router.post("/register")
+@pre_authorize(["root"])
+def register(body: RegistrationRequest, token: JWTToken = Depends(jwt_bearer)):
     user_id = user_service.register(
         body.email, body.password, body.username, body.display_name
     )

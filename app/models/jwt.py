@@ -10,3 +10,8 @@ class JWTToken(BaseModel):
     jti: str
     sub: Any
     user: dict[str, Any]
+
+
+class RefreshToken(BaseModel):
+    token: str
+    ttl: int

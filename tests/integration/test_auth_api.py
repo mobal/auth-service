@@ -1,34 +1,16 @@
 import uuid
 
 import jwt
+import pendulum
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from httpx import Response
-from respx import MockRouter, Route
 
-from app.models.jwt import JWTToken
+from app.models.jwt import JWTToken, RefreshToken
 from app.models.user import User
-
-BASE_URL = "/api/v1"
-LOGIN_URL = f"{BASE_URL}/login"
-PASSWORD = "12345678"
-REFRESH_URL = f"{BASE_URL}/refresh"
 
 
 class TestAuthApi:
-    def _generate_respx_mock(
-        self,
-        method: str,
-        response: Response,
-        respx_mock: MockRouter,
-        url: str,
-        headers: dict[str, str] | None = None,
-    ) -> Route:
-        return respx_mock.route(
-            headers=headers, method=method, url__startswith=url
-        ).mock(response)
-
     @pytest.fixture
     def test_client(
         self, initialize_tokens_table, initialize_users_table
@@ -44,38 +26,42 @@ class TestAuthApi:
             "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(exclude_none=True), jwt_secret_ssm_param_value)}"
         }
 
-    def test_fail_to_login_due_to_empty_body(self, test_client: TestClient):
+    def test_fail_to_login_due_to_empty_body(
+        self, base_url: str, test_client: TestClient
+    ):
         response = test_client.post(
-            f"{BASE_URL}/login",
+            f"{base_url}/login",
             json={},
         )
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     def test_fail_to_login_due_to_invalid_password(
-        self, test_client: TestClient, user: User
+        self, login_url: str, test_client: TestClient, user: User
     ):
         response = test_client.post(
-            LOGIN_URL, json={"email": user.email, "password": "asd"}
+            login_url, json={"email": user.email, "password": "asd"}
         )
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert response.json()["error"] == "Unauthorized"
 
     def test_fail_to_login_due_to_user_not_found(
-        self, test_client: TestClient, user: User
+        self, login_url: str, password: str, test_client: TestClient, user: User
     ):
         response = test_client.post(
-            LOGIN_URL, json={"email": "root@gmail.com", "password": PASSWORD}
+            login_url, json={"email": "root@gmail.com", "password": password}
         )
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert response.json()["error"] == "The requested user was not found"
 
-    def test_successfully_login(self, test_client: TestClient):
+    def test_successfully_login(
+        self, login_url: str, password: str, test_client: TestClient
+    ):
         response = test_client.post(
-            LOGIN_URL,
-            json={"email": "root@netcode.hu", "password": PASSWORD},
+            login_url,
+            json={"email": "root@netcode.hu", "password": password},
         )
 
         assert response.status_code == status.HTTP_200_OK
@@ -86,20 +72,22 @@ class TestAuthApi:
             "expires_in",
         ]
 
-    def test_fail_to_logout_due_to_missing_bearer_token(self, test_client: TestClient):
-        response = test_client.get(f"{BASE_URL}/logout")
+    def test_fail_to_logout_due_to_missing_bearer_token(
+        self, base_url: str, test_client: TestClient
+    ):
+        response = test_client.get(f"{base_url}/logout")
 
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
     def test_successfully_logout(
         self,
+        base_url: str,
         jwt_token: JWTToken,
-        respx_mock: MockRouter,
-        test_client: TestClient,
         jwt_secret_ssm_param_value: str,
+        test_client: TestClient,
     ):
         response = test_client.get(
-            f"{BASE_URL}/logout",
+            f"{base_url}/logout",
             headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
 
@@ -107,16 +95,17 @@ class TestAuthApi:
 
     def test_fail_to_refresh_due_to_jwt_token_not_found(
         self,
-        jwt_token: JWTToken,
-        refresh_token: str,
-        test_client: TestClient,
         jwt_secret_ssm_param_value: str,
+        jwt_token: JWTToken,
+        refresh_token: RefreshToken,
+        refresh_url: str,
+        test_client: TestClient,
     ):
         jwt_token.jti = str(uuid.uuid4())
 
         response = test_client.post(
-            REFRESH_URL,
-            json={"refreshToken": refresh_token},
+            refresh_url,
+            json={"refreshToken": refresh_token.token},
             headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
 
@@ -125,16 +114,17 @@ class TestAuthApi:
 
     def test_fail_to_refresh_due_to_jwt_token_mismatch(
         self,
-        jwt_token: JWTToken,
-        refresh_token: str,
-        test_client: TestClient,
         jwt_secret_ssm_param_value: str,
+        jwt_token: JWTToken,
+        refresh_token: RefreshToken,
+        refresh_url: str,
+        test_client: TestClient,
     ):
         jwt_token.user = {}
 
         response = test_client.post(
-            REFRESH_URL,
-            json={"refreshToken": refresh_token},
+            refresh_url,
+            json={"refreshToken": refresh_token.token},
             headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
 
@@ -142,12 +132,13 @@ class TestAuthApi:
 
     def test_fail_to_refresh_due_to_refresh_token_not_found(
         self,
-        jwt_token: JWTToken,
-        test_client: TestClient,
         jwt_secret_ssm_param_value: str,
+        jwt_token: JWTToken,
+        refresh_url: str,
+        test_client: TestClient,
     ):
         response = test_client.post(
-            REFRESH_URL,
+            refresh_url,
             json={"refreshToken": str(uuid.uuid4())},
             headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
@@ -155,27 +146,60 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert response.json()["error"] == "The requested token was not found"
 
+    def test_fail_to_refresh_due_to_expired_token(
+        self,
+        dynamodb_resource,
+        jwt_secret_ssm_param_value: str,
+        jwt_token: JWTToken,
+        refresh_token: RefreshToken,
+        refresh_url: str,
+        test_client: TestClient,
+        tokens_table_name: str,
+    ):
+        # Create token with expired ttl
+        expired_ttl = pendulum.now().subtract(days=1).int_timestamp
+        tokens_table = dynamodb_resource.Table(tokens_table_name)
+        tokens_table.put_item(
+            Item={
+                "jti": jwt_token.jti,
+                "jwt_token": jwt_token.model_dump(),
+                "refresh_token": refresh_token.token,
+                "created_at": pendulum.from_timestamp(jwt_token.iat).to_iso8601_string(),
+                "expire_at": pendulum.from_timestamp(expired_ttl).to_iso8601_string(),
+                "ttl": expired_ttl,
+            }
+        )
+
+        response = test_client.post(
+            refresh_url,
+            json={"refreshToken": refresh_token.token},
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
+        )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.json()["error"] == "The requested token has expired"
+
     def test_successfully_refresh(
         self,
-        jwt_token: JWTToken,
-        refresh_token: str,
-        respx_mock: MockRouter,
-        test_client: TestClient,
         jwt_secret_ssm_param_value: str,
+        jwt_token: JWTToken,
+        refresh_token: RefreshToken,
+        refresh_url: str,
+        test_client: TestClient,
     ):
         response = test_client.post(
-            REFRESH_URL,
-            json={"refreshToken": refresh_token},
+            refresh_url,
+            json={"refreshToken": refresh_token.token},
             headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
 
         assert response.status_code == status.HTTP_200_OK
 
     def test_fail_to_register_due_to_missing_bearer_token(
-        self, test_client: TestClient
+        self, base_url: str, test_client: TestClient
     ):
         response = test_client.post(
-            f"{BASE_URL}/register",
+            f"{base_url}/register",
             json={
                 "email": "newuser@netcode.hu",
                 "username": "newuser",
@@ -189,12 +213,13 @@ class TestAuthApi:
 
     def test_fail_to_register_due_to_empty_body(
         self,
+        base_url: str,
+        jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
-        jwt_secret_ssm_param_value: str,
     ):
         response = test_client.post(
-            f"{BASE_URL}/register",
+            f"{base_url}/register",
             json={},
             headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
@@ -203,13 +228,14 @@ class TestAuthApi:
 
     def test_fail_to_register_due_to_user_already_exists(
         self,
+        base_url: str,
+        jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
         user: User,
-        jwt_secret_ssm_param_value: str,
     ):
         response = test_client.post(
-            f"{BASE_URL}/register",
+            f"{base_url}/register",
             json={
                 "email": user.email,
                 "username": "newusername",
@@ -227,13 +253,14 @@ class TestAuthApi:
 
     def test_fail_to_register_due_to_username_already_exists(
         self,
+        base_url: str,
+        jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
         user: User,
-        jwt_secret_ssm_param_value: str,
     ):
         response = test_client.post(
-            f"{BASE_URL}/register",
+            f"{base_url}/register",
             json={
                 "email": "newemail@netcode.hu",
                 "username": user.username,
@@ -252,12 +279,13 @@ class TestAuthApi:
 
     def test_successfully_register(
         self,
+        base_url: str,
+        jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
-        jwt_secret_ssm_param_value: str,
     ):
         response = test_client.post(
-            f"{BASE_URL}/register",
+            f"{base_url}/register",
             json={
                 "email": "newuser@netcode.hu",
                 "username": "newuser",
@@ -274,12 +302,13 @@ class TestAuthApi:
 
     def test_fail_to_register_due_to_password_mismatch(
         self,
+        base_url: str,
+        jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
-        jwt_secret_ssm_param_value: str,
     ):
         response = test_client.post(
-            f"{BASE_URL}/register",
+            f"{base_url}/register",
             json={
                 "email": "user@netcode.hu",
                 "username": "user",
@@ -295,12 +324,13 @@ class TestAuthApi:
 
     def test_fail_to_register_due_to_invalid_email(
         self,
+        base_url: str,
+        jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
-        jwt_secret_ssm_param_value: str,
     ):
         response = test_client.post(
-            f"{BASE_URL}/register",
+            f"{base_url}/register",
             json={
                 "email": "invalidemail",
                 "username": "newuser",
@@ -316,12 +346,13 @@ class TestAuthApi:
 
     def test_fail_to_register_due_to_missing_username(
         self,
+        base_url: str,
+        jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
-        jwt_secret_ssm_param_value: str,
     ):
         response = test_client.post(
-            f"{BASE_URL}/register",
+            f"{base_url}/register",
             json={
                 "email": "user@netcode.hu",
                 "password": "password123",
@@ -334,14 +365,66 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
         assert response.json()["error"] == "Validation Error"
 
+    def test_fail_to_admin_register_due_to_missing_required_role(
+        self,
+        base_url: str,
+        jwt_secret_ssm_param_value: str,
+        test_client: TestClient,
+        tokens_table,
+    ):
+        iat = pendulum.now()
+        exp = iat.add(hours=1)
+        jwt_token_without_roles = JWTToken(
+            exp=exp.int_timestamp,
+            iat=iat.int_timestamp,
+            iss=None,
+            jti=str(uuid.uuid4()),
+            sub="user-id",
+            user={
+                "id": "user-id",
+                "email": "user@netcode.hu",
+                "username": "user",
+                "roles": [],
+                "created_at": iat.to_iso8601_string(),
+            },
+        )
+
+        tokens_table.put_item(
+            Item={
+                "jti": jwt_token_without_roles.jti,
+                "jwt_token": jwt_token_without_roles.model_dump(),
+                "refresh_token": str(uuid.uuid4()),
+                "created_at": pendulum.now().to_iso8601_string(),
+                "ttl": jwt_token_without_roles.exp,
+            }
+        )
+
+        response = test_client.post(
+            f"{base_url}/register",
+            json={
+                "email": "newuser@netcode.hu",
+                "username": "newuser",
+                "password": "password123",
+                "confirmPassword": "password123",
+                "displayName": "New User",
+            },
+            headers=self._auth_header(
+                jwt_token_without_roles, jwt_secret_ssm_param_value
+            ),
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.json()["error"] == "Insufficient permissions"
+
     def test_fail_to_register_due_to_missing_email(
         self,
+        base_url: str,
+        jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
-        jwt_secret_ssm_param_value: str,
     ):
         response = test_client.post(
-            f"{BASE_URL}/register",
+            f"{base_url}/register",
             json={
                 "username": "newuser",
                 "password": "password123",
@@ -353,3 +436,129 @@ class TestAuthApi:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
         assert response.json()["error"] == "Validation Error"
+
+    def test_successfully_admin_register_with_required_role(
+        self,
+        base_url: str,
+        jwt_secret_ssm_param_value: str,
+        jwt_token: JWTToken,
+        test_client: TestClient,
+    ):
+        response = test_client.post(
+            f"{base_url}/register",
+            json={
+                "email": "rootuser@netcode.hu",
+                "username": "rootuser",
+                "password": "password123",
+                "confirmPassword": "password123",
+                "displayName": "Root User",
+            },
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert "Location" in response.headers
+        assert response.headers["Location"].startswith("/api/v1/users/")
+
+    def test_fail_to_register_due_to_missing_all_required_roles(
+        self,
+        base_url: str,
+        jwt_secret_ssm_param_value: str,
+        test_client: TestClient,
+        tokens_table,
+    ):
+        iat = pendulum.now()
+        exp = iat.add(hours=1)
+        jwt_token_with_other_roles = JWTToken(
+            exp=exp.int_timestamp,
+            iat=iat.int_timestamp,
+            iss=None,
+            jti=str(uuid.uuid4()),
+            sub="user-id",
+            user={
+                "id": "user-id",
+                "email": "user@netcode.hu",
+                "username": "user",
+                "roles": ["moderator", "viewer"],
+                "created_at": iat.to_iso8601_string(),
+            },
+        )
+
+        tokens_table.put_item(
+            Item={
+                "jti": jwt_token_with_other_roles.jti,
+                "jwt_token": jwt_token_with_other_roles.model_dump(),
+                "refresh_token": str(uuid.uuid4()),
+                "created_at": pendulum.now().to_iso8601_string(),
+                "ttl": jwt_token_with_other_roles.exp,
+            }
+        )
+
+        response = test_client.post(
+            f"{base_url}/register",
+            json={
+                "email": "newuser@netcode.hu",
+                "username": "newuser",
+                "password": "password123",
+                "confirmPassword": "password123",
+                "displayName": "New User",
+            },
+            headers=self._auth_header(
+                jwt_token_with_other_roles, jwt_secret_ssm_param_value
+            ),
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.json()["error"] == "Insufficient permissions"
+
+    def test_successfully_register_with_multiple_roles_including_required(
+        self,
+        base_url: str,
+        jwt_secret_ssm_param_value: str,
+        test_client: TestClient,
+        tokens_table,
+    ):
+        iat = pendulum.now()
+        exp = iat.add(hours=1)
+        jwt_token_with_multiple_roles = JWTToken(
+            exp=exp.int_timestamp,
+            iat=iat.int_timestamp,
+            iss=None,
+            jti=str(uuid.uuid4()),
+            sub="admin-id",
+            user={
+                "id": "admin-id",
+                "email": "admin@netcode.hu",
+                "username": "admin",
+                "roles": ["user", "root", "moderator"],
+                "created_at": iat.to_iso8601_string(),
+            },
+        )
+
+        tokens_table.put_item(
+            Item={
+                "jti": jwt_token_with_multiple_roles.jti,
+                "jwt_token": jwt_token_with_multiple_roles.model_dump(),
+                "refresh_token": str(uuid.uuid4()),
+                "created_at": pendulum.now().to_iso8601_string(),
+                "ttl": jwt_token_with_multiple_roles.exp,
+            }
+        )
+
+        response = test_client.post(
+            f"{base_url}/register",
+            json={
+                "email": "multiuser@netcode.hu",
+                "username": "multiuser",
+                "password": "password123",
+                "confirmPassword": "password123",
+                "displayName": "Multi User",
+            },
+            headers=self._auth_header(
+                jwt_token_with_multiple_roles, jwt_secret_ssm_param_value
+            ),
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert "Location" in response.headers
+        assert response.headers["Location"].startswith("/api/v1/users/")

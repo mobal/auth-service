@@ -13,12 +13,32 @@ resource "aws_dynamodb_table" "users" {
     type = "S"
   }
 
+  attribute {
+    name = "username"
+    type = "S"
+  }
+
   global_secondary_index {
-    hash_key        = "email"
-    name            = "EmailIndex"
+    name = "EmailIndex"
+
+    key_schema {
+      attribute_name = "email"
+      key_type = "HASH"
+    }
+
     projection_type = "ALL"
   }
 
+  global_secondary_index {
+    name = "UsernameIndex"
+
+    key_schema {
+      attribute_name = "username"
+      key_type = "HASH"
+    }
+
+    projection_type = "ALL"
+  }
 }
 
 resource "aws_dynamodb_table" "tokens" {
@@ -37,8 +57,13 @@ resource "aws_dynamodb_table" "tokens" {
   }
 
   global_secondary_index {
-    hash_key        = "refresh_token"
     name            = "RefreshTokenIndex"
+
+    key_schema {
+      attribute_name = "refresh_token"
+      key_type = "HASH"
+    }
+
     projection_type = "ALL"
   }
 

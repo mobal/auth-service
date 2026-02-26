@@ -9,7 +9,7 @@ import pytest
 from argon2 import PasswordHasher
 from moto import mock_aws
 
-from app.models.jwt import JWTToken
+from app.models.jwt import JWTToken, RefreshToken
 from app.models.user import User
 from app.settings import Settings
 
@@ -93,7 +93,10 @@ def initialize_users_table(dynamodb_resource, user: User, users_table_name: str)
 
 @pytest.fixture
 def initialize_tokens_table(
-    dynamodb_resource, jwt_token: JWTToken, refresh_token: str, tokens_table_name: str
+    dynamodb_resource,
+    jwt_token: JWTToken,
+    refresh_token: RefreshToken,
+    tokens_table_name: str,
 ):
     tokens_table = dynamodb_resource.create_table(
         AttributeDefinitions=[
@@ -115,9 +118,12 @@ def initialize_tokens_table(
         Item={
             "jti": jwt_token.jti,
             "jwt_token": jwt_token.model_dump(),
-            "refresh_token": refresh_token,
-            "created_at": pendulum.now().to_iso8601_string(),
-            "ttl": jwt_token.exp,
+            "refresh_token": refresh_token.token,
+            "created_at": pendulum.from_timestamp(jwt_token.iat).to_iso8601_string(),
+            "expire_at": pendulum.from_timestamp(
+                refresh_token.ttl
+            ).to_iso8601_string(),
+            "ttl": refresh_token.ttl,
         }
     )
 
@@ -139,8 +145,16 @@ def jwt_token(user: User) -> JWTToken:
 
 
 @pytest.fixture
-def refresh_token() -> str:
-    return secrets.token_hex(16)
+def password() -> str:
+    return "not_so_secure_password"
+
+
+@pytest.fixture
+def refresh_token() -> RefreshToken:
+    return RefreshToken(
+        token=secrets.token_hex(16),
+        ttl=pendulum.now().add(days=30).int_timestamp,
+    )
 
 
 @pytest.fixture
@@ -149,13 +163,14 @@ def tokens_table_name() -> str:
 
 
 @pytest.fixture
-def user_dict() -> dict[str, Any]:
+def user_dict(password: str) -> dict[str, Any]:
     now = pendulum.now()
     return {
         "display_name": "root",
         "email": "root@netcode.hu",
-        "password": PasswordHasher().hash("12345678"),
+        "password": PasswordHasher().hash(password),
         "username": "root",
+        "roles": ["root"],
         "created_at": now.to_iso8601_string(),
         "updated_at": now.to_iso8601_string(),
     }
@@ -169,6 +184,7 @@ def user(user_dict: dict[str, Any]) -> User:
         email=user_dict["email"],
         password=user_dict["password"],
         username=user_dict["username"],
+        roles=user_dict.get("roles", []),
         created_at=user_dict["created_at"],
     )
 
