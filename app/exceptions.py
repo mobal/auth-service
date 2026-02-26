@@ -17,6 +17,11 @@ class UserNotFoundException(NotFoundException):
     pass
 
 
+class TokenExpiredException(HTTPException):
+    def __init__(self, detail: Any):
+        super().__init__(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
+
+
 class TokenMismatchException(HTTPException):
     def __init__(self, detail: Any):
         super().__init__(

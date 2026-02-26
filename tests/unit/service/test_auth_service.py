@@ -1,4 +1,5 @@
 import uuid
+from unittest.mock import ANY
 
 import jwt
 import pendulum
@@ -11,7 +12,7 @@ from app.exceptions import (
     TokenNotFoundException,
     UserNotFoundException,
 )
-from app.models.jwt import JWTToken
+from app.models.jwt import JWTToken, RefreshToken
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
@@ -77,7 +78,7 @@ class TestAuthService:
             - pendulum.from_timestamp(decoded_jwt_token.iat)
         ).in_words() == "1 hour"
         user_repository.get_by_email.assert_called_once_with(user.email)
-        token_service.create.assert_called_once_with(decoded_jwt_token, refresh_token)
+        token_service.create.assert_called_once_with(decoded_jwt_token, ANY)
 
     def test_fail_to_login_due_user_not_found_by_email(
         self,
@@ -153,13 +154,14 @@ class TestAuthService:
         auth_service: AuthService,
         jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
-        refresh_token: str,
+        refresh_token: RefreshToken,
         token_service: TokenService,
     ):
         item = {
             "jti": jwt_token.jti,
             "jwt_token": jwt_token.model_dump(),
-            "refresh_token": refresh_token,
+            "refresh_token": refresh_token.token,
+            "refresh_token_ttl": refresh_token.ttl,
             "created_at": pendulum.now().to_iso8601_string(),
             "ttl": jwt_token.exp,
         }
@@ -180,7 +182,7 @@ class TestAuthService:
                     algorithms=["HS256"],
                 )
             ),
-            new_refresh_token,
+            ANY,
         )
         token_service.delete_by_id.assert_called_once_with(jwt_token.jti)
 

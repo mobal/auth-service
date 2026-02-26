@@ -6,7 +6,7 @@ import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
-from app.models.jwt import JWTToken
+from app.models.jwt import JWTToken, RefreshToken
 from app.models.user import User
 
 
@@ -97,7 +97,7 @@ class TestAuthApi:
         self,
         jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
-        refresh_token: str,
+        refresh_token: RefreshToken,
         refresh_url: str,
         test_client: TestClient,
     ):
@@ -105,7 +105,7 @@ class TestAuthApi:
 
         response = test_client.post(
             refresh_url,
-            json={"refreshToken": refresh_token},
+            json={"refreshToken": refresh_token.token},
             headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
 
@@ -116,7 +116,7 @@ class TestAuthApi:
         self,
         jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
-        refresh_token: str,
+        refresh_token: RefreshToken,
         refresh_url: str,
         test_client: TestClient,
     ):
@@ -124,7 +124,7 @@ class TestAuthApi:
 
         response = test_client.post(
             refresh_url,
-            json={"refreshToken": refresh_token},
+            json={"refreshToken": refresh_token.token},
             headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
 
@@ -150,13 +150,13 @@ class TestAuthApi:
         self,
         jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
-        refresh_token: str,
+        refresh_token: RefreshToken,
         refresh_url: str,
         test_client: TestClient,
     ):
         response = test_client.post(
             refresh_url,
-            json={"refreshToken": refresh_token},
+            json={"refreshToken": refresh_token.token},
             headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
 

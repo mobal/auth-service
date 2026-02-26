@@ -9,7 +9,7 @@ import pytest
 from argon2 import PasswordHasher
 from moto import mock_aws
 
-from app.models.jwt import JWTToken
+from app.models.jwt import JWTToken, RefreshToken
 from app.models.user import User
 from app.settings import Settings
 
@@ -93,7 +93,10 @@ def initialize_users_table(dynamodb_resource, user: User, users_table_name: str)
 
 @pytest.fixture
 def initialize_tokens_table(
-    dynamodb_resource, jwt_token: JWTToken, refresh_token: str, tokens_table_name: str
+    dynamodb_resource,
+    jwt_token: JWTToken,
+    refresh_token: RefreshToken,
+    tokens_table_name: str,
 ):
     tokens_table = dynamodb_resource.create_table(
         AttributeDefinitions=[
@@ -115,9 +118,10 @@ def initialize_tokens_table(
         Item={
             "jti": jwt_token.jti,
             "jwt_token": jwt_token.model_dump(),
-            "refresh_token": refresh_token,
+            "refresh_token": refresh_token.token,
             "created_at": pendulum.now().to_iso8601_string(),
-            "ttl": jwt_token.exp,
+            "refresh_token_ttl": refresh_token.ttl,
+            "ttl": refresh_token.ttl,
         }
     )
 
@@ -144,8 +148,11 @@ def password() -> str:
 
 
 @pytest.fixture
-def refresh_token() -> str:
-    return secrets.token_hex(16)
+def refresh_token() -> RefreshToken:
+    return RefreshToken(
+        token=secrets.token_hex(16),
+        ttl=pendulum.now().add(days=30).int_timestamp,
+    )
 
 
 @pytest.fixture

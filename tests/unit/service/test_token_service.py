@@ -3,7 +3,7 @@ from typing import Any
 import pytest
 
 from app.exceptions import TokenNotFoundException
-from app.models.jwt import JWTToken
+from app.models.jwt import JWTToken, RefreshToken
 from app.repositories.token_repository import TokenRepository
 from app.services.token_service import TokenService
 
@@ -13,7 +13,7 @@ class TestTokenService:
         self,
         mocker,
         jwt_token: JWTToken,
-        refresh_token: str,
+        refresh_token: RefreshToken,
         token: dict[str, Any],
         token_repository: TokenRepository,
         token_service: TokenService,
@@ -80,7 +80,7 @@ class TestTokenService:
     def test_successfully_get_token_by_refresh_token(
         self,
         mocker,
-        refresh_token: str,
+        refresh_token: RefreshToken,
         token: dict[str, Any],
         token_repository: TokenRepository,
         token_service: TokenService,
@@ -91,6 +91,8 @@ class TestTokenService:
             return_value=token,
         )
 
-        token_service.get_by_refresh_token(refresh_token)
+        token_service.get_by_refresh_token(refresh_token.token)
 
-        token_repository.get_by_refresh_token.assert_called_once_with(refresh_token)
+        token_repository.get_by_refresh_token.assert_called_once_with(
+            refresh_token.token
+        )

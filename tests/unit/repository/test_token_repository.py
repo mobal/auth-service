@@ -3,22 +3,26 @@ from typing import Any
 
 import pendulum
 
-from app.models.jwt import JWTToken
+from app.models.jwt import JWTToken, RefreshToken
 from app.repositories.token_repository import TokenRepository
 
 
 class TestTokenRepository:
     def test_successfully_create_token(
-        self, jwt_token: JWTToken, token_repository: TokenRepository, tokens_table
+        self,
+        jwt_token: JWTToken,
+        refresh_token: RefreshToken,
+        token_repository: TokenRepository,
+        tokens_table,
     ):
         jwt_token.jti = str(uuid.uuid4())
-        refresh_token = str(uuid.uuid4())
         token = {
             "jti": jwt_token.jti,
             "jwt_token": jwt_token.model_dump(),
-            "refresh_token": refresh_token,
+            "refresh_token": refresh_token.token,
             "created_at": pendulum.now().to_iso8601_string(),
-            "ttl": jwt_token.exp,
+            "refresh_token_ttl": refresh_token.ttl,
+            "ttl": refresh_token.ttl,
         }
         token_repository.create_token(token)
 
@@ -45,13 +49,13 @@ class TestTokenRepository:
     def test_successfully_get_by_id(
         self,
         jwt_token: JWTToken,
-        refresh_token: str,
+        refresh_token: RefreshToken,
         token_repository: TokenRepository,
         tokens_table,
     ):
         item = token_repository.get_by_id(jwt_token.jti)
 
-        assert item == (jwt_token, refresh_token)
+        assert item == (jwt_token, refresh_token.token)
 
     def test_get_by_id_returns_none_if_id_not_found(
         self, token_repository: TokenRepository, tokens_table
@@ -61,12 +65,12 @@ class TestTokenRepository:
     def test_successfully_get_by_refresh_token(
         self,
         jwt_token: JWTToken,
-        refresh_token: str,
+        refresh_token: RefreshToken,
         token: dict[str, Any],
         token_repository: TokenRepository,
         tokens_table,
     ):
-        item = token_repository.get_by_refresh_token(refresh_token)
+        item = token_repository.get_by_refresh_token(refresh_token.token)
 
         assert item == token
 
