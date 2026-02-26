@@ -127,7 +127,7 @@ class AuthService:
         if jwt_token.model_dump() != item["jwt_token"]:
             raise TokenMismatchException("Internal Server Error")
 
-        if item["refresh_token_ttl"] < pendulum.now().int_timestamp:
+        if item["ttl"] < pendulum.now().int_timestamp:
             raise TokenExpiredException("The requested token has expired")
 
         self._revoke_token(jwt_token)

@@ -161,8 +161,10 @@ class TestAuthService:
             "jti": jwt_token.jti,
             "jwt_token": jwt_token.model_dump(),
             "refresh_token": refresh_token.token,
-            "refresh_token_ttl": refresh_token.ttl,
             "created_at": pendulum.now().to_iso8601_string(),
+            "refresh_token_expire_at": pendulum.from_timestamp(
+                refresh_token.ttl
+            ).to_iso8601_string(),
             "ttl": jwt_token.exp,
         }
         mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)

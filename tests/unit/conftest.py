@@ -1,6 +1,6 @@
 from typing import Any
-from unittest.mock import ANY
 
+import pendulum
 import pytest as pytest
 
 from app.jwt_bearer import JWTBearer
@@ -21,8 +21,10 @@ def token(jwt_token: JWTToken, refresh_token: RefreshToken) -> dict[str, Any]:
         "jti": jwt_token.jti,
         "jwt_token": jwt_token.model_dump(),
         "refresh_token": refresh_token.token,
-        "refresh_token_ttl": refresh_token.ttl,
-        "created_at": ANY,
+        "created_at": pendulum.from_timestamp(jwt_token.iat).to_iso8601_string(),
+        "refresh_token_expire_at": pendulum.from_timestamp(
+            refresh_token.ttl
+        ).to_iso8601_string(),
         "ttl": refresh_token.ttl,
     }
 

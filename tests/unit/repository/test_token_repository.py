@@ -21,7 +21,9 @@ class TestTokenRepository:
             "jwt_token": jwt_token.model_dump(),
             "refresh_token": refresh_token.token,
             "created_at": pendulum.now().to_iso8601_string(),
-            "refresh_token_ttl": refresh_token.ttl,
+            "refresh_token_expire_at": pendulum.from_timestamp(
+                refresh_token.ttl
+            ).to_iso8601_string(),
             "ttl": refresh_token.ttl,
         }
         token_repository.create_token(token)

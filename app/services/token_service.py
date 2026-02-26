@@ -20,8 +20,12 @@ class TokenService:
                 "jti": jwt_token.jti,
                 "jwt_token": jwt_token.model_dump(),
                 "refresh_token": refresh_token.token,
-                "created_at": pendulum.now().to_iso8601_string(),
-                "refresh_token_ttl": refresh_token.ttl,
+                "created_at": pendulum.from_timestamp(
+                    jwt_token.iat
+                ).to_iso8601_string(),
+                "refresh_token_expire_at": pendulum.from_timestamp(
+                    refresh_token.ttl
+                ).to_iso8601_string(),
                 "ttl": refresh_token.ttl,
             }
         )
