@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.7.0](https://github.com/mobal/auth-service/compare/v0.6.0...v0.7.0) (2026-02-26)
+
+
+### Features
+
+* add cors middleware ([d0c0a54](https://github.com/mobal/auth-service/commit/d0c0a541b8af5bfceb4b982c8a22091878551210))
+* add refresh token expiration ([7bbab2e](https://github.com/mobal/auth-service/commit/7bbab2e32888594dbc801cf7fa86755902524fd1))
+* added pre_authorization wrapper ([c5ba608](https://github.com/mobal/auth-service/commit/c5ba608359beab57e785c1dafa7eb9194a918960))
+* added rate limiting middleware ([696c8b9](https://github.com/mobal/auth-service/commit/696c8b9bf823e05c42221f18823e9f1784982094))
+* added role check ([a16dfe3](https://github.com/mobal/auth-service/commit/a16dfe37cc4bf8067fd22a4f9b74e23cda794c39))
+* work with artifacts ([3086653](https://github.com/mobal/auth-service/commit/3086653c09b07901d1476e679ce516c8be802abd))
+
+
+### Bug Fixes
+
+* add stage to apigw url ([39b458e](https://github.com/mobal/auth-service/commit/39b458e463449f59f60de996a3146c944b3f1794))
+* removed unused error_id ([2d0c221](https://github.com/mobal/auth-service/commit/2d0c22132d67ff6b1e84977f308906109f1205be))
+* typo ([c2c536b](https://github.com/mobal/auth-service/commit/c2c536bfac9e4e490341a1340fde808056277096))
+
 ## [0.6.0](https://github.com/mobal/auth-service/compare/v0.5.1...v0.6.0) (2026-02-11)
 
 
