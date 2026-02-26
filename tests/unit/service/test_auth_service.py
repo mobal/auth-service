@@ -55,6 +55,23 @@ class TestAuthService:
             created_at=pendulum.now().to_iso8601_string(),
         )
 
+    def test_generate_token_with_user_object(
+        self, auth_service: AuthService, user: User
+    ):
+        """Test _generate_token method when passed a User object instead of dict"""
+        jwt_token = auth_service._generate_token(
+            sub=user.id, exp=3600, user=user
+        )
+
+        assert jwt_token.sub == user.id
+        assert jwt_token.user is not None
+        assert "password" not in jwt_token.user
+        assert "created_at" not in jwt_token.user
+        assert "deleted_at" not in jwt_token.user
+        assert "updated_at" not in jwt_token.user
+        assert jwt_token.user["id"] == user.id
+        assert jwt_token.user["email"] == user.email
+
     def test_successfully_login(
         self,
         mocker,
@@ -162,7 +179,7 @@ class TestAuthService:
             "jwt_token": jwt_token.model_dump(),
             "refresh_token": refresh_token.token,
             "created_at": pendulum.now().to_iso8601_string(),
-            "refresh_token_expire_at": pendulum.from_timestamp(
+            "expire_at": pendulum.from_timestamp(
                 refresh_token.ttl
             ).to_iso8601_string(),
             "ttl": jwt_token.exp,
@@ -236,5 +253,34 @@ class TestAuthService:
 
         assert TokenMismatchException.__name__ == excinfo.typename
         assert "Internal Server Error" == excinfo.value.detail
+
+        token_service.get_by_refresh_token.assert_called_once_with(refresh_token)
+
+    def test_fail_to_refresh_due_to_expired_token(
+        self,
+        mocker,
+        auth_service: AuthService,
+        jwt_token: JWTToken,
+        refresh_token: str,
+        token_service: TokenService,
+    ):
+        from app.exceptions import TokenExpiredException
+
+        expired_time = pendulum.now().subtract(days=1).int_timestamp
+        item = {
+            "jti": jwt_token.jti,
+            "jwt_token": jwt_token.model_dump(),
+            "refresh_token": refresh_token,
+            "created_at": pendulum.now().to_iso8601_string(),
+            "ttl": expired_time,
+        }
+        mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
+
+        with pytest.raises(TokenExpiredException) as excinfo:
+            auth_service.refresh(jwt_token, refresh_token)
+
+        assert TokenExpiredException.__name__ == excinfo.typename
+        assert status.HTTP_401_UNAUTHORIZED == excinfo.value.status_code
+        assert "The requested token has expired" == excinfo.value.detail
 
         token_service.get_by_refresh_token.assert_called_once_with(refresh_token)

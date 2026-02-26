@@ -146,6 +146,39 @@ class TestAuthApi:
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert response.json()["error"] == "The requested token was not found"
 
+    def test_fail_to_refresh_due_to_expired_token(
+        self,
+        dynamodb_resource,
+        jwt_secret_ssm_param_value: str,
+        jwt_token: JWTToken,
+        refresh_token: RefreshToken,
+        refresh_url: str,
+        test_client: TestClient,
+        tokens_table_name: str,
+    ):
+        # Create token with expired ttl
+        expired_ttl = pendulum.now().subtract(days=1).int_timestamp
+        tokens_table = dynamodb_resource.Table(tokens_table_name)
+        tokens_table.put_item(
+            Item={
+                "jti": jwt_token.jti,
+                "jwt_token": jwt_token.model_dump(),
+                "refresh_token": refresh_token.token,
+                "created_at": pendulum.from_timestamp(jwt_token.iat).to_iso8601_string(),
+                "expire_at": pendulum.from_timestamp(expired_ttl).to_iso8601_string(),
+                "ttl": expired_ttl,
+            }
+        )
+
+        response = test_client.post(
+            refresh_url,
+            json={"refreshToken": refresh_token.token},
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
+        )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.json()["error"] == "The requested token has expired"
+
     def test_successfully_refresh(
         self,
         jwt_secret_ssm_param_value: str,
