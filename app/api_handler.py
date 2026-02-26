@@ -4,6 +4,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import UJSONResponse
 from mangum import Mangum
@@ -18,6 +19,9 @@ logger = Logger()
 
 app = FastAPI(debug=settings.debug, title="AuthApp", version="1.0.0")
 app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(
+    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+)
 app.add_middleware(GZipMiddleware)
 app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
 app.add_middleware(RateLimitingMiddleware)
