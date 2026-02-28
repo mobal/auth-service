@@ -164,7 +164,9 @@ class TestAuthApi:
                 "jti": jwt_token.jti,
                 "jwt_token": jwt_token.model_dump(),
                 "refresh_token": refresh_token.token,
-                "created_at": pendulum.from_timestamp(jwt_token.iat).to_iso8601_string(),
+                "created_at": pendulum.from_timestamp(
+                    jwt_token.iat
+                ).to_iso8601_string(),
                 "expire_at": pendulum.from_timestamp(expired_ttl).to_iso8601_string(),
                 "ttl": expired_ttl,
             }

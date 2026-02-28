@@ -22,9 +22,7 @@ def token(jwt_token: JWTToken, refresh_token: RefreshToken) -> dict[str, Any]:
         "jwt_token": jwt_token.model_dump(),
         "refresh_token": refresh_token.token,
         "created_at": pendulum.from_timestamp(jwt_token.iat).to_iso8601_string(),
-        "expire_at": pendulum.from_timestamp(
-            refresh_token.ttl
-        ).to_iso8601_string(),
+        "expire_at": pendulum.from_timestamp(refresh_token.ttl).to_iso8601_string(),
         "ttl": refresh_token.ttl,
     }
 

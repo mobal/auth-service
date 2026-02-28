@@ -59,9 +59,7 @@ class TestAuthService:
         self, auth_service: AuthService, user: User
     ):
         """Test _generate_token method when passed a User object instead of dict"""
-        jwt_token = auth_service._generate_token(
-            sub=user.id, exp=3600, user=user
-        )
+        jwt_token = auth_service._generate_token(sub=user.id, exp=3600, user=user)
 
         assert jwt_token.sub == user.id
         assert jwt_token.user is not None
@@ -179,9 +177,7 @@ class TestAuthService:
             "jwt_token": jwt_token.model_dump(),
             "refresh_token": refresh_token.token,
             "created_at": pendulum.now().to_iso8601_string(),
-            "expire_at": pendulum.from_timestamp(
-                refresh_token.ttl
-            ).to_iso8601_string(),
+            "expire_at": pendulum.from_timestamp(refresh_token.ttl).to_iso8601_string(),
             "ttl": jwt_token.exp,
         }
         mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
