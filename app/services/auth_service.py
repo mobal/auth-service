@@ -115,7 +115,7 @@ class AuthService:
             )
 
     def logout(self, jwt_token: JWTToken):
-        self._token_service.delete_by_id(jwt_token.jti)
+        self._revoke_token(jwt_token)
 
     def refresh(self, jwt_token: JWTToken, refresh_token: str) -> tuple[str, str, int]:
         item = self._token_service.get_by_refresh_token(refresh_token)
