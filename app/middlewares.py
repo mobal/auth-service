@@ -6,7 +6,7 @@ from typing import Any
 from aws_lambda_powertools import Logger
 from fastapi import status
 from fastapi.requests import Request
-from fastapi.responses import Response, UJSONResponse
+from fastapi.responses import Response, JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 
@@ -76,7 +76,7 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
         else:
             if client["request_count"] >= settings.rate_limit_requests:
                 logger.warning("Rate limit exceeded", host=client_ip)
-                return UJSONResponse(
+                return JSONResponse(
                     {"message": "Rate limit exceeded. Please try again later"},
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     headers=self._rate_limit_headers(client),

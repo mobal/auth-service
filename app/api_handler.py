@@ -4,9 +4,9 @@ from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import UJSONResponse
 from mangum import Mangum
 from starlette.middleware.exceptions import ExceptionMiddleware
 
@@ -33,12 +33,12 @@ handler = logger.inject_lambda_context(handler, clear_state=True, log_event=True
 
 @app.exception_handler(BotoCoreError)
 @app.exception_handler(ClientError)
-def botocore_error_handler(request: Request, error: BotoCoreError) -> UJSONResponse:
+def botocore_error_handler(request: Request, error: BotoCoreError) -> JSONResponse:
     logger.exception(error)
     error_message = str(error) if settings.debug else "Internal Server Error"
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
 
-    return UJSONResponse(
+    return JSONResponse(
         content=ErrorResponse(status=status_code, error=error_message).model_dump(
             by_alias=True
         ),
@@ -47,10 +47,10 @@ def botocore_error_handler(request: Request, error: BotoCoreError) -> UJSONRespo
 
 
 @app.exception_handler(HTTPException)
-def http_exception_handler(request: Request, error: HTTPException) -> UJSONResponse:
+def http_exception_handler(request: Request, error: HTTPException) -> JSONResponse:
     logger.exception(error)
 
-    return UJSONResponse(
+    return JSONResponse(
         content=ErrorResponse(status=error.status_code, error=error.detail).model_dump(
             by_alias=True
         ),
@@ -61,11 +61,11 @@ def http_exception_handler(request: Request, error: HTTPException) -> UJSONRespo
 @app.exception_handler(RequestValidationError)
 def request_validation_error_handler(
     request: Request, error: RequestValidationError
-) -> UJSONResponse:
+) -> JSONResponse:
     logger.exception(error)
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
 
-    return UJSONResponse(
+    return JSONResponse(
         content=ValidationErrorResponse(
             status=status_code,
             error="Validation Error",
