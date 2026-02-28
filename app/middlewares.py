@@ -6,7 +6,7 @@ from typing import Any
 from aws_lambda_powertools import Logger
 from fastapi import status
 from fastapi.requests import Request
-from fastapi.responses import Response, JSONResponse
+from fastapi.responses import JSONResponse, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 
