@@ -12,7 +12,6 @@ class Settings(BaseSettings):
     aws_secret_access_key: str
     jwt_token_lifetime: int = 3600
     debug: bool = False
-    refresh_token_lifetime: int = 900  # 15 minutes
     stage: str
     rate_limiting: bool = False
     rate_limit_requests: int = 100

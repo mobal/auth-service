@@ -59,7 +59,7 @@ class TestAuthService:
         self, auth_service: AuthService, user: User
     ):
         """Test _generate_token method when passed a User object instead of dict"""
-        jwt_token = auth_service._generate_token(sub=user.id, exp=3600, user=user)
+        jwt_token = auth_service._generate_token(sub=user.id, user=user, exp=3600)
 
         assert jwt_token.sub == user.id
         assert jwt_token.user is not None

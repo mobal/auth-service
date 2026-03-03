@@ -37,8 +37,8 @@ class AuthService:
     def _generate_token(
         self,
         sub: str,
+        user: dict[str, Any] | User,
         exp: int | None = None,
-        user: dict[str, Any] | User | None = None,
     ) -> JWTToken:
         iat = pendulum.now()
         exp = (
@@ -72,7 +72,7 @@ class AuthService:
             extra={"user": user},
         )
 
-        jwt_token = self._generate_token(user["id"], settings.jwt_token_lifetime, user)
+        jwt_token = self._generate_token(user["id"], user, settings.jwt_token_lifetime)
         refresh_token = RefreshToken(
             token=self._generate_refresh_token(),
             ttl=jwt_token.iat + settings.refresh_token_lifetime,

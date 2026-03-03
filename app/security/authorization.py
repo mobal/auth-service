@@ -6,11 +6,11 @@ from fastapi import HTTPException, status
 logger = Logger()
 
 
-def pre_authorize(roles: list[str]):
+def pre_authorize(roles: list[str], token_param: str = "jwt_token"):
     def decorator_wrapper(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            token = kwargs.get("token")
+            token = kwargs.get(token_param)
 
             user_roles = token.user.get("roles", [])
 

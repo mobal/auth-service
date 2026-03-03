@@ -11,7 +11,7 @@ class RegistrationRequest(CamelModel):
     display_name: str | None = None
 
     @field_validator("confirm_password", mode="after")
-    @staticmethod
+    @classmethod
     def passwords_match(cls, value: str, validation_info: ValidationInfo) -> str:
         if (
             "password" in validation_info.data
