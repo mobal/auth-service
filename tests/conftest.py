@@ -99,18 +99,10 @@ def initialize_services_table(
     services_table = dynamodb_resource.create_table(
         AttributeDefinitions=[
             {"AttributeName": "id", "AttributeType": "S"},
-            {"AttributeName": "refresh_token", "AttributeType": "S"},
         ],
         TableName=services_table_name,
         KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
         ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
-        GlobalSecondaryIndexes=[
-            {
-                "IndexName": "RefreshTokenIndex",
-                "KeySchema": [{"AttributeName": "refresh_token", "KeyType": "HASH"}],
-                "Projection": {"ProjectionType": "ALL"},
-            },
-        ],
     )
     services_table.put_item(
         Item={
