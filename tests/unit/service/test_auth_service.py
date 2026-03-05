@@ -8,11 +8,13 @@ from argon2 import PasswordHasher
 from fastapi import HTTPException, status
 
 from app.exceptions import (
+    OAuthException,
     TokenMismatchException,
     TokenNotFoundException,
     UserNotFoundException,
 )
 from app.models.jwt import JWTToken, RefreshToken
+from app.models.service import ServiceCredential
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
@@ -280,3 +282,119 @@ class TestAuthService:
         assert "The requested token has expired" == excinfo.value.detail
 
         token_service.get_by_refresh_token.assert_called_once_with(refresh_token)
+
+    def test_successfully_derive_scope_without_request(self, auth_service: AuthService):
+        scope = auth_service._derive_scope(["root"], None)
+
+        assert scope == "tokens:revoke users:read users:write"
+
+    def test_successfully_derive_scope_with_valid_request(
+        self, auth_service: AuthService
+    ):
+        scope = auth_service._derive_scope(["root"], "users:read")
+
+        assert scope == "users:read"
+
+    def test_fail_to_derive_scope_due_to_invalid_scope(self, auth_service: AuthService):
+        with pytest.raises(OAuthException) as excinfo:
+            auth_service._derive_scope(["root"], "admin:all")
+
+        assert excinfo.value.oauth_error == "invalid_scope"
+
+    def test_successfully_client_credentials_without_requested_scope(
+        self,
+        mocker,
+        auth_service: AuthService,
+        password: str,
+        service_credential: ServiceCredential,
+        settings: Settings,
+    ):
+        mocker.patch(
+            "app.services.auth_service.ServiceRepository.get_by_id",
+            return_value=service_credential,
+        )
+        mocker.patch.object(TokenService, "create")
+
+        token, expires_in, scope = auth_service.client_credentials(
+            service_credential.id, password, None
+        )
+        decoded = JWTToken(
+            **jwt.decode(token, settings.jwt_secret, algorithms=ALGORITHMS)
+        )
+
+        assert decoded.sub == service_credential.id
+        assert decoded.scope == scope
+        assert expires_in == settings.jwt_token_lifetime
+        assert scope == "users:read users:write"
+        auth_service._token_service.create.assert_called_once()
+
+    def test_successfully_client_credentials_with_requested_scope(
+        self,
+        mocker,
+        auth_service: AuthService,
+        password: str,
+        service_credential: ServiceCredential,
+    ):
+        mocker.patch(
+            "app.services.auth_service.ServiceRepository.get_by_id",
+            return_value=service_credential,
+        )
+        mocker.patch.object(TokenService, "create")
+
+        _, _, scope = auth_service.client_credentials(
+            service_credential.id, password, "users:read"
+        )
+
+        assert scope == "users:read"
+        auth_service._token_service.create.assert_called_once()
+
+    def test_fail_to_client_credentials_due_to_missing_service(
+        self, mocker, auth_service: AuthService
+    ):
+        mocker.patch(
+            "app.services.auth_service.ServiceRepository.get_by_id",
+            return_value=None,
+        )
+
+        with pytest.raises(OAuthException) as excinfo:
+            auth_service.client_credentials("missing", "secret", None)
+
+        assert excinfo.value.status_code == status.HTTP_401_UNAUTHORIZED
+        assert excinfo.value.oauth_error == "invalid_client"
+
+    def test_fail_to_client_credentials_due_to_invalid_secret(
+        self,
+        mocker,
+        auth_service: AuthService,
+        password: str,
+        service_credential: ServiceCredential,
+    ):
+        mocker.patch(
+            "app.services.auth_service.ServiceRepository.get_by_id",
+            return_value=service_credential,
+        )
+
+        with pytest.raises(OAuthException) as excinfo:
+            auth_service.client_credentials(service_credential.id, "wrong-secret", None)
+
+        assert excinfo.value.status_code == status.HTTP_401_UNAUTHORIZED
+        assert excinfo.value.oauth_error == "invalid_client"
+
+    def test_fail_to_client_credentials_due_to_invalid_scope(
+        self,
+        mocker,
+        auth_service: AuthService,
+        password: str,
+        service_credential: ServiceCredential,
+    ):
+        mocker.patch(
+            "app.services.auth_service.ServiceRepository.get_by_id",
+            return_value=service_credential,
+        )
+
+        with pytest.raises(OAuthException) as excinfo:
+            auth_service.client_credentials(
+                service_credential.id, password, "tokens:revoke"
+            )
+
+        assert excinfo.value.oauth_error == "invalid_scope"

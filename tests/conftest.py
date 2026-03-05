@@ -10,6 +10,7 @@ from argon2 import PasswordHasher
 from moto import mock_aws
 
 from app.models.jwt import JWTToken, RefreshToken
+from app.models.service import ServiceCredential
 from app.models.user import User
 from app.settings import Settings
 
@@ -92,6 +93,36 @@ def initialize_users_table(dynamodb_resource, user: User, users_table_name: str)
 
 
 @pytest.fixture
+def initialize_services_table(
+    dynamodb_resource, service_credential: ServiceCredential, services_table_name: str
+):
+    services_table = dynamodb_resource.create_table(
+        AttributeDefinitions=[
+            {"AttributeName": "id", "AttributeType": "S"},
+            {"AttributeName": "refresh_token", "AttributeType": "S"},
+        ],
+        TableName=services_table_name,
+        KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
+        ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
+        GlobalSecondaryIndexes=[
+            {
+                "IndexName": "RefreshTokenIndex",
+                "KeySchema": [{"AttributeName": "refresh_token", "KeyType": "HASH"}],
+                "Projection": {"ProjectionType": "ALL"},
+            },
+        ],
+    )
+    services_table.put_item(
+        Item={
+            "id": service_credential.id,
+            "secret": service_credential.secret,
+            "scopes": service_credential.scopes,
+            "created_at": service_credential.created_at,
+        }
+    )
+
+
+@pytest.fixture
 def initialize_tokens_table(
     dynamodb_resource,
     jwt_token: JWTToken,
@@ -157,6 +188,30 @@ def refresh_token() -> RefreshToken:
 
 
 @pytest.fixture
+def service_credential_dict(password: str) -> dict[str, Any]:
+    return {
+        "secret": PasswordHasher().hash(password),
+        "scopes": ["users:read", "users:write"],
+        "created_at": pendulum.now().to_iso8601_string(),
+    }
+
+
+@pytest.fixture
+def service_credential(service_credential_dict: dict[str, Any]) -> ServiceCredential:
+    return ServiceCredential(
+        id=str(uuid.uuid4()),
+        secret=service_credential_dict["secret"],
+        scopes=service_credential_dict["scopes"],
+        created_at=service_credential_dict["created_at"],
+    )
+
+
+@pytest.fixture
+def services_table_name() -> str:
+    return f"{os.getenv('STAGE')}-services"
+
+
+@pytest.fixture
 def tokens_table_name() -> str:
     return f"{os.getenv('STAGE')}-tokens"
 
@@ -201,6 +256,13 @@ def users_table_name() -> str:
 @pytest.fixture
 def tokens_table(dynamodb_resource, initialize_tokens_table, tokens_table_name: str):
     return dynamodb_resource.Table(tokens_table_name)
+
+
+@pytest.fixture
+def services_table(
+    dynamodb_resource, initialize_services_table, services_table_name: str
+):
+    return dynamodb_resource.Table(services_table_name)
 
 
 @pytest.fixture

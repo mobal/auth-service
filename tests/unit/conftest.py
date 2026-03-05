@@ -5,6 +5,7 @@ import pytest as pytest
 
 from app.jwt_bearer import JWTBearer
 from app.models.jwt import JWTToken, RefreshToken
+from app.repositories.service_repository import ServiceRepository
 from app.repositories.token_repository import TokenRepository
 from app.repositories.user_repository import UserRepository
 from app.services.token_service import TokenService
@@ -13,6 +14,11 @@ from app.services.token_service import TokenService
 @pytest.fixture
 def jwt_bearer() -> JWTBearer:
     return JWTBearer()
+
+
+@pytest.fixture
+def service_repository() -> ServiceRepository:
+    return ServiceRepository()
 
 
 @pytest.fixture
