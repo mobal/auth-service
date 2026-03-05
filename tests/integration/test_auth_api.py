@@ -76,7 +76,7 @@ class TestAuthApi:
             token_url,
             data={
                 "grant_type": "password",
-                "username": "root@netcode.hu",
+                "username": "root@squarelabs.hu",
                 "password": password,
             },
         )
@@ -273,7 +273,7 @@ class TestAuthApi:
         response = test_client.post(
             f"{base_url}/register",
             json={
-                "email": "newuser@netcode.hu",
+                "email": "newuser@squarelabs.hu",
                 "username": "newuser",
                 "password": "password123",
                 "confirmPassword": "password123",
@@ -334,7 +334,7 @@ class TestAuthApi:
         response = test_client.post(
             f"{base_url}/register",
             json={
-                "email": "newemail@netcode.hu",
+                "email": "newemail@squarelabs.hu",
                 "username": user.username,
                 "password": "password123",
                 "confirmPassword": "password123",
@@ -359,7 +359,7 @@ class TestAuthApi:
         response = test_client.post(
             f"{base_url}/register",
             json={
-                "email": "newuser@netcode.hu",
+                "email": "newuser@squarelabs.hu",
                 "username": "newuser",
                 "password": "password123",
                 "confirmPassword": "password123",
@@ -382,7 +382,7 @@ class TestAuthApi:
         response = test_client.post(
             f"{base_url}/register",
             json={
-                "email": "user@netcode.hu",
+                "email": "user@squarelabs.hu",
                 "username": "user",
                 "password": "password123",
                 "confirmPassword": "password321",
@@ -426,7 +426,7 @@ class TestAuthApi:
         response = test_client.post(
             f"{base_url}/register",
             json={
-                "email": "user@netcode.hu",
+                "email": "user@squarelabs.hu",
                 "password": "password123",
                 "confirmPassword": "password123",
                 "displayName": "New User",
@@ -455,7 +455,7 @@ class TestAuthApi:
             scope=None,
             user={
                 "id": "user-id",
-                "email": "user@netcode.hu",
+                "email": "user@squarelabs.hu",
                 "username": "user",
                 "roles": [],
                 "created_at": iat.to_iso8601_string(),
@@ -475,7 +475,7 @@ class TestAuthApi:
         response = test_client.post(
             f"{base_url}/register",
             json={
-                "email": "newuser@netcode.hu",
+                "email": "newuser@squarelabs.hu",
                 "username": "newuser",
                 "password": "password123",
                 "confirmPassword": "password123",
@@ -520,7 +520,7 @@ class TestAuthApi:
         response = test_client.post(
             f"{base_url}/register",
             json={
-                "email": "rootuser@netcode.hu",
+                "email": "rootuser@squarelabs.hu",
                 "username": "rootuser",
                 "password": "password123",
                 "confirmPassword": "password123",
@@ -551,7 +551,7 @@ class TestAuthApi:
             scope="posts:read posts:write",
             user={
                 "id": "user-id",
-                "email": "user@netcode.hu",
+                "email": "user@squarelabs.hu",
                 "username": "user",
                 "roles": ["moderator", "viewer"],
                 "created_at": iat.to_iso8601_string(),
@@ -571,7 +571,7 @@ class TestAuthApi:
         response = test_client.post(
             f"{base_url}/register",
             json={
-                "email": "newuser@netcode.hu",
+                "email": "newuser@squarelabs.hu",
                 "username": "newuser",
                 "password": "password123",
                 "confirmPassword": "password123",
@@ -603,7 +603,7 @@ class TestAuthApi:
             scope="tokens:revoke users:read users:write",
             user={
                 "id": "admin-id",
-                "email": "admin@netcode.hu",
+                "email": "admin@squarelabs.hu",
                 "username": "admin",
                 "roles": ["user", "root", "moderator"],
                 "created_at": iat.to_iso8601_string(),
@@ -623,7 +623,7 @@ class TestAuthApi:
         response = test_client.post(
             f"{base_url}/register",
             json={
-                "email": "multiuser@netcode.hu",
+                "email": "multiuser@squarelabs.hu",
                 "username": "multiuser",
                 "password": "password123",
                 "confirmPassword": "password123",

@@ -23,7 +23,7 @@ class TestCorrelationIdMiddleware:
             token_url,
             data={
                 "grant_type": "password",
-                "username": "root@netcode.hu",
+                "username": "root@squarelabs.hu",
                 "password": password,
             },
         )
@@ -40,7 +40,7 @@ class TestCorrelationIdMiddleware:
             token_url,
             data={
                 "grant_type": "password",
-                "username": "root@netcode.hu",
+                "username": "root@squarelabs.hu",
                 "password": password,
             },
             headers={X_CORRELATION_ID: correlation_id_value},
@@ -57,7 +57,7 @@ class TestCorrelationIdMiddleware:
             token_url,
             data={
                 "grant_type": "password",
-                "username": "root@netcode.hu",
+                "username": "root@squarelabs.hu",
                 "password": password,
             },
         )

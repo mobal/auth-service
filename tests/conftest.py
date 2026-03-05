@@ -213,7 +213,7 @@ def user_dict(password: str) -> dict[str, Any]:
     now = pendulum.now()
     return {
         "display_name": "root",
-        "email": "root@netcode.hu",
+        "email": "root@squarelabs.hu",
         "password": PasswordHasher().hash(password),
         "username": "root",
         "roles": ["root"],

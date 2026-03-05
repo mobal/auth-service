@@ -14,7 +14,7 @@ class TestUserRepository:
         user_data = {
             "id": new_user_id,
             "display_name": "new_user",
-            "email": "newuser@netcode.hu",
+            "email": "newuser@squarelabs.hu",
             "password": "hashed_password",
             "username": "newuser",
             "created_at": pendulum.now().to_iso8601_string(),
@@ -49,7 +49,7 @@ class TestUserRepository:
     def test_successfully_return_none_by_email(
         self, users_table, user_repository: UserRepository
     ):
-        item = user_repository.get_by_email("hello@netcode.hu")
+        item = user_repository.get_by_email("hello@squarelabs.hu")
 
         assert item is None
 
