@@ -47,7 +47,7 @@ def _parse_basic_auth(authorization: str | None) -> tuple[str, str]:
             headers={"WWW-Authenticate": "Basic"},
         )
     try:
-        decoded = base64.b64decode(authorization[6:]).decode()
+        decoded = base64.b64decode(authorization[6:], validate=True).decode()
     except Exception:
         raise OAuthException(
             "invalid_client",
@@ -55,6 +55,12 @@ def _parse_basic_auth(authorization: str | None) -> tuple[str, str]:
             headers={"WWW-Authenticate": "Basic"},
         )
     client_id, _, client_secret = decoded.partition(":")
+    if not client_id or not client_secret:
+        raise OAuthException(
+            "invalid_client",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            headers={"WWW-Authenticate": "Basic"},
+        )
     return client_id, client_secret
 
 

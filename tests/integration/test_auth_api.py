@@ -1,4 +1,5 @@
 import uuid
+from base64 import b64encode
 
 import jwt
 import pendulum
@@ -13,7 +14,7 @@ from app.models.user import User
 class TestAuthApi:
     @pytest.fixture
     def test_client(
-        self, initialize_tokens_table, initialize_users_table
+        self, initialize_tokens_table, initialize_users_table, initialize_services_table
     ) -> TestClient:
         from app.api_handler import app
 
@@ -219,6 +220,52 @@ class TestAuthApi:
 
         assert response.status_code == status.HTTP_200_OK
         self._assert_cache_headers(response)
+
+    def test_successfully_client_credentials(
+        self, token_url: str, password: str, service_credential, test_client: TestClient
+    ):
+        basic = b64encode(f"{service_credential.id}:{password}".encode()).decode()
+        response = test_client.post(
+            token_url,
+            data={"grant_type": "client_credentials"},
+            headers={"Authorization": f"Basic {basic}"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert "access_token" in body
+        assert "refresh_token" not in body
+        assert body["token_type"] == "Bearer"
+        assert "expires_in" in body
+        assert body["scope"] == "users:read users:write"
+        self._assert_cache_headers(response)
+
+    def test_fail_to_client_credentials_due_to_malformed_basic_auth(
+        self, token_url: str, test_client: TestClient
+    ):
+        response = test_client.post(
+            token_url,
+            data={"grant_type": "client_credentials"},
+            headers={"Authorization": "Basic !!!"},
+        )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.headers["www-authenticate"] == "Basic"
+        assert response.json()["error"] == "invalid_client"
+
+    def test_fail_to_client_credentials_due_to_missing_secret_in_basic_auth(
+        self, token_url: str, service_credential, test_client: TestClient
+    ):
+        basic = b64encode(service_credential.id.encode()).decode()
+        response = test_client.post(
+            token_url,
+            data={"grant_type": "client_credentials"},
+            headers={"Authorization": f"Basic {basic}"},
+        )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.headers["www-authenticate"] == "Basic"
+        assert response.json()["error"] == "invalid_client"
 
     def test_fail_to_register_due_to_missing_bearer_token(
         self, base_url: str, test_client: TestClient
