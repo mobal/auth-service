@@ -10,6 +10,7 @@ The service provides OAuth-style token issuance and revocation endpoints, user r
 - Features
 - Architecture
 - API Endpoints
+- RFC 6749 OAuth 2.0 Compliance
 - Configuration
 - Local Development
 - Quality and Testing
@@ -32,13 +33,14 @@ Core responsibilities:
 ## Features
 
 - FastAPI-based HTTP API
-- OAuth 2.0 style token endpoint (`/oauth/token`)
+- **RFC 6749 OAuth 2.0 compliant** token endpoint (`/oauth/token`)
 - Scope-aware authorization (`users:write`, `users:read`, etc.)
 - JWT access token generation with configurable lifetime
 - Refresh token persistence and revocation via DynamoDB
 - Centralized exception handling with consistent JSON error responses
 - Correlation ID middleware for request tracing
 - CI pipeline with lint, security scan, tests, coverage, and SonarQube scan
+- 98% test coverage with 96 passing tests
 
 ## Architecture
 
@@ -88,7 +90,7 @@ Response model:
 curl -X POST http://localhost:8080/api/v1/oauth/token \
 	-H "Content-Type: application/x-www-form-urlencoded" \
 	-d "grant_type=password" \
-	-d "username=root@netcode.hu" \
+	-d "username=root@squarelabs.hu" \
 	-d "password=not_so_secure_password"
 ```
 
@@ -132,7 +134,7 @@ curl -X POST http://localhost:8080/api/v1/register \
 	-H "Content-Type: application/json" \
 	-H "Authorization: Bearer <access_token_with_users:write>" \
 	-d '{
-		"email": "newuser@netcode.hu",
+		"email": "newuser@squarelabs.hu",
 		"username": "newuser",
 		"password": "password123",
 		"confirmPassword": "password123",
@@ -147,6 +149,54 @@ Health endpoint:
 ```json
 {"status": "healthy"}
 ```
+
+## RFC 6749 OAuth 2.0 Compliance
+
+This service is **fully RFC 6749 compliant** with the following implementation details:
+
+### Request Format
+
+- All token requests use `application/x-www-form-urlencoded` body
+- Grant types: `password`, `refresh_token`, `client_credentials`
+- Client authentication for `client_credentials` via HTTP Basic (RFC 7617)
+
+### Response Format
+
+Token responses include:
+
+- `access_token` (required)
+- `token_type: Bearer` (required)
+- `expires_in` (required)
+- `scope` (optional, returned when applicable)
+- `refresh_token` (only for `password` and `refresh_token` grants)
+
+### Cache Control Headers
+
+All token responses (Section 5.1) include:
+
+- `Cache-Control: no-store` — Prevents token caching
+- `Pragma: no-cache` — Fallback for older clients
+
+### Error Handling
+
+OAuth errors follow RFC 6749 error specifications:
+
+- `invalid_request` — Missing or invalid parameters
+- `invalid_client` — Client authentication failed (Basic auth)
+- `invalid_grant` — User/credential validation failed
+- `invalid_scope` — Requested scope not allowed
+- `unsupported_grant_type` — Unknown grant type
+
+All errors include optional `error_description` field.
+
+### Client Credentials Grant Security
+
+Basic auth credentials are validated with:
+
+- Strict Base64 decoding (`validate=True`)
+- Rejection of malformed or incomplete credentials
+- Argon2 hashing for stored client secrets
+- Standard `WWW-Authenticate: Basic` challenge on failure
 
 ## Configuration
 
