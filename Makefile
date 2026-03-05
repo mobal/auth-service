@@ -11,7 +11,7 @@ build-lambda:
 	./scripts/build_api.sh
 
 format:
-	uv run ruff format --check app/ tests/
+	uv run ruff format app/ tests/
 
 install:
 	uv sync

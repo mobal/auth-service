@@ -1,15 +1,17 @@
+import base64
 from typing import Annotated
 
 from aws_lambda_powertools import Logger
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 
+from app.exceptions import OAuthException
 from app.jwt_bearer import JWTBearer
 from app.models.jwt import JWTToken
-from app.models.request.login import LoginRequest
-from app.models.request.refresh import RefreshRequest
+from app.models.request.oauth_revoke import OAuthRevokeRequest
+from app.models.request.oauth_token import OAuthTokenRequest
 from app.models.request.register import RegistrationRequest
-from app.models.response.token import TokenResponse
-from app.security.authorization import pre_authorize
+from app.models.response.token import OAuthTokenResponse
+from app.security.authorization import require_scope
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
 
@@ -21,43 +23,89 @@ router = APIRouter()
 user_service = UserService()
 
 
-@router.post("/login", status_code=status.HTTP_200_OK)
-def login(body: LoginRequest) -> TokenResponse:
-    jwt_token, refresh_token, expires_in = auth_service.login(
-        str(body.email), body.password
-    )
-
-    return TokenResponse(
-        access_token=jwt_token, refresh_token=refresh_token, expires_in=expires_in
-    )
-
-
-@router.get(
-    "/logout",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-def logout(jwt_token: Annotated[JWTToken, Depends(jwt_bearer)]):
-    auth_service.logout(jwt_token)
+def _parse_basic_auth(authorization: str | None) -> tuple[str, str]:
+    if not authorization or not authorization.startswith("Basic "):
+        raise OAuthException(
+            "invalid_client",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    try:
+        decoded = base64.b64decode(authorization[6:]).decode()
+    except Exception:
+        raise OAuthException(
+            "invalid_client",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    client_id, _, client_secret = decoded.partition(":")
+    return client_id, client_secret
 
 
 @router.post(
-    "/refresh",
+    "/oauth/token",
     status_code=status.HTTP_200_OK,
+    response_model=OAuthTokenResponse,
+    response_model_exclude_none=True,
 )
-def refresh(
-    body: RefreshRequest, jwt_token: Annotated[JWTToken, Depends(jwt_bearer)]
-) -> TokenResponse:
-    jwt_token, refresh_token, expires_in = auth_service.refresh(
-        jwt_token, body.refresh_token
-    )
+def token(
+    request: Request,
+    body: Annotated[OAuthTokenRequest, Depends(OAuthTokenRequest.as_form)],
+):
+    if body.grant_type == "password":
+        if not body.username or not body.password:
+            raise OAuthException("invalid_request")
+        access_token, refresh_token, expires_in, scope = auth_service.login(
+            body.username, body.password, body.scope
+        )
+        return OAuthTokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=expires_in,
+            scope=scope,
+        )
 
-    return TokenResponse(
-        access_token=jwt_token, refresh_token=refresh_token, expires_in=expires_in
-    )
+    elif body.grant_type == "refresh_token":
+        if not body.refresh_token:
+            raise OAuthException("invalid_request")
+        current_jwt = jwt_bearer(request)
+        access_token, refresh_token, expires_in, scope = auth_service.refresh(
+            current_jwt, body.refresh_token
+        )
+        return OAuthTokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=expires_in,
+            scope=scope,
+        )
+
+    elif body.grant_type == "client_credentials":
+        authorization = request.headers.get("Authorization")
+        client_id, client_secret = _parse_basic_auth(authorization)
+        access_token, expires_in, scope = auth_service.client_credentials(
+            client_id, client_secret, body.scope
+        )
+        return OAuthTokenResponse(
+            access_token=access_token,
+            expires_in=expires_in,
+            scope=scope,
+        )
+
+    else:
+        raise OAuthException("unsupported_grant_type")
+
+
+@router.post("/oauth/revoke", status_code=status.HTTP_200_OK)
+def revoke(
+    request: Request,
+    body: Annotated[OAuthRevokeRequest, Depends(OAuthRevokeRequest.as_form)],
+):
+    current_jwt = jwt_bearer(request)
+    auth_service.logout(current_jwt)
 
 
 @router.post("/register")
-@pre_authorize(["root"])
+@require_scope(["users:write"])
 def register(
     body: RegistrationRequest, jwt_token: Annotated[JWTToken, Depends(jwt_bearer)]
 ) -> Response:

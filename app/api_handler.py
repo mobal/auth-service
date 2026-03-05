@@ -12,6 +12,7 @@ from starlette.middleware.exceptions import ExceptionMiddleware
 
 from app import settings
 from app.api.v1.api import router as api_v1_router
+from app.exceptions import OAuthException
 from app.middlewares import CorrelationIdMiddleware
 from app.models.response.error import ErrorResponse, ValidationErrorResponse
 
@@ -28,6 +29,19 @@ app.include_router(api_v1_router)
 
 handler = Mangum(app)
 handler = logger.inject_lambda_context(handler, clear_state=True, log_event=True)
+
+
+@app.exception_handler(OAuthException)
+def oauth_exception_handler(request: Request, error: OAuthException) -> JSONResponse:
+    logger.exception(error)
+    content: dict = {"error": error.oauth_error}
+    if error.oauth_error_description:
+        content["error_description"] = error.oauth_error_description
+    return JSONResponse(
+        content=content,
+        status_code=error.status_code,
+        headers=dict(error.headers) if error.headers else {},
+    )
 
 
 @app.exception_handler(BotoCoreError)
@@ -62,7 +76,7 @@ def request_validation_error_handler(
     request: Request, error: RequestValidationError
 ) -> JSONResponse:
     logger.exception(error)
-    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
 
     return JSONResponse(
         content=ValidationErrorResponse(

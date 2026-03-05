@@ -6,19 +6,20 @@ from fastapi import HTTPException, status
 logger = Logger()
 
 
-def pre_authorize(roles: list[str], token_param: str = "jwt_token"):
+def require_scope(required_scopes: list[str], token_param: str = "jwt_token"):
     def decorator_wrapper(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             token = kwargs.get(token_param)
+            token_scopes = set(token.scope.split()) if token.scope else set()
 
-            user_roles = token.user.get("roles", [])
-
-            if not any(role in user_roles for role in roles):
-                logger.warning("User does not have required roles: %s", roles)
+            if not any(s in token_scopes for s in required_scopes):
+                logger.warning(
+                    "Token does not have required scopes: %s", required_scopes
+                )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Insufficient permissions",
+                    detail="Insufficient scope",
                 )
 
             return func(*args, **kwargs)

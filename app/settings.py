@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 100
     rate_limit_duration_in_seconds: int = 60
     refresh_token_lifetime: int = 2592000  # 30 days
+    jwt_issuer: str = ""
 
     @computed_field
     @property

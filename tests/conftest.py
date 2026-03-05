@@ -136,6 +136,7 @@ def jwt_token(user: User) -> JWTToken:
         iss=None,
         jti=str(uuid.uuid4()),
         sub=user.id,
+        scope="tokens:revoke users:read users:write",
         user=user.model_dump(
             exclude={"password", "created_at", "deleted_at", "updated_at"}
         ),

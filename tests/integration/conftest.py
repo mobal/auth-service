@@ -7,10 +7,10 @@ def base_url() -> str:
 
 
 @pytest.fixture
-def login_url(base_url: str) -> str:
-    return f"{base_url}/login"
+def token_url(base_url: str) -> str:
+    return f"{base_url}/oauth/token"
 
 
 @pytest.fixture
-def refresh_url(base_url: str) -> str:
-    return f"{base_url}/refresh"
+def revoke_url(base_url: str) -> str:
+    return f"{base_url}/oauth/revoke"
