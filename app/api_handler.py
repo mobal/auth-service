@@ -1,6 +1,6 @@
 import uvicorn
 from aws_lambda_powertools import Logger
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import BotoCoreError
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -12,7 +12,7 @@ from starlette.middleware.exceptions import ExceptionMiddleware
 
 from app import settings
 from app.api.v1.api import router as api_v1_router
-from app.middlewares import CorrelationIdMiddleware, RateLimitingMiddleware
+from app.middlewares import CorrelationIdMiddleware
 from app.models.response.error import ErrorResponse, ValidationErrorResponse
 
 logger = Logger()
@@ -24,7 +24,6 @@ app.add_middleware(
 )
 app.add_middleware(GZipMiddleware)
 app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
-app.add_middleware(RateLimitingMiddleware)
 app.include_router(api_v1_router)
 
 handler = Mangum(app)
@@ -32,7 +31,7 @@ handler = logger.inject_lambda_context(handler, clear_state=True, log_event=True
 
 
 @app.exception_handler(BotoCoreError)
-@app.exception_handler(ClientError)
+@app.exception_handler(Exception)
 def botocore_error_handler(request: Request, error: BotoCoreError) -> JSONResponse:
     logger.exception(error)
     error_message = str(error) if settings.debug else "Internal Server Error"

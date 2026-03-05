@@ -14,7 +14,9 @@ class UserRepository:
         )
 
     def create_user(self, data: dict[str, Any]) -> dict[str, Any]:
-        return self._table.put_item(Item=data)
+        return self._table.put_item(
+            Item=data, ConditionExpression=Attr("email").not_exists()
+        )
 
     def delete_user(self, user_uuid: str) -> dict[str, Any]:
         return self._table.delete_item(Key={"id": user_uuid})

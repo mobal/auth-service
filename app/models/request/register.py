@@ -1,4 +1,4 @@
-from pydantic import EmailStr, ValidationInfo, field_validator
+from pydantic import EmailStr, ValidationInfo, constr, field_validator
 
 from app.models.models import CamelModel
 
@@ -6,7 +6,7 @@ from app.models.models import CamelModel
 class RegistrationRequest(CamelModel):
     email: EmailStr
     username: str
-    password: str
+    password: constr(min_length=8)
     confirm_password: str
     display_name: str | None = None
 

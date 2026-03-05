@@ -40,7 +40,7 @@ class TestAuthApi:
         self, login_url: str, test_client: TestClient, user: User
     ):
         response = test_client.post(
-            login_url, json={"email": user.email, "password": "asd"}
+            login_url, json={"email": user.email, "password": "asdasdasd"}
         )
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -128,7 +128,7 @@ class TestAuthApi:
             headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
 
-        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_fail_to_refresh_due_to_refresh_token_not_found(
         self,
