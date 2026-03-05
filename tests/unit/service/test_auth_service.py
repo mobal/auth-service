@@ -22,7 +22,6 @@ from app.services.token_service import TokenService
 from app.settings import Settings
 
 ALGORITHMS = ["HS256"]
-PASSWORD = "123456"
 
 
 class TestAuthService:
@@ -31,31 +30,8 @@ class TestAuthService:
         return AuthService()
 
     @pytest.fixture
-    def jwt_token(self, user: User) -> JWTToken:
-        iat = pendulum.now()
-        exp = iat.add(hours=1)
-        return JWTToken(
-            exp=exp.int_timestamp,
-            iat=iat.int_timestamp,
-            jti=str(uuid.uuid4()),
-            sub=user.id,
-            user=user.model_dump(),
-        )
-
-    @pytest.fixture
     def password_hasher(self) -> PasswordHasher:
         return PasswordHasher()
-
-    @pytest.fixture
-    def user(self, password_hasher: PasswordHasher) -> User:
-        return User(
-            id=str(uuid.uuid4()),
-            display_name="root",
-            email="root@netcode.hu",
-            password=password_hasher.hash(PASSWORD),
-            username="root",
-            created_at=pendulum.now().to_iso8601_string(),
-        )
 
     def test_generate_token_with_user_object(
         self, auth_service: AuthService, user: User
@@ -76,6 +52,7 @@ class TestAuthService:
         self,
         mocker,
         auth_service: AuthService,
+        password: str,
         settings: Settings,
         token_service: TokenService,
         user: User,
@@ -84,7 +61,7 @@ class TestAuthService:
         mocker.patch.object(UserRepository, "get_by_email", return_value=user)
         mocker.patch.object(TokenService, "create")
 
-        jwt_token, refresh_token, _, _ = auth_service.login(user.email, PASSWORD)
+        jwt_token, _, _, _ = auth_service.login(user.email, password)
         decoded_jwt_token = JWTToken(
             **jwt.decode(jwt_token, settings.jwt_secret, ALGORITHMS)
         )
@@ -101,6 +78,7 @@ class TestAuthService:
         self,
         mocker,
         auth_service: AuthService,
+        password: str,
         user: User,
         user_repository: UserRepository,
     ):
@@ -108,7 +86,7 @@ class TestAuthService:
         mocker.patch.object(UserRepository, "get_by_email", return_value=None)
 
         with pytest.raises(UserNotFoundException) as excinfo:
-            auth_service.login(user.email, PASSWORD)
+            auth_service.login(user.email, password)
 
         assert status.HTTP_404_NOT_FOUND == excinfo.value.status_code
         assert error_message == excinfo.value.detail
@@ -186,9 +164,7 @@ class TestAuthService:
         mocker.patch.object(TokenService, "create")
         mocker.patch.object(TokenService, "delete_by_id")
 
-        new_jwt_token, new_refresh_token, _, _ = auth_service.refresh(
-            jwt_token, refresh_token
-        )
+        new_jwt_token, _, _, _ = auth_service.refresh(jwt_token, refresh_token)
 
         token_service.get_by_refresh_token.assert_called_once_with(refresh_token)
         token_service.create.assert_called_once_with(
