@@ -5,7 +5,7 @@ on: [push]
 jobs:
   build-and-test:
     name: Build and test
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     env:
       Coverage_File: coverage.xml
     continue-on-error: false
@@ -14,12 +14,6 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-
-    - name: Cache venv
-      uses: actions/cache@v4
-      with:
-        path: .venv
-        key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') }}
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -37,11 +31,12 @@ jobs:
 
     - name: Run Bandit security scanner
       run: |
-        uv run -m bandit --severity-level high --confidence-level high -r app/ -vvv
+        uv run -m bandit --severity-level medium --confidence-level high -r app/ -vvv
 
     - name: Run ruff linter
       run: |
         uv run ruff check app/ tests/ --statistics
+        uv run ruff format --check app/ tests/
 
     - name: Running tests with Pytest and generate coverage
       run: |

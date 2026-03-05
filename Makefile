@@ -1,6 +1,6 @@
 .PHONY: all build build-layer build-lambda format install lint bandit test tflint ty
 
-all: build bandit format lint test
+all: bandit format lint test
 
 build: build-layer build-lambda
 
@@ -11,16 +11,16 @@ build-lambda:
 	./scripts/build_api.sh
 
 format:
-	uv run ruff format .
+	uv run ruff format --check app/ tests/
 
 install:
 	uv sync
 
 lint:
-	uv run ruff check app/ tests/ --fix
+	uv run ruff check app/ tests/ --fix --statistics
 
 bandit:
-	uv run -m bandit --severity-level high --confidence-level high -r app/ -vvv
+	uv run -m bandit --severity-level medium --confidence-level high -r app/ -vvv
 
 test:
 	uv run pytest tests/ --cov=app --cov-report=term-missing --cov-branch
