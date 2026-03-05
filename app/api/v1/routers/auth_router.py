@@ -1,4 +1,5 @@
 import base64
+from enum import StrEnum, auto
 from typing import Annotated
 
 from aws_lambda_powertools import Logger
@@ -17,10 +18,25 @@ from app.services.user_service import UserService
 
 logger = Logger()
 
+TOKEN_RESPONSE_HEADERS = {
+    "Cache-Control": "no-store",
+    "Pragma": "no-cache",
+}
+
 auth_service = AuthService()
 jwt_bearer = JWTBearer()
 router = APIRouter()
 user_service = UserService()
+
+
+class GrantType(StrEnum):
+    PASSWORD = auto()
+    REFRESH_TOKEN = auto()
+    CLIENT_CREDENTIALS = auto()
+
+
+def _set_token_response_headers(response: Response) -> None:
+    response.headers.update(TOKEN_RESPONSE_HEADERS)
 
 
 def _parse_basic_auth(authorization: str | None) -> tuple[str, str]:
@@ -50,49 +66,50 @@ def _parse_basic_auth(authorization: str | None) -> tuple[str, str]:
 )
 def token(
     request: Request,
+    response: Response,
     body: Annotated[OAuthTokenRequest, Depends(OAuthTokenRequest.as_form)],
 ):
-    if body.grant_type == "password":
-        if not body.username or not body.password:
-            raise OAuthException("invalid_request")
-        access_token, refresh_token, expires_in, scope = auth_service.login(
-            body.username, body.password, body.scope
-        )
-        return OAuthTokenResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            expires_in=expires_in,
-            scope=scope,
-        )
+    _set_token_response_headers(response)
 
-    elif body.grant_type == "refresh_token":
-        if not body.refresh_token:
-            raise OAuthException("invalid_request")
-        current_jwt = jwt_bearer(request)
-        access_token, refresh_token, expires_in, scope = auth_service.refresh(
-            current_jwt, body.refresh_token
-        )
-        return OAuthTokenResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            expires_in=expires_in,
-            scope=scope,
-        )
-
-    elif body.grant_type == "client_credentials":
-        authorization = request.headers.get("Authorization")
-        client_id, client_secret = _parse_basic_auth(authorization)
-        access_token, expires_in, scope = auth_service.client_credentials(
-            client_id, client_secret, body.scope
-        )
-        return OAuthTokenResponse(
-            access_token=access_token,
-            expires_in=expires_in,
-            scope=scope,
-        )
-
-    else:
-        raise OAuthException("unsupported_grant_type")
+    match body.grant_type:
+        case GrantType.PASSWORD:
+            if not body.username or not body.password:
+                raise OAuthException("invalid_request")
+            access_token, refresh_token, expires_in, scope = auth_service.login(
+                body.username, body.password, body.scope
+            )
+            return OAuthTokenResponse(
+                access_token=access_token,
+                refresh_token=refresh_token,
+                expires_in=expires_in,
+                scope=scope,
+            )
+        case GrantType.REFRESH_TOKEN:
+            if not body.refresh_token:
+                raise OAuthException("invalid_request")
+            current_jwt = jwt_bearer(request)
+            access_token, refresh_token, expires_in, scope = auth_service.refresh(
+                current_jwt, body.refresh_token
+            )
+            return OAuthTokenResponse(
+                access_token=access_token,
+                refresh_token=refresh_token,
+                expires_in=expires_in,
+                scope=scope,
+            )
+        case GrantType.CLIENT_CREDENTIALS:
+            authorization = request.headers.get("Authorization")
+            client_id, client_secret = _parse_basic_auth(authorization)
+            access_token, expires_in, scope = auth_service.client_credentials(
+                client_id, client_secret, body.scope
+            )
+            return OAuthTokenResponse(
+                access_token=access_token,
+                expires_in=expires_in,
+                scope=scope,
+            )
+        case _:
+            raise OAuthException("unsupported_grant_type")
 
 
 @router.post("/oauth/revoke", status_code=status.HTTP_200_OK)

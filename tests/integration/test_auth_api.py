@@ -26,6 +26,11 @@ class TestAuthApi:
             "Authorization": f"Bearer {jwt.encode(jwt_token.model_dump(exclude_none=True), jwt_secret_ssm_param_value)}"
         }
 
+    @staticmethod
+    def _assert_cache_headers(response):
+        assert response.headers.get("Cache-Control") == "no-store"
+        assert response.headers.get("Pragma") == "no-cache"
+
     def test_fail_to_login_due_to_empty_body(
         self, token_url: str, test_client: TestClient
     ):
@@ -82,6 +87,7 @@ class TestAuthApi:
         assert body["token_type"] == "Bearer"
         assert "expires_in" in body
         assert "scope" in body
+        self._assert_cache_headers(response)
 
     def test_fail_to_logout_due_to_missing_bearer_token(
         self, revoke_url: str, test_client: TestClient
@@ -212,6 +218,7 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_200_OK
+        self._assert_cache_headers(response)
 
     def test_fail_to_register_due_to_missing_bearer_token(
         self, base_url: str, test_client: TestClient
