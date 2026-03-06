@@ -34,6 +34,7 @@ Core responsibilities:
 
 - FastAPI-based HTTP API
 - **RFC 6749 OAuth 2.0 compliant** token endpoint (`/oauth/token`)
+- **Authorization code flow with PKCE support** (RFC 7636)
 - Scope-aware authorization (`users:write`, `users:read`, etc.)
 - JWT access token generation with configurable lifetime
 - Refresh token persistence and revocation via DynamoDB
@@ -75,6 +76,7 @@ Supported `grant_type` values:
 - `password`
 - `refresh_token`
 - `client_credentials`
+- `authorization_code`
 
 Response model:
 
@@ -112,6 +114,54 @@ curl -X POST http://localhost:8080/api/v1/oauth/token \
 	-d "grant_type=client_credentials" \
 	-d "scope=users:read"
 ```
+
+#### Authorization code grant example
+
+```bash
+curl -X POST http://localhost:8080/api/v1/oauth/token \
+	-H "Content-Type: application/x-www-form-urlencoded" \
+	-d "grant_type=authorization_code" \
+	-d "code=<authorization_code>" \
+	-d "redirect_uri=https://client.example.com/callback" \
+	-d "code_verifier=<pkce_verifier>"
+```
+
+### `GET /api/v1/oauth/authorize`
+
+Initiates the authorization code flow. Requires authentication with a valid JWT bearer token.
+
+**Query parameters:**
+
+- `client_id` (required) — Client application identifier
+- `redirect_uri` (required) — Callback URL where authorization code will be sent
+- `response_type` (required) — Must be `code`
+- `scope` (optional) — Space-separated scopes (defaults to user's role-based scopes)
+- `state` (optional) — Client state for CSRF protection
+- `code_challenge` (optional) — PKCE code challenge (RFC 7636)
+- `code_challenge_method` (optional) — `S256` or `plain` (required if code_challenge provided)
+
+**Response:**
+
+Redirects to `redirect_uri` with query parameters:
+- `code` — Authorization code (10-minute expiration, one-time use)
+- `state` — Echoed state parameter (if provided)
+
+**Example:**
+
+```bash
+curl -X GET "http://localhost:8080/api/v1/oauth/authorize?client_id=my-app&redirect_uri=https://client.example.com/callback&response_type=code&scope=users:read&state=xyz123&code_challenge=E9Melhoa2OwkFrlvQYW3jxjfkTRzIxXfsQeuCCqRCw&code_challenge_method=S256" \
+	-H "Authorization: Bearer <access_token>" \
+	-L
+```
+
+**PKCE Flow:**
+
+1. Client generates `code_verifier` (cryptographically random string)
+2. Client computes `code_challenge = BASE64URL(SHA256(code_verifier))` for S256 method
+3. Client calls `/oauth/authorize` with `code_challenge` and `code_challenge_method=S256`
+4. Service returns authorization `code`
+5. Client exchanges code at `/oauth/token` with `grant_type=authorization_code` and original `code_verifier`
+6. Service validates PKCE and returns tokens
 
 ### `POST /api/v1/oauth/revoke`
 
@@ -156,8 +206,9 @@ This service is **fully RFC 6749 compliant** with the following implementation d
 ### Request Format
 
 - All token requests use `application/x-www-form-urlencoded` body
-- Grant types: `password`, `refresh_token`, `client_credentials`
+- Grant types: `password`, `refresh_token`, `client_credentials`, `authorization_code`
 - Client authentication for `client_credentials` via HTTP Basic (RFC 7617)
+- Authorization code flow with PKCE support (RFC 7636)
 
 ### Response Format
 
@@ -226,6 +277,7 @@ Notes:
 	- `<stage>-users`
 	- `<stage>-tokens`
 	- `<stage>-services`
+	- `<stage>-authorization_codes`
 
 ## Local Development
 
