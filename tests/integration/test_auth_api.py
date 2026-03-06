@@ -14,7 +14,11 @@ from app.models.user import User
 class TestAuthApi:
     @pytest.fixture
     def test_client(
-        self, initialize_tokens_table, initialize_users_table, initialize_services_table
+        self,
+        initialize_tokens_table,
+        initialize_users_table,
+        initialize_services_table,
+        initialize_authorization_codes_table,
     ) -> TestClient:
         from app.api_handler import app
 
@@ -213,7 +217,10 @@ class TestAuthApi:
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert response.headers["www-authenticate"] == "Basic"
-        assert response.json()["error"] == "invalid_client"
+        assert (
+            response.json()["error"]
+            == "Invalid client: missing or invalid Authorization header"
+        )
 
     def test_fail_to_client_credentials_due_to_missing_secret_in_basic_auth(
         self, token_url: str, service_credential, test_client: TestClient
@@ -227,7 +234,10 @@ class TestAuthApi:
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert response.headers["www-authenticate"] == "Basic"
-        assert response.json()["error"] == "invalid_client"
+        assert (
+            response.json()["error"]
+            == "Invalid client: missing or invalid Authorization header"
+        )
 
     def test_fail_to_register_due_to_missing_bearer_token(
         self, base_url: str, test_client: TestClient

@@ -1,0 +1,235 @@
+import uuid
+
+import pendulum
+import pytest
+
+from app.models.authorization_code import AuthorizationCode
+from app.repositories.authorization_code_repository import (
+    AuthorizationCodeRepository,
+)
+
+
+class TestAuthorizationCodeRepository:
+    @pytest.fixture
+    def repository(self, authorization_codes_table) -> AuthorizationCodeRepository:
+        return AuthorizationCodeRepository()
+
+    def test_successfully_create_authorization_code(
+        self, repository: AuthorizationCodeRepository
+    ):
+        client_id = str(uuid.uuid4())
+        user_id = str(uuid.uuid4())
+        redirect_uri = "https://example.com/callback"
+        scope = "users:read"
+
+        code = repository.create(
+            client_id=client_id,
+            user_id=user_id,
+            redirect_uri=redirect_uri,
+            scope=scope,
+        )
+
+        assert code is not None
+        assert isinstance(code, str)
+        assert len(code) > 0
+
+    def test_successfully_create_authorization_code_with_pkce_s256(
+        self, repository: AuthorizationCodeRepository
+    ):
+        client_id = str(uuid.uuid4())
+        user_id = str(uuid.uuid4())
+        redirect_uri = "https://example.com/callback"
+        scope = "users:read"
+        code_challenge = "E9Mrozoa2owUG2gw61pfAqgxVrQj5zwJckeqyUmKkqM"
+        code_challenge_method = "S256"
+
+        code = repository.create(
+            client_id=client_id,
+            user_id=user_id,
+            redirect_uri=redirect_uri,
+            scope=scope,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+        )
+
+        assert code is not None
+
+    def test_successfully_create_authorization_code_with_pkce_plain(
+        self, repository: AuthorizationCodeRepository
+    ):
+        client_id = str(uuid.uuid4())
+        user_id = str(uuid.uuid4())
+        redirect_uri = "https://example.com/callback"
+        code_challenge = "plain_challenge"
+        code_challenge_method = "plain"
+
+        code = repository.create(
+            client_id=client_id,
+            user_id=user_id,
+            redirect_uri=redirect_uri,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+        )
+
+        assert code is not None
+
+    def test_successfully_create_authorization_code_without_scope(
+        self, repository: AuthorizationCodeRepository
+    ):
+        client_id = str(uuid.uuid4())
+        user_id = str(uuid.uuid4())
+        redirect_uri = "https://example.com/callback"
+
+        code = repository.create(
+            client_id=client_id,
+            user_id=user_id,
+            redirect_uri=redirect_uri,
+        )
+
+        assert code is not None
+
+    def test_successfully_get_authorization_code_by_code(
+        self, repository: AuthorizationCodeRepository
+    ):
+        client_id = str(uuid.uuid4())
+        user_id = str(uuid.uuid4())
+        redirect_uri = "https://example.com/callback"
+        scope = "users:read"
+
+        code = repository.create(
+            client_id=client_id,
+            user_id=user_id,
+            redirect_uri=redirect_uri,
+            scope=scope,
+        )
+
+        auth_code = repository.get_by_code(code)
+
+        assert auth_code is not None
+        assert isinstance(auth_code, AuthorizationCode)
+        assert auth_code.code == code
+        assert auth_code.client_id == client_id
+        assert auth_code.user_id == user_id
+        assert auth_code.redirect_uri == redirect_uri
+        assert auth_code.scope == scope
+
+    def test_successfully_get_authorization_code_with_pkce(
+        self, repository: AuthorizationCodeRepository
+    ):
+        client_id = str(uuid.uuid4())
+        user_id = str(uuid.uuid4())
+        redirect_uri = "https://example.com/callback"
+        code_challenge = "E9Mrozoa2owUG2gw61pfAqgxVrQj5zwJckeqyUmKkqM"
+        code_challenge_method = "S256"
+
+        code = repository.create(
+            client_id=client_id,
+            user_id=user_id,
+            redirect_uri=redirect_uri,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+        )
+
+        auth_code = repository.get_by_code(code)
+
+        assert auth_code is not None
+        assert auth_code.code_challenge == code_challenge
+        assert auth_code.code_challenge_method == code_challenge_method
+
+    def test_get_authorization_code_returns_none_for_missing_code(
+        self, repository: AuthorizationCodeRepository
+    ):
+        auth_code = repository.get_by_code("nonexistent_code_xyz")
+
+        assert auth_code is None
+
+    def test_successfully_delete_authorization_code(
+        self, repository: AuthorizationCodeRepository
+    ):
+        client_id = str(uuid.uuid4())
+        user_id = str(uuid.uuid4())
+        redirect_uri = "https://example.com/callback"
+
+        code = repository.create(
+            client_id=client_id,
+            user_id=user_id,
+            redirect_uri=redirect_uri,
+        )
+
+        auth_code = repository.get_by_code(code)
+        assert auth_code is not None
+
+        repository.delete_by_code(code)
+
+        auth_code = repository.get_by_code(code)
+        assert auth_code is None
+
+    def test_successfully_delete_authorization_code_one_time_use(
+        self, repository: AuthorizationCodeRepository
+    ):
+        client_id = str(uuid.uuid4())
+        user_id = str(uuid.uuid4())
+        redirect_uri = "https://example.com/callback"
+        code_challenge = "E9Mrozoa2owUG2gw61pfAqgxVrQj5zwJckeqyUmKkqM"
+
+        code = repository.create(
+            client_id=client_id,
+            user_id=user_id,
+            redirect_uri=redirect_uri,
+            code_challenge=code_challenge,
+            code_challenge_method="S256",
+        )
+
+        auth_code = repository.get_by_code(code)
+        assert auth_code is not None
+        assert auth_code.code_challenge == code_challenge
+
+        repository.delete_by_code(code)
+
+        auth_code = repository.get_by_code(code)
+        assert auth_code is None
+
+    def test_authorization_code_has_correct_ttl(
+        self, repository: AuthorizationCodeRepository
+    ):
+        client_id = str(uuid.uuid4())
+        user_id = str(uuid.uuid4())
+        redirect_uri = "https://example.com/callback"
+
+        before_create = pendulum.now().int_timestamp
+        code = repository.create(
+            client_id=client_id,
+            user_id=user_id,
+            redirect_uri=redirect_uri,
+        )
+        after_create = pendulum.now().int_timestamp
+
+        auth_code = repository.get_by_code(code)
+        assert auth_code is not None
+        assert auth_code.ttl is not None
+
+        expected_ttl = before_create + 600
+        assert expected_ttl - 60 <= auth_code.ttl <= after_create + 600 + 60
+
+    def test_create_generates_unique_codes(
+        self, repository: AuthorizationCodeRepository
+    ):
+        client_id = str(uuid.uuid4())
+        user_id = str(uuid.uuid4())
+        redirect_uri = "https://example.com/callback"
+
+        code1 = repository.create(
+            client_id=client_id,
+            user_id=user_id,
+            redirect_uri=redirect_uri,
+        )
+
+        code2 = repository.create(
+            client_id=client_id,
+            user_id=user_id,
+            redirect_uri=redirect_uri,
+        )
+
+        assert code1 != code2
+        assert repository.get_by_code(code1) is not None
+        assert repository.get_by_code(code2) is not None

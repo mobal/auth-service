@@ -19,6 +19,7 @@ from app.exceptions import (
 )
 from app.models.jwt import JWTToken, RefreshToken
 from app.models.user import User
+from app.repositories.authorization_code_repository import AuthorizationCodeRepository
 from app.repositories.service_repository import ServiceRepository
 from app.repositories.user_repository import UserRepository
 from app.services.token_service import TokenService
@@ -36,6 +37,7 @@ class AuthService:
     def __init__(self):
         self._logger = Logger()
         self._password_hasher = PasswordHasher()
+        self._authorization_code_repository = AuthorizationCodeRepository()
         self._service_repository = ServiceRepository()
         self._token_service = TokenService()
         self._user_repository = UserRepository()
@@ -222,3 +224,87 @@ class AuthService:
             jwt_token.model_dump(exclude_none=True), settings.jwt_secret
         )
         return encoded, settings.jwt_token_lifetime, granted_scope
+
+    def authorize(
+        self,
+        user_id: str,
+        client_id: str,
+        redirect_uri: str,
+        requested_scope: str | None = None,
+        code_challenge: str | None = None,
+        code_challenge_method: str | None = None,
+    ) -> str:
+        user = self._user_repository.get_by_id(user_id)
+        if user is None:
+            raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
+
+        scope = self._derive_scope(user.roles, requested_scope)
+
+        code = self._authorization_code_repository.create(
+            client_id=client_id,
+            user_id=user_id,
+            redirect_uri=redirect_uri,
+            scope=scope,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+        )
+
+        return code
+
+    def exchange_code(
+        self, code: str, redirect_uri: str, code_verifier: str | None = None
+    ) -> tuple[str, str, int, str | None]:
+        auth_code = self._authorization_code_repository.get_by_code(code)
+
+        if auth_code is None:
+            raise OAuthException("invalid_grant")
+
+        if auth_code.ttl < pendulum.now().int_timestamp:
+            self._authorization_code_repository.delete_by_code(code)
+            raise OAuthException("invalid_grant")
+
+        if auth_code.redirect_uri != redirect_uri:
+            raise OAuthException("invalid_grant")
+
+        if auth_code.code_challenge:
+            if not code_verifier:
+                raise OAuthException("invalid_request")
+
+            import base64
+            import hashlib
+
+            if auth_code.code_challenge_method == "S256":
+                computed = (
+                    base64.urlsafe_b64encode(
+                        hashlib.sha256(code_verifier.encode()).digest()
+                    )
+                    .decode()
+                    .rstrip("=")
+                )
+            elif auth_code.code_challenge_method == "plain":
+                computed = code_verifier
+            else:
+                raise OAuthException("invalid_request")
+
+            if computed != auth_code.code_challenge:
+                raise OAuthException("invalid_grant")
+
+        self._authorization_code_repository.delete_by_code(code)
+
+        user = self._user_repository.get_by_id(auth_code.user_id)
+        if user is None:
+            raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
+
+        user_dict = user.model_dump(
+            exclude={"password", "created_at", "deleted_at", "updated_at"}
+        )
+        jwt_token, refresh_token = self._generate_tokens_for_user(
+            user_dict, scope=auth_code.scope
+        )
+
+        return (
+            jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
+            refresh_token.token,
+            settings.jwt_token_lifetime,
+            auth_code.scope,
+        )

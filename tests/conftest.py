@@ -150,6 +150,20 @@ def initialize_tokens_table(
 
 
 @pytest.fixture
+def initialize_authorization_codes_table(
+    dynamodb_resource, authorization_codes_table_name: str
+):
+    dynamodb_resource.create_table(
+        AttributeDefinitions=[
+            {"AttributeName": "code", "AttributeType": "S"},
+        ],
+        TableName=authorization_codes_table_name,
+        KeySchema=[{"AttributeName": "code", "KeyType": "HASH"}],
+        ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
+    )
+
+
+@pytest.fixture
 def jwt_token(user: User) -> JWTToken:
     iat = pendulum.now()
     exp = iat.add(hours=1)
@@ -248,6 +262,20 @@ def users_table_name() -> str:
 @pytest.fixture
 def tokens_table(dynamodb_resource, initialize_tokens_table, tokens_table_name: str):
     return dynamodb_resource.Table(tokens_table_name)
+
+
+@pytest.fixture
+def authorization_codes_table_name() -> str:
+    return f"{os.getenv('STAGE')}-authorization_codes"
+
+
+@pytest.fixture
+def authorization_codes_table(
+    dynamodb_resource,
+    initialize_authorization_codes_table,
+    authorization_codes_table_name: str,
+):
+    return dynamodb_resource.Table(authorization_codes_table_name)
 
 
 @pytest.fixture

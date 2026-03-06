@@ -35,7 +35,6 @@ class TestAuthService:
     def test_generate_token_with_user_object(
         self, auth_service: AuthService, user: User
     ):
-        """Test _generate_token method when passed a User object instead of dict"""
         jwt_token = auth_service._generate_token(sub=user.id, user=user, exp=3600)
 
         assert jwt_token.sub == user.id
@@ -379,3 +378,453 @@ class TestAuthService:
             )
 
         assert excinfo.value.oauth_error == "invalid_scope"
+
+    def test_successfully_authorize_with_user(
+        self,
+        mocker,
+        auth_service: AuthService,
+        user: User,
+    ):
+        mocker.patch(
+            "app.services.auth_service.UserRepository.get_by_id",
+            return_value=user,
+        )
+        create_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.create",
+            return_value="test_code_123",
+        )
+
+        code = auth_service.authorize(
+            user_id=user.id,
+            client_id="client_123",
+            redirect_uri="https://example.com/callback",
+            requested_scope="users:read",
+        )
+
+        assert code == "test_code_123"
+        create_mock.assert_called_once()
+        call_kwargs = create_mock.call_args[1]
+        assert call_kwargs["client_id"] == "client_123"
+        assert call_kwargs["user_id"] == user.id
+        assert call_kwargs["redirect_uri"] == "https://example.com/callback"
+        assert call_kwargs["scope"] == "users:read"
+        assert call_kwargs["code_challenge"] is None
+        assert call_kwargs["code_challenge_method"] is None
+
+    def test_successfully_authorize_with_pkce_s256(
+        self,
+        mocker,
+        auth_service: AuthService,
+        user: User,
+    ):
+        mocker.patch(
+            "app.services.auth_service.UserRepository.get_by_id",
+            return_value=user,
+        )
+        create_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.create",
+            return_value="test_code_pkce",
+        )
+
+        code = auth_service.authorize(
+            user_id=user.id,
+            client_id="client_123",
+            redirect_uri="https://example.com/callback",
+            requested_scope="users:read",
+            code_challenge="E9Mrozoa2owUG2gw61pfAqgxVrQj5zwJckeqyUmKkqM",
+            code_challenge_method="S256",
+        )
+
+        assert code == "test_code_pkce"
+        call_kwargs = create_mock.call_args[1]
+        assert (
+            call_kwargs["code_challenge"]
+            == "E9Mrozoa2owUG2gw61pfAqgxVrQj5zwJckeqyUmKkqM"
+        )
+        assert call_kwargs["code_challenge_method"] == "S256"
+
+    def test_successfully_authorize_with_pkce_plain(
+        self,
+        mocker,
+        auth_service: AuthService,
+        user: User,
+    ):
+        mocker.patch(
+            "app.services.auth_service.UserRepository.get_by_id",
+            return_value=user,
+        )
+        create_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.create",
+            return_value="test_code_plain",
+        )
+
+        code = auth_service.authorize(
+            user_id=user.id,
+            client_id="client_123",
+            redirect_uri="https://example.com/callback",
+            code_challenge="test_challenge_plain",
+            code_challenge_method="plain",
+        )
+
+        assert code == "test_code_plain"
+        call_kwargs = create_mock.call_args[1]
+        assert call_kwargs["code_challenge"] == "test_challenge_plain"
+        assert call_kwargs["code_challenge_method"] == "plain"
+
+    def test_fail_to_authorize_due_to_user_not_found(
+        self,
+        mocker,
+        auth_service: AuthService,
+    ):
+        mocker.patch(
+            "app.services.auth_service.UserRepository.get_by_id",
+            return_value=None,
+        )
+
+        with pytest.raises(UserNotFoundException) as excinfo:
+            auth_service.authorize(
+                user_id="nonexistent_user",
+                client_id="client_123",
+                redirect_uri="https://example.com/callback",
+            )
+
+        assert "not found" in str(excinfo.value.detail).lower()
+
+    def test_successfully_exchange_code_without_pkce(
+        self,
+        mocker,
+        auth_service: AuthService,
+        user: User,
+    ):
+        import pendulum
+
+        auth_code_data = {
+            "code": "auth_code_123",
+            "client_id": "client_123",
+            "user_id": user.id,
+            "redirect_uri": "https://example.com/callback",
+            "scope": "users:read",
+            "code_challenge": None,
+            "code_challenge_method": None,
+            "ttl": pendulum.now().add(minutes=5).int_timestamp,
+        }
+        auth_code = mocker.MagicMock()
+        auth_code.code = auth_code_data["code"]
+        auth_code.user_id = auth_code_data["user_id"]
+        auth_code.redirect_uri = auth_code_data["redirect_uri"]
+        auth_code.scope = auth_code_data["scope"]
+        auth_code.code_challenge = None
+        auth_code.ttl = auth_code_data["ttl"]
+
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
+            return_value=auth_code,
+        )
+        mocker.patch(
+            "app.services.auth_service.UserRepository.get_by_id",
+            return_value=user,
+        )
+        mocker.patch(
+            "app.services.auth_service.TokenService.create",
+        )
+        delete_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.delete_by_code"
+        )
+
+        jwt_str, refresh_token, exp, scope = auth_service.exchange_code(
+            code="auth_code_123",
+            redirect_uri="https://example.com/callback",
+        )
+
+        assert jwt_str is not None
+        assert refresh_token is not None
+        assert exp == 3600
+        assert scope == "users:read"
+        delete_mock.assert_called_once_with("auth_code_123")
+
+    def test_fail_to_exchange_code_due_to_invalid_code(
+        self,
+        mocker,
+        auth_service: AuthService,
+    ):
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
+            return_value=None,
+        )
+
+        with pytest.raises(OAuthException) as excinfo:
+            auth_service.exchange_code(
+                code="invalid_code",
+                redirect_uri="https://example.com/callback",
+            )
+
+        assert excinfo.value.oauth_error == "invalid_grant"
+
+    def test_fail_to_exchange_code_due_to_expired_code(
+        self,
+        mocker,
+        auth_service: AuthService,
+    ):
+        import pendulum
+
+        auth_code = mocker.MagicMock()
+        auth_code.ttl = pendulum.now().subtract(minutes=5).int_timestamp
+        auth_code.redirect_uri = "https://example.com/callback"
+
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
+            return_value=auth_code,
+        )
+        delete_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.delete_by_code"
+        )
+
+        with pytest.raises(OAuthException) as excinfo:
+            auth_service.exchange_code(
+                code="expired_code",
+                redirect_uri="https://example.com/callback",
+            )
+
+        assert excinfo.value.oauth_error == "invalid_grant"
+        delete_mock.assert_called_once_with("expired_code")
+
+    def test_fail_to_exchange_code_due_to_redirect_uri_mismatch(
+        self,
+        mocker,
+        auth_service: AuthService,
+    ):
+        import pendulum
+
+        auth_code = mocker.MagicMock()
+        auth_code.code = "auth_code_123"
+        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
+        auth_code.redirect_uri = "https://example.com/callback"
+        auth_code.code_challenge = None
+
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
+            return_value=auth_code,
+        )
+
+        with pytest.raises(OAuthException) as excinfo:
+            auth_service.exchange_code(
+                code="auth_code_123",
+                redirect_uri="https://different.com/callback",
+            )
+
+        assert excinfo.value.oauth_error == "invalid_grant"
+
+    def test_fail_to_exchange_code_due_to_missing_code_verifier(
+        self,
+        mocker,
+        auth_service: AuthService,
+    ):
+        import pendulum
+
+        auth_code = mocker.MagicMock()
+        auth_code.code = "auth_code_123"
+        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
+        auth_code.redirect_uri = "https://example.com/callback"
+        auth_code.code_challenge = "E9Mrozoa2owUG2gw61pfAqgxVrQj5zwJckeqyUmKkqM"
+        auth_code.code_challenge_method = "S256"
+
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
+            return_value=auth_code,
+        )
+
+        with pytest.raises(OAuthException) as excinfo:
+            auth_service.exchange_code(
+                code="auth_code_123",
+                redirect_uri="https://example.com/callback",
+                code_verifier=None,
+            )
+
+        assert excinfo.value.oauth_error == "invalid_request"
+
+    def test_fail_to_exchange_code_due_to_invalid_pkce_s256(
+        self,
+        mocker,
+        auth_service: AuthService,
+    ):
+        import pendulum
+
+        auth_code = mocker.MagicMock()
+        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
+        auth_code.redirect_uri = "https://example.com/callback"
+        auth_code.code_challenge = "E9Mrozoa2owUG2gw61pfAqgxVrQj5zwJckeqyUmKkqM"
+        auth_code.code_challenge_method = "S256"
+
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
+            return_value=auth_code,
+        )
+
+        with pytest.raises(OAuthException) as excinfo:
+            auth_service.exchange_code(
+                code="auth_code_123",
+                redirect_uri="https://example.com/callback",
+                code_verifier="invalid_verifier",
+            )
+
+        assert excinfo.value.oauth_error == "invalid_grant"
+
+    def test_fail_to_exchange_code_due_to_invalid_pkce_plain(
+        self,
+        mocker,
+        auth_service: AuthService,
+    ):
+        import pendulum
+
+        auth_code = mocker.MagicMock()
+        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
+        auth_code.redirect_uri = "https://example.com/callback"
+        auth_code.code_challenge = "expected_challenge"
+        auth_code.code_challenge_method = "plain"
+
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
+            return_value=auth_code,
+        )
+
+        with pytest.raises(OAuthException) as excinfo:
+            auth_service.exchange_code(
+                code="auth_code_123",
+                redirect_uri="https://example.com/callback",
+                code_verifier="different_challenge",
+            )
+
+        assert excinfo.value.oauth_error == "invalid_grant"
+
+    def test_successfully_exchange_code_with_pkce_s256(
+        self,
+        mocker,
+        auth_service: AuthService,
+        user: User,
+    ):
+        import base64
+        import hashlib
+
+        import pendulum
+
+        code_verifier = "test_verifier_for_pkce"
+        code_challenge = (
+            base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest())
+            .decode()
+            .rstrip("=")
+        )
+
+        auth_code = mocker.MagicMock()
+        auth_code.code = "auth_code_123"
+        auth_code.user_id = user.id
+        auth_code.redirect_uri = "https://example.com/callback"
+        auth_code.scope = "users:read"
+        auth_code.code_challenge = code_challenge
+        auth_code.code_challenge_method = "S256"
+        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
+
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
+            return_value=auth_code,
+        )
+        mocker.patch(
+            "app.services.auth_service.UserRepository.get_by_id",
+            return_value=user,
+        )
+        mocker.patch(
+            "app.services.auth_service.TokenService.create",
+        )
+        delete_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.delete_by_code"
+        )
+
+        jwt_str, refresh_token, exp, scope = auth_service.exchange_code(
+            code="auth_code_123",
+            redirect_uri="https://example.com/callback",
+            code_verifier=code_verifier,
+        )
+
+        assert jwt_str is not None
+        assert refresh_token is not None
+        assert exp == 3600
+        assert scope == "users:read"
+        delete_mock.assert_called_once_with("auth_code_123")
+
+    def test_successfully_exchange_code_with_pkce_plain(
+        self,
+        mocker,
+        auth_service: AuthService,
+        user: User,
+    ):
+        import pendulum
+
+        auth_code = mocker.MagicMock()
+        auth_code.code = "auth_code_123"
+        auth_code.user_id = user.id
+        auth_code.redirect_uri = "https://example.com/callback"
+        auth_code.scope = "users:read"
+        auth_code.code_challenge = "plain_challenge"
+        auth_code.code_challenge_method = "plain"
+        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
+
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
+            return_value=auth_code,
+        )
+        mocker.patch(
+            "app.services.auth_service.UserRepository.get_by_id",
+            return_value=user,
+        )
+        mocker.patch(
+            "app.services.auth_service.TokenService.create",
+        )
+        delete_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.delete_by_code"
+        )
+
+        jwt_str, refresh_token, exp, scope = auth_service.exchange_code(
+            code="auth_code_123",
+            redirect_uri="https://example.com/callback",
+            code_verifier="plain_challenge",
+        )
+
+        assert jwt_str is not None
+        assert refresh_token is not None
+        assert exp == 3600
+        assert scope == "users:read"
+        delete_mock.assert_called_once()
+
+    def test_fail_to_exchange_code_due_to_user_not_found(
+        self,
+        mocker,
+        auth_service: AuthService,
+    ):
+        import pendulum
+
+        auth_code = mocker.MagicMock()
+        auth_code.code = "auth_code_123"
+        auth_code.user_id = "nonexistent_user"
+        auth_code.redirect_uri = "https://example.com/callback"
+        auth_code.code_challenge = None
+        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
+
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
+            return_value=auth_code,
+        )
+        mocker.patch(
+            "app.services.auth_service.UserRepository.get_by_id",
+            return_value=None,
+        )
+        delete_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.delete_by_code"
+        )
+
+        with pytest.raises(UserNotFoundException) as excinfo:
+            auth_service.exchange_code(
+                code="auth_code_123",
+                redirect_uri="https://example.com/callback",
+            )
+
+        assert "not found" in str(excinfo.value.detail).lower()
+        delete_mock.assert_called_once_with("auth_code_123")

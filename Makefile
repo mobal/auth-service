@@ -17,7 +17,7 @@ install:
 	uv sync
 
 lint:
-	uv run ruff check app/ tests/ --fix --statistics
+	uv run ruff check app/ tests/ --fix
 
 bandit:
 	uv run -m bandit --severity-level medium --confidence-level high -r app/ -vvv
