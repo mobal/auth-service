@@ -116,54 +116,22 @@ class TestAuthApi:
 
         assert response.status_code == status.HTTP_200_OK
 
-    def test_fail_to_refresh_due_to_jwt_token_not_found(
-        self,
-        jwt_secret_ssm_param_value: str,
-        jwt_token: JWTToken,
-        refresh_token: RefreshToken,
-        token_url: str,
-        test_client: TestClient,
+    def test_fail_to_refresh_due_to_missing_refresh_token(
+        self, token_url: str, test_client: TestClient
     ):
-        jwt_token.jti = str(uuid.uuid4())
+        response = test_client.post(token_url, data={"grant_type": "refresh_token"})
 
-        response = test_client.post(
-            token_url,
-            data={"grant_type": "refresh_token", "refresh_token": refresh_token.token},
-            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
-        )
-
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert response.json()["error"] == "Not authenticated"
-
-    def test_fail_to_refresh_due_to_jwt_token_mismatch(
-        self,
-        jwt_secret_ssm_param_value: str,
-        jwt_token: JWTToken,
-        refresh_token: RefreshToken,
-        token_url: str,
-        test_client: TestClient,
-    ):
-        jwt_token.user = {}
-
-        response = test_client.post(
-            token_url,
-            data={"grant_type": "refresh_token", "refresh_token": refresh_token.token},
-            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
-        )
-
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.json()["error"] == "Invalid request: refresh_token is required"
 
     def test_fail_to_refresh_due_to_refresh_token_not_found(
         self,
-        jwt_secret_ssm_param_value: str,
-        jwt_token: JWTToken,
         token_url: str,
         test_client: TestClient,
     ):
         response = test_client.post(
             token_url,
             data={"grant_type": "refresh_token", "refresh_token": str(uuid.uuid4())},
-            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
@@ -172,14 +140,12 @@ class TestAuthApi:
     def test_fail_to_refresh_due_to_expired_token(
         self,
         dynamodb_resource,
-        jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         refresh_token: RefreshToken,
         token_url: str,
         test_client: TestClient,
         tokens_table_name: str,
     ):
-        # Create token with expired ttl
         expired_ttl = pendulum.now().subtract(days=1).int_timestamp
         tokens_table = dynamodb_resource.Table(tokens_table_name)
         tokens_table.put_item(
@@ -198,7 +164,6 @@ class TestAuthApi:
         response = test_client.post(
             token_url,
             data={"grant_type": "refresh_token", "refresh_token": refresh_token.token},
-            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -206,8 +171,6 @@ class TestAuthApi:
 
     def test_successfully_refresh(
         self,
-        jwt_secret_ssm_param_value: str,
-        jwt_token: JWTToken,
         refresh_token: RefreshToken,
         token_url: str,
         test_client: TestClient,
@@ -215,7 +178,6 @@ class TestAuthApi:
         response = test_client.post(
             token_url,
             data={"grant_type": "refresh_token", "refresh_token": refresh_token.token},
-            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
 
         assert response.status_code == status.HTTP_200_OK

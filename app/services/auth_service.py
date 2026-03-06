@@ -14,7 +14,6 @@ from app import settings
 from app.exceptions import (
     OAuthException,
     TokenExpiredException,
-    TokenMismatchException,
     TokenNotFoundException,
     UserNotFoundException,
 )
@@ -153,22 +152,17 @@ class AuthService:
     def logout(self, jwt_token: JWTToken):
         self._revoke_token(jwt_token)
 
-    def refresh(
-        self, jwt_token: JWTToken, refresh_token: str
-    ) -> tuple[str, str, int, str | None]:
+    def refresh(self, refresh_token: str) -> tuple[str, str, int, str | None]:
         item = self._token_service.get_by_refresh_token(refresh_token)
 
         if item is None:
             self._logger.warning("The requested token was not found!")
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
 
-        if jwt_token.model_dump() != item["jwt_token"]:
-            raise TokenMismatchException("Internal Server Error")
-
         if item["ttl"] < pendulum.now().int_timestamp:
             raise TokenExpiredException("The requested token has expired")
 
-        self._revoke_token(jwt_token)
+        self._token_service.delete_by_id(item["jwt_token"]["jti"])
 
         scope = item["jwt_token"].get("scope")
         jwt_token, refresh_token = self._generate_tokens_for_user(

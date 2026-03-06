@@ -99,7 +99,6 @@ curl -X POST http://localhost:8080/api/v1/oauth/token \
 ```bash
 curl -X POST http://localhost:8080/api/v1/oauth/token \
 	-H "Content-Type: application/x-www-form-urlencoded" \
-	-H "Authorization: Bearer <current_access_token>" \
 	-d "grant_type=refresh_token" \
 	-d "refresh_token=<refresh_token>"
 ```

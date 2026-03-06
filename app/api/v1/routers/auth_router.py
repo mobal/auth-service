@@ -80,7 +80,9 @@ def token(
     match body.grant_type:
         case GrantType.PASSWORD:
             if not body.username or not body.password:
-                raise OAuthException("invalid_request")
+                raise OAuthException(
+                    "Invalid request: username and password are required"
+                )
             access_token, refresh_token, expires_in, scope = auth_service.login(
                 body.username, body.password, body.scope
             )
@@ -92,10 +94,9 @@ def token(
             )
         case GrantType.REFRESH_TOKEN:
             if not body.refresh_token:
-                raise OAuthException("invalid_request")
-            current_jwt = jwt_bearer(request)
+                raise OAuthException("Invalid request: refresh_token is required")
             access_token, refresh_token, expires_in, scope = auth_service.refresh(
-                current_jwt, body.refresh_token
+                body.refresh_token
             )
             return OAuthTokenResponse(
                 access_token=access_token,
@@ -115,7 +116,7 @@ def token(
                 scope=scope,
             )
         case _:
-            raise OAuthException("unsupported_grant_type")
+            raise OAuthException("Unsupported grant type")
 
 
 @router.post("/oauth/revoke", status_code=status.HTTP_200_OK)
