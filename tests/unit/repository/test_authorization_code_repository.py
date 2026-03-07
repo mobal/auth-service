@@ -159,7 +159,7 @@ class TestAuthorizationCodeRepository:
         auth_code = repository.get_by_code(code)
         assert auth_code is not None
 
-        repository.delete_by_code(code)
+        repository.delete_by_id(auth_code.id)
 
         auth_code = repository.get_by_code(code)
         assert auth_code is None
@@ -184,7 +184,7 @@ class TestAuthorizationCodeRepository:
         assert auth_code is not None
         assert auth_code.code_challenge == code_challenge
 
-        repository.delete_by_code(code)
+        repository.delete_by_id(auth_code.id)
 
         auth_code = repository.get_by_code(code)
         assert auth_code is None

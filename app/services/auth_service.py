@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import secrets
 import uuid
 from typing import Any
@@ -17,6 +19,7 @@ from app.exceptions import (
     TokenNotFoundException,
     UserNotFoundException,
 )
+from app.models.authorization_code import AuthorizationCode
 from app.models.jwt import JWTToken, RefreshToken
 from app.models.user import User
 from app.repositories.authorization_code_repository import AuthorizationCodeRepository
@@ -59,6 +62,53 @@ class AuthService:
             return requested_scope
 
         return " ".join(sorted(allowed_scopes))
+
+    @staticmethod
+    def _get_pkce_challenge(
+        code_verifier: str,
+        code_challenge_method: str | None,
+    ) -> str:
+        if code_challenge_method == "S256":
+            return (
+                base64.urlsafe_b64encode(
+                    hashlib.sha256(code_verifier.encode()).digest()
+                )
+                .decode()
+                .rstrip("=")
+            )
+
+        if code_challenge_method == "plain":
+            return code_verifier
+
+        raise OAuthException(
+            "invalid_request",
+            "Unsupported code_challenge_method",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    def _validate_pkce(
+        self,
+        auth_code: AuthorizationCode,
+        code_verifier: str | None,
+    ):
+        if not auth_code.code_challenge:
+            return
+
+        if not code_verifier:
+            raise OAuthException(
+                "invalid_request",
+                "Missing code_verifier",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        expected_challenge = self._get_pkce_challenge(
+            code_verifier,
+            auth_code.code_challenge_method,
+        )
+        if expected_challenge != auth_code.code_challenge:
+            raise OAuthException(
+                "invalid_grant", status_code=status.HTTP_400_BAD_REQUEST
+            )
 
     def _generate_token(
         self,
@@ -201,7 +251,9 @@ class AuthService:
         if requested_scope:
             requested = set(requested_scope.split())
             if not requested.issubset(allowed):
-                raise OAuthException("invalid_scope")
+                raise OAuthException(
+                    "invalid_scope", status_code=status.HTTP_400_BAD_REQUEST
+                )
             granted_scope = requested_scope
         else:
             granted_scope = " ".join(sorted(allowed)) if allowed else None
@@ -255,41 +307,27 @@ class AuthService:
         self, code: str, redirect_uri: str, code_verifier: str | None = None
     ) -> tuple[str, str, int, str | None]:
         auth_code = self._authorization_code_repository.get_by_code(code)
+        now = pendulum.now().int_timestamp
 
         if auth_code is None:
-            raise OAuthException("invalid_grant")
+            raise OAuthException(
+                "invalid_grant", status_code=status.HTTP_400_BAD_REQUEST
+            )
 
-        if auth_code.ttl < pendulum.now().int_timestamp:
-            self._authorization_code_repository.delete_by_code(code)
-            raise OAuthException("invalid_grant")
+        if auth_code.ttl < now:
+            self._authorization_code_repository.delete_by_id(auth_code.id)
+            raise OAuthException(
+                "invalid_grant", status_code=status.HTTP_400_BAD_REQUEST
+            )
 
         if auth_code.redirect_uri != redirect_uri:
-            raise OAuthException("invalid_grant")
+            raise OAuthException(
+                "invalid_grant", status_code=status.HTTP_400_BAD_REQUEST
+            )
 
-        if auth_code.code_challenge:
-            if not code_verifier:
-                raise OAuthException("invalid_request")
+        self._validate_pkce(auth_code, code_verifier)
 
-            import base64
-            import hashlib
-
-            if auth_code.code_challenge_method == "S256":
-                computed = (
-                    base64.urlsafe_b64encode(
-                        hashlib.sha256(code_verifier.encode()).digest()
-                    )
-                    .decode()
-                    .rstrip("=")
-                )
-            elif auth_code.code_challenge_method == "plain":
-                computed = code_verifier
-            else:
-                raise OAuthException("invalid_request")
-
-            if computed != auth_code.code_challenge:
-                raise OAuthException("invalid_grant")
-
-        self._authorization_code_repository.delete_by_code(code)
+        self._authorization_code_repository.delete_by_id(auth_code.id)
 
         user = self._user_repository.get_by_id(auth_code.user_id)
         if user is None:

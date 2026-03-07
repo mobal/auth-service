@@ -58,6 +58,28 @@ def dynamodb_resource(settings):
 
 
 @pytest.fixture
+def initialize_authorization_codes_table(
+    dynamodb_resource, authorization_codes_table_name: str
+):
+    dynamodb_resource.create_table(
+        AttributeDefinitions=[
+            {"AttributeName": "id", "AttributeType": "S"},
+            {"AttributeName": "code", "AttributeType": "S"},
+        ],
+        TableName=authorization_codes_table_name,
+        KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
+        GlobalSecondaryIndexes=[
+            {
+                "IndexName": "CodeIndex",
+                "KeySchema": [{"AttributeName": "code", "KeyType": "HASH"}],
+                "Projection": {"ProjectionType": "ALL"},
+            },
+        ],
+        ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
+    )
+
+
+@pytest.fixture
 def initialize_users_table(dynamodb_resource, user: User, users_table_name: str):
     users_table = dynamodb_resource.create_table(
         AttributeDefinitions=[
@@ -146,20 +168,6 @@ def initialize_tokens_table(
             "expire_at": pendulum.from_timestamp(refresh_token.ttl).to_iso8601_string(),
             "ttl": refresh_token.ttl,
         }
-    )
-
-
-@pytest.fixture
-def initialize_authorization_codes_table(
-    dynamodb_resource, authorization_codes_table_name: str
-):
-    dynamodb_resource.create_table(
-        AttributeDefinitions=[
-            {"AttributeName": "code", "AttributeType": "S"},
-        ],
-        TableName=authorization_codes_table_name,
-        KeySchema=[{"AttributeName": "code", "KeyType": "HASH"}],
-        ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
     )
 
 

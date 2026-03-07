@@ -509,6 +509,7 @@ class TestAuthService:
             "ttl": pendulum.now().add(minutes=5).int_timestamp,
         }
         auth_code = mocker.MagicMock()
+        auth_code.id = "auth-code-id-123"
         auth_code.code = auth_code_data["code"]
         auth_code.user_id = auth_code_data["user_id"]
         auth_code.redirect_uri = auth_code_data["redirect_uri"]
@@ -528,7 +529,7 @@ class TestAuthService:
             "app.services.auth_service.TokenService.create",
         )
         delete_mock = mocker.patch(
-            "app.services.auth_service.AuthorizationCodeRepository.delete_by_code"
+            "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
         )
 
         jwt_str, refresh_token, exp, scope = auth_service.exchange_code(
@@ -540,7 +541,7 @@ class TestAuthService:
         assert refresh_token is not None
         assert exp == 3600
         assert scope == "users:read"
-        delete_mock.assert_called_once_with("auth_code_123")
+        delete_mock.assert_called_once_with("auth-code-id-123")
 
     def test_fail_to_exchange_code_due_to_invalid_code(
         self,
@@ -568,6 +569,7 @@ class TestAuthService:
         import pendulum
 
         auth_code = mocker.MagicMock()
+        auth_code.id = "expired-auth-code-id"
         auth_code.ttl = pendulum.now().subtract(minutes=5).int_timestamp
         auth_code.redirect_uri = "https://example.com/callback"
 
@@ -576,7 +578,7 @@ class TestAuthService:
             return_value=auth_code,
         )
         delete_mock = mocker.patch(
-            "app.services.auth_service.AuthorizationCodeRepository.delete_by_code"
+            "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
         )
 
         with pytest.raises(OAuthException) as excinfo:
@@ -586,7 +588,7 @@ class TestAuthService:
             )
 
         assert excinfo.value.oauth_error == "invalid_grant"
-        delete_mock.assert_called_once_with("expired_code")
+        delete_mock.assert_called_once_with("expired-auth-code-id")
 
     def test_fail_to_exchange_code_due_to_redirect_uri_mismatch(
         self,
@@ -596,6 +598,7 @@ class TestAuthService:
         import pendulum
 
         auth_code = mocker.MagicMock()
+        auth_code.id = "auth-code-id-s256"
         auth_code.code = "auth_code_123"
         auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
         auth_code.redirect_uri = "https://example.com/callback"
@@ -622,6 +625,7 @@ class TestAuthService:
         import pendulum
 
         auth_code = mocker.MagicMock()
+        auth_code.id = "auth-code-id-s256"
         auth_code.code = "auth_code_123"
         auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
         auth_code.redirect_uri = "https://example.com/callback"
@@ -715,6 +719,7 @@ class TestAuthService:
         )
 
         auth_code = mocker.MagicMock()
+        auth_code.id = "auth-code-id-s256"
         auth_code.code = "auth_code_123"
         auth_code.user_id = user.id
         auth_code.redirect_uri = "https://example.com/callback"
@@ -735,7 +740,7 @@ class TestAuthService:
             "app.services.auth_service.TokenService.create",
         )
         delete_mock = mocker.patch(
-            "app.services.auth_service.AuthorizationCodeRepository.delete_by_code"
+            "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
         )
 
         jwt_str, refresh_token, exp, scope = auth_service.exchange_code(
@@ -748,7 +753,7 @@ class TestAuthService:
         assert refresh_token is not None
         assert exp == 3600
         assert scope == "users:read"
-        delete_mock.assert_called_once_with("auth_code_123")
+        delete_mock.assert_called_once_with("auth-code-id-s256")
 
     def test_successfully_exchange_code_with_pkce_plain(
         self,
@@ -759,6 +764,7 @@ class TestAuthService:
         import pendulum
 
         auth_code = mocker.MagicMock()
+        auth_code.id = "auth-code-id-plain"
         auth_code.code = "auth_code_123"
         auth_code.user_id = user.id
         auth_code.redirect_uri = "https://example.com/callback"
@@ -779,7 +785,7 @@ class TestAuthService:
             "app.services.auth_service.TokenService.create",
         )
         delete_mock = mocker.patch(
-            "app.services.auth_service.AuthorizationCodeRepository.delete_by_code"
+            "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
         )
 
         jwt_str, refresh_token, exp, scope = auth_service.exchange_code(
@@ -792,7 +798,7 @@ class TestAuthService:
         assert refresh_token is not None
         assert exp == 3600
         assert scope == "users:read"
-        delete_mock.assert_called_once()
+        delete_mock.assert_called_once_with("auth-code-id-plain")
 
     def test_fail_to_exchange_code_due_to_user_not_found(
         self,
@@ -802,6 +808,7 @@ class TestAuthService:
         import pendulum
 
         auth_code = mocker.MagicMock()
+        auth_code.id = "auth-code-id-user-not-found"
         auth_code.code = "auth_code_123"
         auth_code.user_id = "nonexistent_user"
         auth_code.redirect_uri = "https://example.com/callback"
@@ -817,7 +824,7 @@ class TestAuthService:
             return_value=None,
         )
         delete_mock = mocker.patch(
-            "app.services.auth_service.AuthorizationCodeRepository.delete_by_code"
+            "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
         )
 
         with pytest.raises(UserNotFoundException) as excinfo:
@@ -827,4 +834,4 @@ class TestAuthService:
             )
 
         assert "not found" in str(excinfo.value.detail).lower()
-        delete_mock.assert_called_once_with("auth_code_123")
+        delete_mock.assert_called_once_with("auth-code-id-user-not-found")

@@ -13,7 +13,7 @@ def require_scope(required_scopes: list[str], token_param: str = "jwt_token"):
             token = kwargs.get(token_param)
             token_scopes = set(token.scope.split()) if token.scope else set()
 
-            if not any(s in token_scopes for s in required_scopes):
+            if not any(scope in token_scopes for scope in required_scopes):
                 logger.warning(
                     "Token does not have required scopes: %s", required_scopes
                 )

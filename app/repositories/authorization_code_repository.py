@@ -1,7 +1,9 @@
 import secrets
+import uuid
 
 import pendulum
 from aws_lambda_powertools import Logger
+from boto3.dynamodb.conditions import Key
 
 from app import settings
 from app.models.authorization_code import AuthorizationCode
@@ -22,13 +24,13 @@ class AuthorizationCodeRepository:
         code_challenge: str | None = None,
         code_challenge_method: str | None = None,
     ) -> str:
-        """Create and store authorization code."""
         code = secrets.token_urlsafe(32)
         now = pendulum.now()
         ttl = (now.add(minutes=10)).int_timestamp
 
         self._table.put_item(
             Item={
+                "id": str(uuid.uuid4()),
                 "code": code,
                 "client_id": client_id,
                 "user_id": user_id,
@@ -47,15 +49,22 @@ class AuthorizationCodeRepository:
         )
         return code
 
-    def get_by_code(self, code: str) -> AuthorizationCode | None:
-        """Retrieve authorization code by code."""
-        response = self._table.get_item(Key={"code": code})
+    def delete_by_id(self, code_id: str) -> None:
+        self._table.delete_item(Key={"id": code_id})
+        self._logger.info(f"Deleted authorization code {code_id}")
 
-        if "Item" not in response:
+    def get_by_code(self, code: str) -> AuthorizationCode | None:
+        response = self._table.query(
+            IndexName="CodeIndex",
+            KeyConditionExpression=Key("code").eq(code),
+        )
+
+        if "Items" not in response or not response["Items"]:
             return None
 
-        item = response["Item"]
+        item = response["Items"][0]
         return AuthorizationCode(
+            id=item["id"],
             code=item["code"],
             client_id=item["client_id"],
             user_id=item["user_id"],
@@ -65,8 +74,3 @@ class AuthorizationCodeRepository:
             code_challenge_method=item.get("code_challenge_method"),
             ttl=item["ttl"],
         )
-
-    def delete_by_code(self, code: str) -> None:
-        """Delete authorization code (one-time use)."""
-        self._table.delete_item(Key={"code": code})
-        self._logger.info(f"Deleted authorization code {code}")

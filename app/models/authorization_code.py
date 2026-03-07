@@ -2,6 +2,7 @@ from pydantic import BaseModel
 
 
 class AuthorizationCode(BaseModel):
+    id: str
     code: str
     client_id: str
     user_id: str

@@ -1,5 +1,4 @@
 import base64
-from enum import StrEnum, auto
 from typing import Annotated
 from urllib.parse import urlencode
 
@@ -9,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.exceptions import OAuthException
 from app.jwt_bearer import JWTBearer
+from app.models.grant_type import GrantType
 from app.models.jwt import JWTToken
 from app.models.request.oauth_token import OAuthTokenRequest
 from app.models.request.register import RegistrationRequest
@@ -27,13 +27,6 @@ user_service = UserService()
 
 ERROR_MESSAGE_INVALID_CLIENT = "Invalid client: missing or invalid Authorization header"
 ERROR_MESSAGE_UNSUPPORTED_GRANT_TYPE = "Unsupported grant type"
-
-
-class GrantType(StrEnum):
-    PASSWORD = auto()
-    REFRESH_TOKEN = auto()
-    CLIENT_CREDENTIALS = auto()
-    AUTHORIZATION_CODE = auto()
 
 
 def _parse_authorization_header(authorization: str | None) -> tuple[str, str]:
