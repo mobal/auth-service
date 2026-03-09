@@ -11,10 +11,10 @@ from mangum import Mangum
 from starlette.middleware.exceptions import ExceptionMiddleware
 
 from app import settings
-from app.api.v1.api import router as api_v1_router
 from app.exceptions import OAuthException
 from app.middlewares import CorrelationIdMiddleware
 from app.models.response.error import ErrorResponse, ValidationErrorResponse
+from app.routers.oauth.auth_router import router as auth_router
 
 logger = Logger()
 
@@ -25,7 +25,7 @@ app.add_middleware(
 )
 app.add_middleware(GZipMiddleware)
 app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
-app.include_router(api_v1_router)
+app.include_router(auth_router, tags=["auth"])
 
 handler = Mangum(app)
 handler = logger.inject_lambda_context(handler, clear_state=True, log_event=True)

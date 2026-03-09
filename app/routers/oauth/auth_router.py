@@ -188,7 +188,7 @@ def authorize(
     )
 
 
-@router.post("/register")
+@router.post("/api/v1/register")
 @require_scope(["users:write"])
 def register(
     body: RegistrationRequest, jwt_token: Annotated[JWTToken, Depends(jwt_bearer)]

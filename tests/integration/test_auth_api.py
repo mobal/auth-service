@@ -11,6 +11,9 @@ from app.models.jwt import JWTToken, RefreshToken
 from app.models.user import User
 
 
+ROUTE_REGISTER = "/api/v1/register"
+ROUTE_USERS = "/api/v1/users"
+
 class TestAuthApi:
     @pytest.fixture
     def test_client(
@@ -240,10 +243,10 @@ class TestAuthApi:
         )
 
     def test_fail_to_register_due_to_missing_bearer_token(
-        self, base_url: str, test_client: TestClient
+        self, test_client: TestClient
     ):
         response = test_client.post(
-            f"{base_url}/register",
+            ROUTE_REGISTER,
             json={
                 "email": "newuser@squarelabs.hu",
                 "username": "newuser",
@@ -257,13 +260,12 @@ class TestAuthApi:
 
     def test_fail_to_register_due_to_empty_body(
         self,
-        base_url: str,
         jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
     ):
         response = test_client.post(
-            f"{base_url}/register",
+            ROUTE_REGISTER,
             json={},
             headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
         )
@@ -272,14 +274,13 @@ class TestAuthApi:
 
     def test_fail_to_register_due_to_user_already_exists(
         self,
-        base_url: str,
         jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
         user: User,
     ):
         response = test_client.post(
-            f"{base_url}/register",
+            ROUTE_REGISTER,
             json={
                 "email": user.email,
                 "username": "newusername",
@@ -297,14 +298,13 @@ class TestAuthApi:
 
     def test_fail_to_register_due_to_username_already_exists(
         self,
-        base_url: str,
         jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
         user: User,
     ):
         response = test_client.post(
-            f"{base_url}/register",
+            ROUTE_REGISTER,
             json={
                 "email": "newemail@squarelabs.hu",
                 "username": user.username,
@@ -323,13 +323,12 @@ class TestAuthApi:
 
     def test_successfully_register(
         self,
-        base_url: str,
         jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
     ):
         response = test_client.post(
-            f"{base_url}/register",
+            ROUTE_REGISTER,
             json={
                 "email": "newuser@squarelabs.hu",
                 "username": "newuser",
@@ -342,17 +341,16 @@ class TestAuthApi:
 
         assert response.status_code == status.HTTP_201_CREATED
         assert "Location" in response.headers
-        assert response.headers["Location"].startswith("/api/v1/users/")
+        assert response.headers["Location"].startswith(ROUTE_USERS)
 
     def test_fail_to_register_due_to_password_mismatch(
         self,
-        base_url: str,
         jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
     ):
         response = test_client.post(
-            f"{base_url}/register",
+            ROUTE_REGISTER,
             json={
                 "email": "user@squarelabs.hu",
                 "username": "user",
@@ -368,13 +366,12 @@ class TestAuthApi:
 
     def test_fail_to_register_due_to_invalid_email(
         self,
-        base_url: str,
         jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
     ):
         response = test_client.post(
-            f"{base_url}/register",
+            ROUTE_REGISTER,
             json={
                 "email": "invalidemail",
                 "username": "newuser",
@@ -390,13 +387,12 @@ class TestAuthApi:
 
     def test_fail_to_register_due_to_missing_username(
         self,
-        base_url: str,
         jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
     ):
         response = test_client.post(
-            f"{base_url}/register",
+            ROUTE_REGISTER,
             json={
                 "email": "user@squarelabs.hu",
                 "password": "password123",
@@ -411,7 +407,6 @@ class TestAuthApi:
 
     def test_fail_to_admin_register_due_to_missing_required_scope(
         self,
-        base_url: str,
         jwt_secret_ssm_param_value: str,
         test_client: TestClient,
         tokens_table,
@@ -445,7 +440,7 @@ class TestAuthApi:
         )
 
         response = test_client.post(
-            f"{base_url}/register",
+            ROUTE_REGISTER,
             json={
                 "email": "newuser@squarelabs.hu",
                 "username": "newuser",
@@ -463,13 +458,12 @@ class TestAuthApi:
 
     def test_fail_to_register_due_to_missing_email(
         self,
-        base_url: str,
         jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
     ):
         response = test_client.post(
-            f"{base_url}/register",
+            ROUTE_REGISTER,
             json={
                 "username": "newuser",
                 "password": "password123",
@@ -484,13 +478,12 @@ class TestAuthApi:
 
     def test_successfully_admin_register_with_required_scope(
         self,
-        base_url: str,
         jwt_secret_ssm_param_value: str,
         jwt_token: JWTToken,
         test_client: TestClient,
     ):
         response = test_client.post(
-            f"{base_url}/register",
+            ROUTE_REGISTER,
             json={
                 "email": "rootuser@squarelabs.hu",
                 "username": "rootuser",
@@ -503,11 +496,10 @@ class TestAuthApi:
 
         assert response.status_code == status.HTTP_201_CREATED
         assert "Location" in response.headers
-        assert response.headers["Location"].startswith("/api/v1/users/")
+        assert response.headers["Location"].startswith(ROUTE_USERS)
 
     def test_fail_to_register_due_to_missing_all_required_scopes(
         self,
-        base_url: str,
         jwt_secret_ssm_param_value: str,
         test_client: TestClient,
         tokens_table,
@@ -541,7 +533,7 @@ class TestAuthApi:
         )
 
         response = test_client.post(
-            f"{base_url}/register",
+            ROUTE_REGISTER,
             json={
                 "email": "newuser@squarelabs.hu",
                 "username": "newuser",
@@ -559,7 +551,6 @@ class TestAuthApi:
 
     def test_successfully_register_with_multiple_scopes_including_required(
         self,
-        base_url: str,
         jwt_secret_ssm_param_value: str,
         test_client: TestClient,
         tokens_table,
@@ -593,7 +584,7 @@ class TestAuthApi:
         )
 
         response = test_client.post(
-            f"{base_url}/register",
+            ROUTE_REGISTER,
             json={
                 "email": "multiuser@squarelabs.hu",
                 "username": "multiuser",
@@ -608,4 +599,4 @@ class TestAuthApi:
 
         assert response.status_code == status.HTTP_201_CREATED
         assert "Location" in response.headers
-        assert response.headers["Location"].startswith("/api/v1/users/")
+        assert response.headers["Location"].startswith(ROUTE_USERS)
