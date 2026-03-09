@@ -49,15 +49,14 @@ High-level flow:
 
 1. Request enters FastAPI app (`app/api_handler.py`)
 2. Middleware adds correlation ID and common middleware stack is applied
-3. API router delegates to auth endpoints (`app/api/v1/routers/auth_router.py`)
+3. API router delegates to auth endpoints (`app/routers/oauth/auth_router.py`)
 4. Services implement business logic (`app/services/*.py`)
 5. Repositories persist/read data from DynamoDB (`app/repositories/*.py`)
 
 Main runtime components:
 
 - API app: `app/api_handler.py`
-- Versioned router: `app/api/v1/api.py`
-- Auth routes: `app/api/v1/routers/auth_router.py`
+- Auth routes: `app/routers/oauth/auth_router.py`
 - Domain services: `app/services/`
 - Persistence repositories: `app/repositories/`
 - Models: `app/models/`
@@ -65,9 +64,12 @@ Main runtime components:
 
 ## API Endpoints
 
-Base path: `/api/v1`
+Base paths:
 
-### `POST /api/v1/oauth/token`
+- `/oauth`
+- `/api/v1`
+
+### `POST /oauth/token`
 
 Consumes `application/x-www-form-urlencoded` body.
 
@@ -89,7 +91,7 @@ Response model:
 #### Password grant example
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/oauth/token \
+curl -X POST http://localhost:8080/oauth/token \
 	-H "Content-Type: application/x-www-form-urlencoded" \
 	-d "grant_type=password" \
 	-d "username=root@squarelabs.hu" \
@@ -99,7 +101,7 @@ curl -X POST http://localhost:8080/api/v1/oauth/token \
 #### Refresh token grant example
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/oauth/token \
+curl -X POST http://localhost:8080/oauth/token \
 	-H "Content-Type: application/x-www-form-urlencoded" \
 	-d "grant_type=refresh_token" \
 	-d "refresh_token=<refresh_token>"
@@ -108,7 +110,7 @@ curl -X POST http://localhost:8080/api/v1/oauth/token \
 #### Client credentials grant example
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/oauth/token \
+curl -X POST http://localhost:8080/oauth/token \
 	-H "Content-Type: application/x-www-form-urlencoded" \
 	-H "Authorization: Basic <base64(client_id:client_secret)>" \
 	-d "grant_type=client_credentials" \
@@ -118,7 +120,7 @@ curl -X POST http://localhost:8080/api/v1/oauth/token \
 #### Authorization code grant example
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/oauth/token \
+curl -X POST http://localhost:8080/oauth/token \
 	-H "Content-Type: application/x-www-form-urlencoded" \
 	-d "grant_type=authorization_code" \
 	-d "code=<authorization_code>" \
@@ -126,7 +128,7 @@ curl -X POST http://localhost:8080/api/v1/oauth/token \
 	-d "code_verifier=<pkce_verifier>"
 ```
 
-### `GET /api/v1/oauth/authorize`
+### `GET /oauth/authorize`
 
 Initiates the authorization code flow. Requires authentication with a valid JWT bearer token.
 
@@ -149,7 +151,7 @@ Redirects to `redirect_uri` with query parameters:
 **Example:**
 
 ```bash
-curl -X GET "http://localhost:8080/api/v1/oauth/authorize?client_id=my-app&redirect_uri=https://client.example.com/callback&response_type=code&scope=users:read&state=xyz123&code_challenge=E9Melhoa2OwkFrlvQYW3jxjfkTRzIxXfsQeuCCqRCw&code_challenge_method=S256" \
+curl -X GET "http://localhost:8080/oauth/authorize?client_id=my-app&redirect_uri=https://client.example.com/callback&response_type=code&scope=users:read&state=xyz123&code_challenge=E9Melhoa2OwkFrlvQYW3jxjfkTRzIxXfsQeuCCqRCw&code_challenge_method=S256" \
 	-H "Authorization: Bearer <access_token>" \
 	-L
 ```
@@ -163,12 +165,12 @@ curl -X GET "http://localhost:8080/api/v1/oauth/authorize?client_id=my-app&redir
 5. Client exchanges code at `/oauth/token` with `grant_type=authorization_code` and original `code_verifier`
 6. Service validates PKCE and returns tokens
 
-### `POST /api/v1/oauth/revoke`
+### `POST /oauth/revoke`
 
 Revokes the currently authenticated token.
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/oauth/revoke \
+curl -X POST http://localhost:8080/oauth/revoke \
 	-H "Content-Type: application/x-www-form-urlencoded" \
 	-H "Authorization: Bearer <access_token>" \
 	-d "token=<access_token_or_refresh_token>"
