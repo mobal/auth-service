@@ -170,9 +170,9 @@ class AuthService:
         self._token_service.delete_by_id(jwt_token.jti)
 
     def login(
-        self, username: str, password: str, requested_scope: str | None = None
+        self, email: str, password: str, requested_scope: str | None = None
     ) -> tuple[str, str, int, str | None]:
-        user = self._user_repository.get_by_email(username)
+        user = self._user_repository.get_by_email(email)
 
         if user is None:
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
