@@ -10,9 +10,9 @@ from fastapi.testclient import TestClient
 from app.models.jwt import JWTToken, RefreshToken
 from app.models.user import User
 
-
 ROUTE_REGISTER = "/api/v1/register"
 ROUTE_USERS = "/api/v1/users"
+
 
 class TestAuthApi:
     @pytest.fixture
