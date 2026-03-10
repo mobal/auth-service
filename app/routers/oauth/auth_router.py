@@ -11,19 +11,14 @@ from app.jwt_bearer import JWTBearer
 from app.models.grant_type import GrantType
 from app.models.jwt import JWTToken
 from app.models.request.oauth_token import OAuthTokenRequest
-from app.models.request.register import RegistrationRequest
 from app.models.response.token import OAuthTokenResponse
-from app.security.authorization import require_scope
 from app.services.auth_service import AuthService
-from app.services.user_service import UserService
 
 logger = Logger()
 
 auth_service = AuthService()
 jwt_bearer = JWTBearer()
 router = APIRouter()
-user_service = UserService()
-
 
 ERROR_MESSAGE_INVALID_CLIENT = "Invalid client: missing or invalid Authorization header"
 ERROR_MESSAGE_UNSUPPORTED_GRANT_TYPE = "Unsupported grant type"
@@ -185,19 +180,4 @@ def authorize(
     return Response(
         status_code=status.HTTP_302_FOUND,
         headers={"Location": f"{redirect_uri}?{urlencode(query_params)}"},
-    )
-
-
-@router.post("/api/v1/register")
-@require_scope(["users:write"])
-def register(
-    body: RegistrationRequest, jwt_token: Annotated[JWTToken, Depends(jwt_bearer)]
-) -> Response:
-    user_id = user_service.register(
-        body.email, body.password, body.username, body.display_name
-    )
-
-    return Response(
-        status_code=status.HTTP_201_CREATED,
-        headers={"Location": f"/api/v1/users/{user_id}"},
     )
