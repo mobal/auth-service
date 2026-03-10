@@ -2,7 +2,7 @@
 
 Authentication and authorization service built with FastAPI, AWS Lambda, DynamoDB, and Terraform.
 
-The service provides OAuth-style token issuance and revocation endpoints, user registration with scope-based authorization, and production-ready CI checks.
+The service provides OAuth-style token issuance and revocation endpoints and production-ready CI checks.
 
 ## Table of Contents
 
@@ -28,7 +28,6 @@ Core responsibilities:
 - Refresh access tokens with refresh tokens
 - Issue machine-to-machine access tokens using `client_credentials`
 - Revoke tokens
-- Register users (protected endpoint with scope checks)
 
 ## Features
 
@@ -174,23 +173,6 @@ curl -X POST http://localhost:8080/oauth/revoke \
 	-H "Content-Type: application/x-www-form-urlencoded" \
 	-H "Authorization: Bearer <access_token>" \
 	-d "token=<access_token_or_refresh_token>"
-```
-
-### `POST /api/v1/register`
-
-Requires bearer token with `users:write` scope.
-
-```bash
-curl -X POST http://localhost:8080/api/v1/register \
-	-H "Content-Type: application/json" \
-	-H "Authorization: Bearer <access_token_with_users:write>" \
-	-d '{
-		"email": "newuser@squarelabs.hu",
-		"username": "newuser",
-		"password": "password123",
-		"confirmPassword": "password123",
-		"displayName": "New User"
-	}'
 ```
 
 ### `GET /health`
