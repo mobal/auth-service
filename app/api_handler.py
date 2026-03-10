@@ -20,11 +20,11 @@ logger = Logger()
 
 app = FastAPI(debug=settings.debug, title="AuthApp", version="1.0.0")
 app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(GZipMiddleware)
+app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
-app.add_middleware(GZipMiddleware)
-app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
 app.include_router(auth_router, tags=["auth"])
 
 handler = Mangum(app)
