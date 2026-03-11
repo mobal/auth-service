@@ -334,6 +334,8 @@ Test stack includes:
 - Lambda package: `scripts/build_api.sh`
 - Dependencies layer: `scripts/build_requirements_layer.sh`
 
+`scripts/build_api.sh` always runs the build container as `linux/amd64`, so builds from Apple Silicon Macs still produce the expected x86_64 Lambda package.
+
 These scripts output archives under `dist/`:
 
 - `dist/api.zip`
