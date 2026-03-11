@@ -4,9 +4,9 @@ from unittest.mock import ANY
 import jwt
 import pendulum
 import pytest as pytest
-from argon2 import PasswordHasher
 from fastapi import HTTPException, status
 
+from app.clients.user_service_client import UserServiceClient
 from app.exceptions import (
     OAuthException,
     TokenNotFoundException,
@@ -14,8 +14,6 @@ from app.exceptions import (
 )
 from app.models.jwt import JWTToken, RefreshToken
 from app.models.service import ServiceCredential
-from app.models.user import User
-from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
 from app.services.token_service import TokenService
 from app.settings import Settings
@@ -29,83 +27,75 @@ class TestAuthService:
         return AuthService()
 
     @pytest.fixture
-    def password_hasher(self) -> PasswordHasher:
-        return PasswordHasher()
+    def user_id(self) -> str:
+        return str(uuid.uuid4())
 
-    def test_generate_token_with_user_object(
-        self, auth_service: AuthService, user: User
-    ):
-        jwt_token = auth_service._generate_token(sub=user.id, user=user, exp=3600)
+    @pytest.fixture
+    def user_data(self, user_id: str) -> dict:
+        from argon2 import PasswordHasher
 
-        assert jwt_token.sub == user.id
-        assert jwt_token.user is not None
-        assert "password" not in jwt_token.user
-        assert "created_at" not in jwt_token.user
-        assert "deleted_at" not in jwt_token.user
-        assert "updated_at" not in jwt_token.user
-        assert jwt_token.user["id"] == user.id
-        assert jwt_token.user["email"] == user.email
+        return {
+            "id": user_id,
+            "email": "root@squarelabs.hu",
+            "username": "root",
+            "display_name": "root",
+            "roles": ["root"],
+            "password": PasswordHasher().hash("password"),
+        }
 
     def test_successfully_login(
         self,
         mocker,
         auth_service: AuthService,
-        password: str,
+        user_data: dict,
         settings: Settings,
         token_service: TokenService,
-        user: User,
-        user_repository: UserRepository,
     ):
-        mocker.patch.object(UserRepository, "get_by_email", return_value=user)
+        mocker.patch.object(
+            UserServiceClient, "get_user_by_email", return_value=user_data
+        )
         mocker.patch.object(TokenService, "create")
 
-        jwt_token, _, _, _ = auth_service.login(user.email, password)
-        decoded_jwt_token = JWTToken(
-            **jwt.decode(jwt_token, settings.jwt_secret, ALGORITHMS)
-        )
+        jwt_str, _, _, _ = auth_service.login(user_data["email"], "password")
+        decoded = JWTToken(**jwt.decode(jwt_str, settings.jwt_secret, ALGORITHMS))
 
-        assert user.id == decoded_jwt_token.sub
+        assert decoded.sub == user_data["id"]
         assert (
-            pendulum.from_timestamp(decoded_jwt_token.exp)
-            - pendulum.from_timestamp(decoded_jwt_token.iat)
+            pendulum.from_timestamp(decoded.exp) - pendulum.from_timestamp(decoded.iat)
         ).in_words() == "1 hour"
-        user_repository.get_by_email.assert_called_once_with(user.email)
-        token_service.create.assert_called_once_with(decoded_jwt_token, ANY)
+        auth_service._user_service_client.get_user_by_email.assert_called_once_with(
+            user_data["email"]
+        )
+        token_service.create.assert_called_once_with(decoded, ANY)
 
-    def test_fail_to_login_due_user_not_found_by_email(
+    def test_fail_to_login_due_to_invalid_credentials(
         self,
         mocker,
         auth_service: AuthService,
-        password: str,
-        user: User,
-        user_repository: UserRepository,
     ):
-        error_message = "The requested user was not found"
-        mocker.patch.object(UserRepository, "get_by_email", return_value=None)
-
-        with pytest.raises(UserNotFoundException) as excinfo:
-            auth_service.login(user.email, password)
-
-        assert status.HTTP_404_NOT_FOUND == excinfo.value.status_code
-        assert error_message == excinfo.value.detail
-        user_repository.get_by_email.assert_called_once_with(user.email)
-
-    def test_fail_to_login_due_password_does_not_match(
-        self,
-        mocker,
-        auth_service: AuthService,
-        password_hasher: PasswordHasher,
-        user: User,
-        user_repository: UserRepository,
-    ):
-        mocker.patch.object(UserRepository, "get_by_email", return_value=user)
+        mocker.patch.object(UserServiceClient, "get_user_by_email", return_value=None)
 
         with pytest.raises(HTTPException) as excinfo:
-            auth_service.login(user.email, password_hasher.hash("doest_not_match"))
+            auth_service.login("user@example.com", "wrong_password")
 
-        assert status.HTTP_401_UNAUTHORIZED == excinfo.value.status_code
-        assert "Unauthorized" == excinfo.value.detail
-        user_repository.get_by_email.assert_called_once_with(user.email)
+        assert excinfo.value.status_code == status.HTTP_401_UNAUTHORIZED
+        assert excinfo.value.detail == "Unauthorized"
+
+    def test_fail_to_login_due_to_wrong_password(
+        self,
+        mocker,
+        auth_service: AuthService,
+        user_data: dict,
+    ):
+        mocker.patch.object(
+            UserServiceClient, "get_user_by_email", return_value=user_data
+        )
+
+        with pytest.raises(HTTPException) as excinfo:
+            auth_service.login(user_data["email"], "wrong_password")
+
+        assert excinfo.value.status_code == status.HTTP_401_UNAUTHORIZED
+        assert excinfo.value.detail == "Unauthorized"
 
     def test_successfully_logout(
         self,
@@ -211,7 +201,6 @@ class TestAuthService:
                 "iss": None,
                 "jti": stored_jti,
                 "sub": "user-1",
-                "user": {"id": "user-1", "email": "root@squarelabs.hu"},
             },
             "refresh_token": refresh_token.token,
             "created_at": pendulum.now().to_iso8601_string(),
@@ -224,7 +213,6 @@ class TestAuthService:
         auth_service.refresh(refresh_token.token)
 
         token_service.delete_by_id.assert_called_once_with(stored_jti)
-
         token_service.get_by_refresh_token.assert_called_once_with(refresh_token.token)
 
     def test_fail_to_refresh_due_to_expired_token(
@@ -246,7 +234,6 @@ class TestAuthService:
                 "iss": None,
                 "jti": str(uuid.uuid4()),
                 "sub": "user-1",
-                "user": {"id": "user-1", "email": "root@squarelabs.hu"},
             },
             "refresh_token": refresh_token,
             "created_at": pendulum.now().to_iso8601_string(),
@@ -383,19 +370,16 @@ class TestAuthService:
         self,
         mocker,
         auth_service: AuthService,
-        user: User,
+        user_data: dict,
     ):
-        mocker.patch(
-            "app.services.auth_service.UserRepository.get_by_id",
-            return_value=user,
-        )
+        mocker.patch.object(UserServiceClient, "get_user_by_id", return_value=user_data)
         create_mock = mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.create",
             return_value="test_code_123",
         )
 
         code = auth_service.authorize(
-            user_id=user.id,
+            user_id=user_data["id"],
             client_id="client_123",
             redirect_uri="https://example.com/callback",
             requested_scope="users:read",
@@ -405,7 +389,7 @@ class TestAuthService:
         create_mock.assert_called_once()
         call_kwargs = create_mock.call_args[1]
         assert call_kwargs["client_id"] == "client_123"
-        assert call_kwargs["user_id"] == user.id
+        assert call_kwargs["user_id"] == user_data["id"]
         assert call_kwargs["redirect_uri"] == "https://example.com/callback"
         assert call_kwargs["scope"] == "users:read"
         assert call_kwargs["code_challenge"] is None
@@ -415,19 +399,16 @@ class TestAuthService:
         self,
         mocker,
         auth_service: AuthService,
-        user: User,
+        user_data: dict,
     ):
-        mocker.patch(
-            "app.services.auth_service.UserRepository.get_by_id",
-            return_value=user,
-        )
+        mocker.patch.object(UserServiceClient, "get_user_by_id", return_value=user_data)
         create_mock = mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.create",
             return_value="test_code_pkce",
         )
 
         code = auth_service.authorize(
-            user_id=user.id,
+            user_id=user_data["id"],
             client_id="client_123",
             redirect_uri="https://example.com/callback",
             requested_scope="users:read",
@@ -447,19 +428,16 @@ class TestAuthService:
         self,
         mocker,
         auth_service: AuthService,
-        user: User,
+        user_data: dict,
     ):
-        mocker.patch(
-            "app.services.auth_service.UserRepository.get_by_id",
-            return_value=user,
-        )
+        mocker.patch.object(UserServiceClient, "get_user_by_id", return_value=user_data)
         create_mock = mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.create",
             return_value="test_code_plain",
         )
 
         code = auth_service.authorize(
-            user_id=user.id,
+            user_id=user_data["id"],
             client_id="client_123",
             redirect_uri="https://example.com/callback",
             code_challenge="test_challenge_plain",
@@ -476,10 +454,7 @@ class TestAuthService:
         mocker,
         auth_service: AuthService,
     ):
-        mocker.patch(
-            "app.services.auth_service.UserRepository.get_by_id",
-            return_value=None,
-        )
+        mocker.patch.object(UserServiceClient, "get_user_by_id", return_value=None)
 
         with pytest.raises(UserNotFoundException) as excinfo:
             auth_service.authorize(
@@ -494,40 +469,23 @@ class TestAuthService:
         self,
         mocker,
         auth_service: AuthService,
-        user: User,
+        user_data: dict,
     ):
-        import pendulum
-
-        auth_code_data = {
-            "code": "auth_code_123",
-            "client_id": "client_123",
-            "user_id": user.id,
-            "redirect_uri": "https://example.com/callback",
-            "scope": "users:read",
-            "code_challenge": None,
-            "code_challenge_method": None,
-            "ttl": pendulum.now().add(minutes=5).int_timestamp,
-        }
         auth_code = mocker.MagicMock()
         auth_code.id = "auth-code-id-123"
-        auth_code.code = auth_code_data["code"]
-        auth_code.user_id = auth_code_data["user_id"]
-        auth_code.redirect_uri = auth_code_data["redirect_uri"]
-        auth_code.scope = auth_code_data["scope"]
+        auth_code.code = "auth_code_123"
+        auth_code.user_id = user_data["id"]
+        auth_code.redirect_uri = "https://example.com/callback"
+        auth_code.scope = "users:read"
         auth_code.code_challenge = None
-        auth_code.ttl = auth_code_data["ttl"]
+        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
 
         mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
             return_value=auth_code,
         )
-        mocker.patch(
-            "app.services.auth_service.UserRepository.get_by_id",
-            return_value=user,
-        )
-        mocker.patch(
-            "app.services.auth_service.TokenService.create",
-        )
+        mocker.patch.object(UserServiceClient, "get_user_by_id", return_value=user_data)
+        mocker.patch("app.services.auth_service.TokenService.create")
         delete_mock = mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
         )
@@ -566,12 +524,12 @@ class TestAuthService:
         mocker,
         auth_service: AuthService,
     ):
-        import pendulum
-
         auth_code = mocker.MagicMock()
-        auth_code.id = "expired-auth-code-id"
-        auth_code.ttl = pendulum.now().subtract(minutes=5).int_timestamp
+        auth_code.id = "expired-code-id"
+        auth_code.code = "auth_code_123"
         auth_code.redirect_uri = "https://example.com/callback"
+        auth_code.code_challenge = None
+        auth_code.ttl = pendulum.now().subtract(minutes=5).int_timestamp
 
         mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
@@ -583,26 +541,24 @@ class TestAuthService:
 
         with pytest.raises(OAuthException) as excinfo:
             auth_service.exchange_code(
-                code="expired_code",
+                code="auth_code_123",
                 redirect_uri="https://example.com/callback",
             )
 
         assert excinfo.value.oauth_error == "invalid_grant"
-        delete_mock.assert_called_once_with("expired-auth-code-id")
+        delete_mock.assert_called_once_with("expired-code-id")
 
     def test_fail_to_exchange_code_due_to_redirect_uri_mismatch(
         self,
         mocker,
         auth_service: AuthService,
     ):
-        import pendulum
-
         auth_code = mocker.MagicMock()
-        auth_code.id = "auth-code-id-s256"
+        auth_code.id = "auth-code-id"
         auth_code.code = "auth_code_123"
-        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
         auth_code.redirect_uri = "https://example.com/callback"
         auth_code.code_challenge = None
+        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
 
         mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
@@ -622,11 +578,7 @@ class TestAuthService:
         mocker,
         auth_service: AuthService,
     ):
-        import pendulum
-
         auth_code = mocker.MagicMock()
-        auth_code.id = "auth-code-id-s256"
-        auth_code.code = "auth_code_123"
         auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
         auth_code.redirect_uri = "https://example.com/callback"
         auth_code.code_challenge = "E9Mrozoa2owUG2gw61pfAqgxVrQj5zwJckeqyUmKkqM"
@@ -651,8 +603,6 @@ class TestAuthService:
         mocker,
         auth_service: AuthService,
     ):
-        import pendulum
-
         auth_code = mocker.MagicMock()
         auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
         auth_code.redirect_uri = "https://example.com/callback"
@@ -678,8 +628,6 @@ class TestAuthService:
         mocker,
         auth_service: AuthService,
     ):
-        import pendulum
-
         auth_code = mocker.MagicMock()
         auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
         auth_code.redirect_uri = "https://example.com/callback"
@@ -704,12 +652,10 @@ class TestAuthService:
         self,
         mocker,
         auth_service: AuthService,
-        user: User,
+        user_data: dict,
     ):
         import base64
         import hashlib
-
-        import pendulum
 
         code_verifier = "test_verifier_for_pkce"
         code_challenge = (
@@ -721,7 +667,7 @@ class TestAuthService:
         auth_code = mocker.MagicMock()
         auth_code.id = "auth-code-id-s256"
         auth_code.code = "auth_code_123"
-        auth_code.user_id = user.id
+        auth_code.user_id = user_data["id"]
         auth_code.redirect_uri = "https://example.com/callback"
         auth_code.scope = "users:read"
         auth_code.code_challenge = code_challenge
@@ -732,13 +678,8 @@ class TestAuthService:
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
             return_value=auth_code,
         )
-        mocker.patch(
-            "app.services.auth_service.UserRepository.get_by_id",
-            return_value=user,
-        )
-        mocker.patch(
-            "app.services.auth_service.TokenService.create",
-        )
+        mocker.patch.object(UserServiceClient, "get_user_by_id", return_value=user_data)
+        mocker.patch("app.services.auth_service.TokenService.create")
         delete_mock = mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
         )
@@ -759,14 +700,12 @@ class TestAuthService:
         self,
         mocker,
         auth_service: AuthService,
-        user: User,
+        user_data: dict,
     ):
-        import pendulum
-
         auth_code = mocker.MagicMock()
         auth_code.id = "auth-code-id-plain"
         auth_code.code = "auth_code_123"
-        auth_code.user_id = user.id
+        auth_code.user_id = user_data["id"]
         auth_code.redirect_uri = "https://example.com/callback"
         auth_code.scope = "users:read"
         auth_code.code_challenge = "plain_challenge"
@@ -777,13 +716,8 @@ class TestAuthService:
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
             return_value=auth_code,
         )
-        mocker.patch(
-            "app.services.auth_service.UserRepository.get_by_id",
-            return_value=user,
-        )
-        mocker.patch(
-            "app.services.auth_service.TokenService.create",
-        )
+        mocker.patch.object(UserServiceClient, "get_user_by_id", return_value=user_data)
+        mocker.patch("app.services.auth_service.TokenService.create")
         delete_mock = mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
         )
@@ -805,8 +739,6 @@ class TestAuthService:
         mocker,
         auth_service: AuthService,
     ):
-        import pendulum
-
         auth_code = mocker.MagicMock()
         auth_code.id = "auth-code-id-user-not-found"
         auth_code.code = "auth_code_123"
@@ -819,10 +751,7 @@ class TestAuthService:
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
             return_value=auth_code,
         )
-        mocker.patch(
-            "app.services.auth_service.UserRepository.get_by_id",
-            return_value=None,
-        )
+        mocker.patch.object(UserServiceClient, "get_user_by_id", return_value=None)
         delete_mock = mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
         )

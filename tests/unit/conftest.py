@@ -7,7 +7,6 @@ from app.jwt_bearer import JWTBearer
 from app.models.jwt import JWTToken, RefreshToken
 from app.repositories.service_repository import ServiceRepository
 from app.repositories.token_repository import TokenRepository
-from app.repositories.user_repository import UserRepository
 from app.services.token_service import TokenService
 
 
@@ -41,8 +40,3 @@ def token_repository() -> TokenRepository:
 @pytest.fixture
 def token_service() -> TokenService:
     return TokenService()
-
-
-@pytest.fixture
-def user_repository() -> UserRepository:
-    return UserRepository()

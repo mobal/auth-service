@@ -9,3 +9,8 @@ def token_url() -> str:
 @pytest.fixture
 def revoke_url() -> str:
     return "oauth/revoke"
+
+
+@pytest.fixture
+def authorize_url() -> str:
+    return "oauth/authorize"

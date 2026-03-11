@@ -8,10 +8,6 @@ from fastapi import status
 from fastapi.testclient import TestClient
 
 from app.models.jwt import JWTToken, RefreshToken
-from app.models.user import User
-
-ROUTE_REGISTER = "/api/v1/register"
-ROUTE_USERS = "/api/v1/users"
 
 
 class TestAuthApi:
@@ -19,7 +15,6 @@ class TestAuthApi:
     def test_client(
         self,
         initialize_tokens_table,
-        initialize_users_table,
         initialize_services_table,
         initialize_authorization_codes_table,
     ) -> TestClient:
@@ -46,45 +41,65 @@ class TestAuthApi:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
-    def test_fail_to_login_due_to_invalid_password(
-        self, token_url: str, test_client: TestClient, user: User
+    def test_fail_to_login_due_to_invalid_credentials(
+        self,
+        httpx_mock,
+        token_url: str,
+        test_client: TestClient,
     ):
+        import os
+
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/users?email=root%40squarelabs.hu",
+            json=[],
+            status_code=status.HTTP_200_OK,
+        )
+
         response = test_client.post(
             token_url,
             data={
                 "grant_type": "password",
-                "username": user.email,
-                "password": "asdasdasd",
+                "username": "root@squarelabs.hu",
+                "password": "wrong_password",
             },
         )
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert response.json()["error"] == "Unauthorized"
 
-    def test_fail_to_login_due_to_user_not_found(
-        self, token_url: str, password: str, test_client: TestClient
+    def test_successfully_login(
+        self,
+        httpx_mock,
+        token_url: str,
+        test_client: TestClient,
     ):
-        response = test_client.post(
-            token_url,
-            data={
-                "grant_type": "password",
-                "username": "root@gmail.com",
-                "password": password,
-            },
+        import os
+        import uuid
+
+        from argon2 import PasswordHasher
+
+        user_id = str(uuid.uuid4())
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/users?email=root%40squarelabs.hu",
+            json=[
+                {
+                    "id": user_id,
+                    "email": "root@squarelabs.hu",
+                    "roles": ["root"],
+                    "password": PasswordHasher().hash("password"),
+                }
+            ],
+            status_code=status.HTTP_200_OK,
         )
 
-        assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json()["error"] == "The requested user was not found"
-
-    def test_successfully_login(
-        self, token_url: str, password: str, test_client: TestClient
-    ):
         response = test_client.post(
             token_url,
             data={
                 "grant_type": "password",
                 "username": "root@squarelabs.hu",
-                "password": password,
+                "password": "password",
             },
         )
 
@@ -94,7 +109,6 @@ class TestAuthApi:
         assert "refresh_token" in body
         assert body["token_type"] == "Bearer"
         assert "expires_in" in body
-        assert "scope" in body
         self._assert_cache_headers(response)
 
     def test_fail_to_logout_due_to_missing_bearer_token(
@@ -241,3 +255,171 @@ class TestAuthApi:
             response.json()["error"]
             == "Invalid client: missing or invalid Authorization header"
         )
+
+    def test_fail_to_client_credentials_due_to_missing_authorization_header(
+        self, token_url: str, test_client: TestClient
+    ):
+        response = test_client.post(
+            token_url,
+            data={"grant_type": "client_credentials"},
+        )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.headers["www-authenticate"] == "Basic"
+        assert (
+            response.json()["error"]
+            == "Invalid client: missing or invalid Authorization header"
+        )
+
+    def test_fail_to_login_due_to_missing_credentials(
+        self, token_url: str, test_client: TestClient
+    ):
+        response = test_client.post(
+            token_url,
+            data={"grant_type": "password", "username": "root@squarelabs.hu"},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert (
+            response.json()["error"]
+            == "Invalid request: username and password are required"
+        )
+
+    def test_fail_to_token_due_to_unsupported_grant_type(
+        self, token_url: str, test_client: TestClient
+    ):
+        response = test_client.post(
+            token_url,
+            data={"grant_type": "device_code"},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.json()["error"] == "Unsupported grant type"
+
+    def test_fail_to_authorization_code_exchange_due_to_missing_code(
+        self, token_url: str, test_client: TestClient
+    ):
+        response = test_client.post(
+            token_url,
+            data={
+                "grant_type": "authorization_code",
+                "redirect_uri": "https://example.com/callback",
+            },
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert (
+            response.json()["error"]
+            == "Invalid request: code and redirect_uri are required"
+        )
+
+    def test_successfully_authorization_code_exchange(
+        self,
+        httpx_mock,
+        dynamodb_resource,
+        authorization_codes_table_name: str,
+        token_url: str,
+        test_client: TestClient,
+    ):
+        import os
+
+        user_id = str(uuid.uuid4())
+        redirect_uri = "https://example.com/callback"
+        code = "test-auth-code-abc123"
+
+        auth_codes_table = dynamodb_resource.Table(authorization_codes_table_name)
+        auth_codes_table.put_item(
+            Item={
+                "id": str(uuid.uuid4()),
+                "code": code,
+                "client_id": "my-app",
+                "user_id": user_id,
+                "redirect_uri": redirect_uri,
+                "scope": "users:read",
+                "ttl": pendulum.now().add(minutes=10).int_timestamp,
+            }
+        )
+
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/users/{user_id}",
+            json={"id": user_id, "email": "root@squarelabs.hu", "roles": ["root"]},
+            status_code=status.HTTP_200_OK,
+        )
+
+        response = test_client.post(
+            token_url,
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert "access_token" in body
+        assert "refresh_token" in body
+        assert body["token_type"] == "Bearer"
+        assert "expires_in" in body
+        self._assert_cache_headers(response)
+
+    def test_successfully_authorize(
+        self,
+        httpx_mock,
+        jwt_token: JWTToken,
+        jwt_secret_ssm_param_value: str,
+        authorize_url: str,
+        test_client: TestClient,
+    ):
+        import os
+
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/users/{jwt_token.sub}",
+            json={
+                "id": jwt_token.sub,
+                "email": "root@squarelabs.hu",
+                "roles": ["root"],
+            },
+            status_code=status.HTTP_200_OK,
+        )
+
+        response = test_client.get(
+            authorize_url,
+            params={
+                "response_type": "code",
+                "client_id": "my-app",
+                "redirect_uri": "https://example.com/callback",
+                "scope": "users:read",
+                "state": "xyz123",
+            },
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
+            follow_redirects=False,
+        )
+
+        assert response.status_code == status.HTTP_302_FOUND
+        location = response.headers["location"]
+        assert location.startswith("https://example.com/callback?")
+        assert "code=" in location
+        assert "state=xyz123" in location
+
+    def test_fail_to_authorize_due_to_invalid_response_type(
+        self,
+        jwt_token: JWTToken,
+        jwt_secret_ssm_param_value: str,
+        authorize_url: str,
+        test_client: TestClient,
+    ):
+        response = test_client.get(
+            authorize_url,
+            params={
+                "response_type": "token",
+                "client_id": "my-app",
+                "redirect_uri": "https://example.com/callback",
+            },
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.json()["error"] == "Unsupported grant type"

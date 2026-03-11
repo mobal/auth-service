@@ -40,7 +40,7 @@ Core responsibilities:
 - Centralized exception handling with consistent JSON error responses
 - Correlation ID middleware for request tracing
 - CI pipeline with lint, security scan, tests, coverage, and SonarQube scan
-- 98% test coverage with 96 passing tests
+- 99 passing tests
 
 ## Architecture
 
@@ -50,13 +50,15 @@ High-level flow:
 2. Middleware adds correlation ID and common middleware stack is applied
 3. API router delegates to auth endpoints (`app/routers/oauth/auth_router.py`)
 4. Services implement business logic (`app/services/*.py`)
-5. Repositories persist/read data from DynamoDB (`app/repositories/*.py`)
+5. For `password` grant, user credentials are fetched from `user-service` via service-to-service JWT auth, and the password is verified locally with Argon2
+6. Repositories persist/read data from DynamoDB (`app/repositories/*.py`)
 
 Main runtime components:
 
 - API app: `app/api_handler.py`
 - Auth routes: `app/routers/oauth/auth_router.py`
 - Domain services: `app/services/`
+- User-service client: `app/clients/user_service_client.py` (fetches users via service-to-service JWT)
 - Persistence repositories: `app/repositories/`
 - Models: `app/models/`
 - Infrastructure as code: `infrastructure/`
@@ -254,11 +256,15 @@ Optional variables (with defaults):
 - `LOG_LEVEL`
 - `POWERTOOLS_*`
 
+User-service integration variables:
+
+- `USER_SERVICE_BASE_URL_SSM_PARAM_NAME` — SSM parameter name that stores the user-service base URL (output by user-service deployment)
+- `USER_SERVICE_CLIENT_ID` — Service account identifier used when generating service-to-service JWTs
+
 Notes:
 
 - `jwt_secret` is fetched from AWS SSM Parameter Store at runtime.
 - DynamoDB table names are stage-prefixed, for example:
-	- `<stage>-users`
 	- `<stage>-tokens`
 	- `<stage>-services`
 	- `<stage>-authorization_codes`
@@ -363,7 +369,7 @@ Terraform provisions:
 
 - Lambda function (`python3.14`) running `app.api_handler.handler`
 - API Gateway integration
-- DynamoDB tables for users, tokens, and services
+- DynamoDB tables for tokens, services, and authorization codes
 - IAM roles/policies
 - SSM-based secret integration for JWT secret
 

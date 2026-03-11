@@ -11,7 +11,6 @@ class JWTToken(BaseModel):
     jti: str
     sub: Any
     scope: str | None = None
-    user: dict[str, Any] | None = None
 
 
 class RefreshToken(BaseModel):

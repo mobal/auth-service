@@ -54,6 +54,8 @@ env = [
     "POWERTOOLS_DEBUG=false",
     "REFRESH_TOKEN_LIFETIME=3600",
     "STAGE=test",
+    "USER_SERVICE_BASE_URL_SSM_PARAM_NAME=/dev/user-service/base-url",
+    "USER_SERVICE_BASE_URL_SSM_PARAM_VALUE=http://user-service",
 ]
 pythonpath = [
     ".",
