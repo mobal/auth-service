@@ -18,6 +18,9 @@ from app.settings import Settings
 def setup(monkeypatch):
     with mock_aws():
         monkeypatch.setenv(
+            "CLIENT_SECRET_SSM_PARAM_NAME", os.getenv("CLIENT_SECRET_SSM_PARAM_NAME")
+        )
+        monkeypatch.setenv(
             "JWT_SECRET_SSM_PARAM_NAME", os.getenv("JWT_SECRET_SSM_PARAM_NAME")
         )
         monkeypatch.setenv(
@@ -31,6 +34,11 @@ def setup(monkeypatch):
             aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
         )
         ssm_client.put_parameter(
+            Name=os.getenv("CLIENT_SECRET_SSM_PARAM_NAME"),
+            Value=os.getenv("CLIENT_SECRET_SSM_PARAM_VALUE"),
+            Type="SecureString",
+        )
+        ssm_client.put_parameter(
             Name=os.getenv("JWT_SECRET_SSM_PARAM_NAME"),
             Value=os.getenv("JWT_SECRET_SSM_PARAM_VALUE"),
             Type="SecureString",
@@ -40,6 +48,7 @@ def setup(monkeypatch):
             Value=os.getenv("USER_SERVICE_BASE_URL_SSM_PARAM_VALUE"),
             Type="String",
         )
+
         yield
 
 
@@ -105,6 +114,16 @@ def initialize_services_table(
             "secret": service_credential.secret,
             "scopes": service_credential.scopes,
             "created_at": service_credential.created_at,
+        }
+    )
+    services_table.put_item(
+        Item={
+            "id": "user-service",
+            "secret": PasswordHasher().hash(
+                os.getenv("SERVICE_TOKEN_SECRET", "test-service-token-secret")
+            ),
+            "scopes": ["users:read"],
+            "created_at": pendulum.now().to_iso8601_string(),
         }
     )
 

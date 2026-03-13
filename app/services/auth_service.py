@@ -43,6 +43,8 @@ class AuthService:
         self._token_service = TokenService()
         self._user_service_client = UserServiceClient()
 
+        self._user_service_token = None
+
     def _derive_scope(
         self, roles: list[str], requested_scope: str | None
     ) -> str | None:
@@ -155,10 +157,30 @@ class AuthService:
         )
         self._token_service.delete_by_id(jwt_token.jti)
 
+    def _issue_service_token(
+        self, client_id: str, client_secret: str, scope: str | None = None
+    ) -> JWTToken:
+        if (
+            self._user_service_token
+            and self._user_service_token.exp > pendulum.now().int_timestamp
+        ):
+            return self._user_service_token
+
+        self._logger.info("Issuing new user service token")
+
+        jwt_token = self._generate_client_credentials(client_id, client_secret, scope)
+        self._user_service_token = jwt_token
+
+        return jwt_token
+
     def login(
         self, email: str, password: str, requested_scope: str | None = None
     ) -> tuple[str, str, int, str | None]:
-        user = self._user_service_client.get_user_by_email(email)
+        jwt_token = self._issue_service_token(settings.app_name, settings.client_secret)
+        user = self._user_service_client.get_user_by_email(
+            email,
+            jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
+        )
 
         if user is None:
             raise InvalidCredentialsException(ERROR_MESSAGE_UNAUTHORIZED)
@@ -204,9 +226,9 @@ class AuthService:
             scope,
         )
 
-    def client_credentials(
+    def _generate_client_credentials(
         self, client_id: str, client_secret: str, requested_scope: str | None
-    ) -> tuple[str, int, str | None]:
+    ) -> JWTToken:
         service = self._service_repository.get_by_id(client_id)
         if service is None:
             raise OAuthException(
@@ -236,21 +258,25 @@ class AuthService:
 
         jwt_token = self._generate_token(
             sub=client_id,
-            exp=settings.jwt_token_lifetime,
+            exp=settings.service_token_lifetime,
             scope=granted_scope,
         )
         self._token_service.create(
             jwt_token,
-            RefreshToken(
-                token=self._generate_refresh_token(),
-                ttl=jwt_token.iat + settings.jwt_token_lifetime,
-            ),
+            None,
         )
 
-        encoded = jwt.encode(
-            jwt_token.model_dump(exclude_none=True), settings.jwt_secret
+        return jwt_token
+
+    def client_credentials(
+        self, client_id: str, client_secret: str, scope: str | None = None
+    ) -> tuple[str, int, str | None]:
+        jwt_token = self._generate_client_credentials(client_id, client_secret, scope)
+        return (
+            jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
+            settings.service_token_lifetime,
+            jwt_token.scope,
         )
-        return encoded, settings.jwt_token_lifetime, granted_scope
 
     def authorize(
         self,
@@ -261,7 +287,11 @@ class AuthService:
         code_challenge: str | None = None,
         code_challenge_method: str | None = None,
     ) -> str:
-        user = self._user_service_client.get_user_by_id(user_id)
+        jwt_token = self._issue_service_token(settings.app_name, settings.client_secret)
+        user = self._user_service_client.get_user_by_id(
+            user_id,
+            jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
+        )
         if user is None:
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
 
@@ -304,7 +334,11 @@ class AuthService:
 
         self._authorization_code_repository.delete_by_id(auth_code.id)
 
-        user = self._user_service_client.get_user_by_id(auth_code.user_id)
+        jwt_token = self._issue_service_token(settings.app_name, settings.client_secret)
+        user = self._user_service_client.get_user_by_id(
+            auth_code.user_id,
+            jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
+        )
         if user is None:
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
 

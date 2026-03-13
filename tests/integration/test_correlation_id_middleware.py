@@ -20,7 +20,9 @@ USER_VERIFY_RESPONSE = [
 
 class TestCorrelationIdMiddleware:
     @pytest.fixture
-    def test_client(self, initialize_tokens_table) -> TestClient:
+    def test_client(
+        self, initialize_tokens_table, initialize_services_table
+    ) -> TestClient:
         from app.api_handler import app
 
         return TestClient(app, raise_server_exceptions=True)

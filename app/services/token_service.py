@@ -14,19 +14,19 @@ class TokenService:
     def __init__(self):
         self._token_repository = TokenRepository()
 
-    def create(self, jwt_token: JWTToken, refresh_token: RefreshToken):
+    def create(self, jwt_token: JWTToken, refresh_token: RefreshToken | None):
         self._token_repository.create_token(
             {
                 "jti": jwt_token.jti,
                 "jwt_token": jwt_token.model_dump(),
-                "refresh_token": refresh_token.token,
+                "refresh_token": refresh_token.token if refresh_token else None,
                 "created_at": pendulum.from_timestamp(
                     jwt_token.iat
                 ).to_iso8601_string(),
                 "expire_at": pendulum.from_timestamp(
-                    refresh_token.ttl
+                    refresh_token.ttl if refresh_token else jwt_token.exp
                 ).to_iso8601_string(),
-                "ttl": refresh_token.ttl,
+                "ttl": refresh_token.ttl if refresh_token else jwt_token.exp,
             }
         )
 

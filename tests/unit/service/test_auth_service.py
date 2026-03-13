@@ -1,4 +1,5 @@
 import uuid
+from types import SimpleNamespace
 from unittest.mock import ANY
 
 import jwt
@@ -22,6 +23,30 @@ ALGORITHMS = ["HS256"]
 
 
 class TestAuthService:
+    @pytest.fixture(autouse=True)
+    def _patch_auth_service_dependencies(self, mocker, monkeypatch, settings: Settings):
+        # AuthService now expects this setting when requesting a user-service token.
+        patched_settings = SimpleNamespace(
+            service_token_secret="test-service-token-secret"
+        )
+        for key, value in settings.model_dump().items():
+            setattr(patched_settings, key, value)
+        patched_settings.jwt_secret = settings.jwt_secret
+        patched_settings.user_service_base_url = settings.user_service_base_url
+
+        monkeypatch.setattr("app.services.auth_service.settings", patched_settings)
+        now = pendulum.now().int_timestamp
+        service_token = JWTToken(
+            exp=now + 3600,
+            iat=now,
+            jti="unit-s2s-jti",
+            sub="auth-service",
+            scope="users:read",
+        )
+        mocker.patch.object(
+            AuthService, "_issue_service_token", return_value=service_token
+        )
+
     @pytest.fixture
     def auth_service(self) -> AuthService:
         return AuthService()
@@ -64,7 +89,7 @@ class TestAuthService:
             pendulum.from_timestamp(decoded.exp) - pendulum.from_timestamp(decoded.iat)
         ).in_words() == "1 hour"
         auth_service._user_service_client.get_user_by_email.assert_called_once_with(
-            user_data["email"]
+            user_data["email"], ANY
         )
         token_service.create.assert_called_once_with(decoded, ANY)
 
@@ -291,7 +316,7 @@ class TestAuthService:
 
         assert decoded.sub == service_credential.id
         assert decoded.scope == scope
-        assert expires_in == settings.jwt_token_lifetime
+        assert expires_in == settings.service_token_lifetime
         assert scope == "users:read users:write"
         auth_service._token_service.create.assert_called_once()
 
