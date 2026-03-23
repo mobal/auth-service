@@ -42,7 +42,7 @@ class TestUserServiceClient:
     ):
         httpx_mock.add_response(
             method="GET",
-            url=f"http://user-service/users?email={user_data['email']}",
+            url=f"http://user-service/api/v1/users?email={user_data['email']}",
             json=[user_data],
         )
 
@@ -82,7 +82,7 @@ class TestUserServiceClient:
     ):
         httpx_mock.add_response(
             method="GET",
-            url=f"http://user-service/users?email={user_data['email']}",
+            url=f"http://user-service/api/v1/users?email={user_data['email']}",
             json=[],
         )
 
@@ -99,7 +99,7 @@ class TestUserServiceClient:
     ):
         httpx_mock.add_response(
             method="GET",
-            url=f"http://user-service/users/{user_data['id']}",
+            url=f"http://user-service/api/v1/users/{user_data['id']}",
             json=user_data,
         )
 

@@ -51,7 +51,7 @@ class TestAuthApi:
 
         httpx_mock.add_response(
             method="GET",
-            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/users?email=root%40squarelabs.hu",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users?email=root%40squarelabs.hu",
             json=[],
             status_code=status.HTTP_200_OK,
         )
@@ -82,7 +82,7 @@ class TestAuthApi:
         user_id = str(uuid.uuid4())
         httpx_mock.add_response(
             method="GET",
-            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/users?email=root%40squarelabs.hu",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users?email=root%40squarelabs.hu",
             json=[
                 {
                     "id": user_id,
@@ -341,7 +341,7 @@ class TestAuthApi:
 
         httpx_mock.add_response(
             method="GET",
-            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/users/{user_id}",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{user_id}",
             json={"id": user_id, "email": "root@squarelabs.hu", "roles": ["root"]},
             status_code=status.HTTP_200_OK,
         )
@@ -375,7 +375,7 @@ class TestAuthApi:
 
         httpx_mock.add_response(
             method="GET",
-            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/users/{jwt_token.sub}",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{jwt_token.sub}",
             json={
                 "id": jwt_token.sub,
                 "email": "root@squarelabs.hu",

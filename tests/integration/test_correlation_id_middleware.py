@@ -7,7 +7,7 @@ from fastapi import status
 from fastapi.testclient import TestClient
 
 X_CORRELATION_ID = "X-Correlation-ID"
-USER_SERVICE_USERS_URL = f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/users?email=root%40squarelabs.hu"
+USER_SERVICE_USERS_URL = f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users?email=root%40squarelabs.hu"
 USER_VERIFY_RESPONSE = [
     {
         "id": str(uuid.uuid4()),

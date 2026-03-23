@@ -12,10 +12,11 @@ class UserServiceClient:
         logger.info(f"Fetching user from user-service email={email}")
         try:
             response = httpx.get(
-                f"{settings.user_service_base_url}/users",
+                f"{settings.user_service_base_url}/api/v1/users",
                 params={"email": email},
                 headers={"Authorization": f"Bearer {jwt_token}"},
             )
+            response.raise_for_status()
         except httpx.HTTPStatusError as err:
             if err.response.status_code == status.HTTP_404_NOT_FOUND:
                 logger.warning(f"User with email {email} not found in user-service")
@@ -32,9 +33,10 @@ class UserServiceClient:
 
         try:
             response = httpx.get(
-                f"{settings.user_service_base_url}/users/{user_id}",
+                f"{settings.user_service_base_url}/api/v1/users/{user_id}",
                 headers={"Authorization": f"Bearer {jwt_token}"},
             )
+            response.raise_for_status()
         except httpx.HTTPStatusError as err:
             if err.response.status_code == status.HTTP_404_NOT_FOUND:
                 logger.warning(f"User with ID {user_id} not found in user-service")
