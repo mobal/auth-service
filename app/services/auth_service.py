@@ -132,7 +132,7 @@ class AuthService:
             scope=scope,
         )
 
-    def _generate_refresh_token(self, length: int = 16):
+    def _generate_refresh_token(self, length: int = 32):
         return secrets.token_hex(length)
 
     def _generate_tokens(
