@@ -1,5 +1,8 @@
+from aws_lambda_powertools import Logger
 from fastapi import Form
 from pydantic import BaseModel
+
+logger = Logger()
 
 
 class OAuthTokenRequest(BaseModel):
@@ -24,6 +27,10 @@ class OAuthTokenRequest(BaseModel):
         redirect_uri: str | None = Form(None),
         scope: str | None = Form(None),
     ) -> "OAuthTokenRequest":
+        logger.debug(
+            "Building OAuthTokenRequest from form data",
+            extra={"grant_type": grant_type},
+        )
         return cls(
             grant_type=grant_type,
             username=username,

@@ -9,7 +9,7 @@ logger = Logger()
 
 class UserServiceClient:
     def get_user_by_email(self, email: str, jwt_token: str) -> dict | None:
-        logger.info(f"Fetching user from user-service email={email}")
+        logger.info("Fetching user from user-service by email")
         try:
             response = httpx.get(
                 f"{settings.user_service_base_url}/api/v1/users",
@@ -25,7 +25,9 @@ class UserServiceClient:
 
         result = response.json()
         if not result or "items" not in result or not result["items"]:
+            logger.warning("User-service returned no user for requested email")
             return None
+        logger.info("User fetched from user-service by email")
         return result["items"][0]
 
     def get_user_by_id(self, user_id: str, jwt_token: str) -> dict | None:
@@ -45,4 +47,5 @@ class UserServiceClient:
             logger.error(f"Error fetching user by ID: {err}")
             raise
 
+        logger.info(f"User fetched from user-service user_id={user_id}")
         return response.json()

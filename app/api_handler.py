@@ -33,6 +33,10 @@ handler = logger.inject_lambda_context(handler, clear_state=True, log_event=True
 
 @app.exception_handler(OAuthException)
 def oauth_exception_handler(request: Request, error: OAuthException) -> JSONResponse:
+    logger.warning(
+        "OAuth exception handled",
+        extra={"path": request.url.path, "method": request.method},
+    )
     logger.exception(error)
     content: dict = {"error": error.oauth_error}
     if error.oauth_error_description:
@@ -47,6 +51,10 @@ def oauth_exception_handler(request: Request, error: OAuthException) -> JSONResp
 @app.exception_handler(BotoCoreError)
 @app.exception_handler(Exception)
 def botocore_error_handler(request: Request, error: Exception) -> JSONResponse:
+    logger.error(
+        "Unhandled exception reached global exception handler",
+        extra={"path": request.url.path, "method": request.method},
+    )
     logger.exception(
         "Unhandled exception",
         extra={
@@ -81,6 +89,10 @@ def botocore_error_handler(request: Request, error: Exception) -> JSONResponse:
 
 @app.exception_handler(HTTPException)
 def http_exception_handler(request: Request, error: HTTPException) -> JSONResponse:
+    logger.warning(
+        "HTTP exception handled",
+        extra={"status_code": error.status_code, "path": request.url.path},
+    )
     logger.exception(error)
 
     return JSONResponse(
@@ -95,6 +107,10 @@ def http_exception_handler(request: Request, error: HTTPException) -> JSONRespon
 def request_validation_error_handler(
     request: Request, error: RequestValidationError
 ) -> JSONResponse:
+    logger.warning(
+        "Request validation error handled",
+        extra={"path": request.url.path, "method": request.method},
+    )
     logger.exception(error)
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -110,6 +126,7 @@ def request_validation_error_handler(
 
 @app.get("/health")
 async def health_check():
+    logger.debug("Health check endpoint called")
     return {"status": "healthy"}
 
 

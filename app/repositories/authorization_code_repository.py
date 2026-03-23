@@ -54,15 +54,21 @@ class AuthorizationCodeRepository:
         self._logger.info(f"Deleted authorization code {code_id}")
 
     def get_by_code(self, code: str) -> AuthorizationCode | None:
+        self._logger.debug("Querying authorization code by code value")
         response = self._table.query(
             IndexName="CodeIndex",
             KeyConditionExpression=Key("code").eq(code),
         )
 
         if "Items" not in response or not response["Items"]:
+            self._logger.warning("Authorization code not found")
             return None
 
         item = response["Items"][0]
+        self._logger.info(
+            f"Authorization code found id={item['id']}",
+            extra={"client_id": item["client_id"], "user_id": item["user_id"]},
+        )
         return AuthorizationCode(
             id=item["id"],
             code=item["code"],

@@ -25,7 +25,9 @@ ERROR_MESSAGE_UNSUPPORTED_GRANT_TYPE = "Unsupported grant type"
 
 
 def _parse_authorization_header(authorization: str | None) -> tuple[str, str]:
+    logger.debug("Parsing Authorization header for client credentials grant")
     if not authorization or not authorization.startswith("Basic "):
+        logger.warning("Missing or invalid Basic Authorization header")
         raise OAuthException(
             ERROR_MESSAGE_INVALID_CLIENT,
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -34,6 +36,7 @@ def _parse_authorization_header(authorization: str | None) -> tuple[str, str]:
     try:
         decoded = base64.b64decode(authorization[6:], validate=True).decode()
     except Exception:
+        logger.warning("Failed to decode Basic Authorization header")
         raise OAuthException(
             ERROR_MESSAGE_INVALID_CLIENT,
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -42,17 +45,22 @@ def _parse_authorization_header(authorization: str | None) -> tuple[str, str]:
 
     client_id, _, client_secret = decoded.partition(":")
     if not client_id or not client_secret:
+        logger.warning("Basic Authorization header missing client id or secret")
         raise OAuthException(
             ERROR_MESSAGE_INVALID_CLIENT,
             status_code=status.HTTP_401_UNAUTHORIZED,
             headers={"WWW-Authenticate": "Basic"},
         )
 
+    logger.debug(f"Parsed client credentials for client_id={client_id}")
+
     return client_id, client_secret
 
 
 def _handle_password_grant(body: OAuthTokenRequest) -> OAuthTokenResponse:
+    logger.info("Handling password grant")
     if not body.username or not body.password:
+        logger.warning("Password grant is missing username or password")
         raise OAuthException("Invalid request: username and password are required")
 
     access_token, refresh_token, expires_in, scope = auth_service.login(
@@ -68,7 +76,9 @@ def _handle_password_grant(body: OAuthTokenRequest) -> OAuthTokenResponse:
 
 
 def _handle_refresh_token_grant(body: OAuthTokenRequest) -> OAuthTokenResponse:
+    logger.info("Handling refresh_token grant")
     if not body.refresh_token:
+        logger.warning("Refresh token grant is missing refresh_token")
         raise OAuthException("Invalid request: refresh_token is required")
 
     access_token, refresh_token, expires_in, scope = auth_service.refresh(
@@ -84,7 +94,9 @@ def _handle_refresh_token_grant(body: OAuthTokenRequest) -> OAuthTokenResponse:
 
 
 def _handle_authorization_code_grant(body: OAuthTokenRequest) -> OAuthTokenResponse:
+    logger.info("Handling authorization_code grant")
     if not body.code or not body.redirect_uri:
+        logger.warning("Authorization code grant is missing code or redirect_uri")
         raise OAuthException("Invalid request: code and redirect_uri are required")
 
     access_token, refresh_token, expires_in, scope = auth_service.exchange_code(
@@ -102,6 +114,7 @@ def _handle_authorization_code_grant(body: OAuthTokenRequest) -> OAuthTokenRespo
 def _handle_client_credentials_grant(
     request: Request, body: OAuthTokenRequest
 ) -> OAuthTokenResponse:
+    logger.info("Handling client_credentials grant")
     authorization = request.headers.get("Authorization")
     client_id, client_secret = _parse_authorization_header(authorization)
 
@@ -124,6 +137,10 @@ def token(
     request: Request,
     body: Annotated[OAuthTokenRequest, Depends(OAuthTokenRequest.as_form)],
 ):
+    logger.info(
+        "OAuth token endpoint called",
+        extra={"grant_type": str(body.grant_type)},
+    )
     match body.grant_type:
         case GrantType.PASSWORD:
             token_response = _handle_password_grant(body)
@@ -134,6 +151,7 @@ def token(
         case GrantType.CLIENT_CREDENTIALS:
             token_response = _handle_client_credentials_grant(request, body)
         case _:
+            logger.warning("Unsupported grant type received")
             raise OAuthException(ERROR_MESSAGE_UNSUPPORTED_GRANT_TYPE)
 
     return JSONResponse(
@@ -147,6 +165,7 @@ def token(
 def revoke(
     jwt_token: Annotated[JWTToken, Depends(jwt_bearer)],
 ):
+    logger.info(f"OAuth token revoke endpoint called for jti={jwt_token.jti}")
     auth_service.logout(jwt_token)
 
 
@@ -161,7 +180,15 @@ def authorize(
     code_challenge: str | None = None,
     code_challenge_method: str | None = None,
 ) -> Response:
+    logger.info(
+        f"OAuth authorize endpoint called for user_id={jwt_token.sub}",
+        extra={"client_id": client_id, "has_scope": scope is not None},
+    )
     if response_type != "code":
+        logger.warning(
+            "Unsupported authorize response type",
+            extra={"response_type": response_type},
+        )
         raise OAuthException(ERROR_MESSAGE_UNSUPPORTED_GRANT_TYPE)
 
     code = auth_service.authorize(
@@ -176,6 +203,11 @@ def authorize(
     query_params = {"code": code}
     if state:
         query_params["state"] = state
+
+    logger.info(
+        f"OAuth authorize completed for user_id={jwt_token.sub}",
+        extra={"client_id": client_id},
+    )
 
     return Response(
         status_code=status.HTTP_302_FOUND,

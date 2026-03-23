@@ -1,8 +1,11 @@
 import os
 
+from aws_lambda_powertools import Logger
 from aws_lambda_powertools.utilities import parameters
 from pydantic import computed_field
 from pydantic_settings import BaseSettings
+
+logger = Logger()
 
 
 class Settings(BaseSettings):
@@ -23,6 +26,7 @@ class Settings(BaseSettings):
     @computed_field
     @property
     def client_secret(self) -> str:
+        logger.debug("Resolving client_secret from parameter store")
         return parameters.get_parameter(
             os.environ.get("CLIENT_SECRET_SSM_PARAM_NAME"), decrypt=True
         )
@@ -30,6 +34,7 @@ class Settings(BaseSettings):
     @computed_field
     @property
     def jwt_secret(self) -> str:
+        logger.debug("Resolving jwt_secret from parameter store")
         return parameters.get_parameter(
             os.environ.get("JWT_SECRET_SSM_PARAM_NAME"), decrypt=True
         )
@@ -37,6 +42,7 @@ class Settings(BaseSettings):
     @computed_field
     @property
     def user_service_base_url(self) -> str:
+        logger.debug("Resolving user_service_base_url from parameter store")
         return parameters.get_parameter(
             os.environ.get("USER_SERVICE_BASE_URL_SSM_PARAM_NAME")
         )

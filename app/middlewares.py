@@ -18,10 +18,15 @@ logger = Logger(utc=True)
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp):
         super().__init__(app)
+        logger.debug("CorrelationIdMiddleware initialized")
 
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
+        logger.debug(
+            "Correlation ID middleware handling request",
+            extra={"path": request.url.path, "method": request.method},
+        )
         correlation_id.set(
             request.headers.get(X_CORRELATION_ID)
             or (
@@ -34,4 +39,8 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
         logger.set_correlation_id(correlation_id.get())
         response = await call_next(request)
         response.headers[X_CORRELATION_ID] = correlation_id.get()
+        logger.debug(
+            "Correlation ID attached to response",
+            extra={"status_code": response.status_code},
+        )
         return response
