@@ -46,9 +46,29 @@ def oauth_exception_handler(request: Request, error: OAuthException) -> JSONResp
 
 @app.exception_handler(BotoCoreError)
 @app.exception_handler(Exception)
-def botocore_error_handler(request: Request, error: BotoCoreError) -> JSONResponse:
-    logger.exception(error)
-    error_message = str(error) if settings.debug else "Internal Server Error"
+def botocore_error_handler(request: Request, error: Exception) -> JSONResponse:
+    logger.exception(
+        "Unhandled exception",
+        extra={
+            "exception_type": type(error).__name__,
+            "exception_message": str(error),
+            "exception_repr": repr(error),
+            "exception_cause": repr(error.__cause__) if error.__cause__ else None,
+            "exception_context": (
+                repr(error.__context__) if error.__context__ else None
+            ),
+            "path": request.url.path,
+            "method": request.method,
+        },
+    )
+    if settings.debug:
+        error_message = (
+            f"{type(error).__name__}: {str(error) or repr(error)}"
+            if str(error)
+            else repr(error)
+        )
+    else:
+        error_message = "Internal Server Error"
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
 
     return JSONResponse(

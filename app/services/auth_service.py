@@ -2,18 +2,18 @@ import base64
 import hashlib
 import secrets
 import uuid
-from typing import Any
 
 import jwt
 import pendulum
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerifyMismatchError
 from aws_lambda_powertools import Logger
-from fastapi import HTTPException
 from starlette import status
 
 from app import settings
+from app.clients.user_service_client import UserServiceClient
 from app.exceptions import (
+    InvalidCredentialsException,
     OAuthException,
     TokenExpiredException,
     TokenNotFoundException,
@@ -21,10 +21,8 @@ from app.exceptions import (
 )
 from app.models.authorization_code import AuthorizationCode
 from app.models.jwt import JWTToken, RefreshToken
-from app.models.user import User
 from app.repositories.authorization_code_repository import AuthorizationCodeRepository
 from app.repositories.service_repository import ServiceRepository
-from app.repositories.user_repository import UserRepository
 from app.services.token_service import TokenService
 
 ERROR_MESSAGE_UNAUTHORIZED = "Unauthorized"
@@ -43,7 +41,9 @@ class AuthService:
         self._authorization_code_repository = AuthorizationCodeRepository()
         self._service_repository = ServiceRepository()
         self._token_service = TokenService()
-        self._user_repository = UserRepository()
+        self._user_service_client = UserServiceClient()
+
+        self._user_service_token = None
 
     def _derive_scope(
         self, roles: list[str], requested_scope: str | None
@@ -113,7 +113,6 @@ class AuthService:
     def _generate_token(
         self,
         sub: str,
-        user: dict[str, Any] | User | None,
         exp: int | None = None,
         scope: str | None = None,
     ) -> JWTToken:
@@ -124,11 +123,6 @@ class AuthService:
             else iat.add(seconds=exp)
         )
 
-        if user and isinstance(user, User):
-            user = user.model_dump(
-                exclude={"password", "created_at", "deleted_at", "updated_at"}
-            )
-
         return JWTToken(
             exp=exp.int_timestamp,
             iat=iat.int_timestamp,
@@ -136,25 +130,19 @@ class AuthService:
             jti=str(uuid.uuid4()),
             sub=sub,
             scope=scope,
-            user=user,
         )
 
     def _generate_refresh_token(self, length: int = 16):
         return secrets.token_hex(length)
 
-    def _generate_tokens_for_user(
+    def _generate_tokens(
         self,
-        user: dict[str, Any],
+        sub: str,
         scope: str | None = None,
     ) -> tuple[JWTToken, RefreshToken]:
-        self._logger.info(
-            f"Generate new tokens for user={user['id']}",
-            extra={"user": user},
-        )
+        self._logger.info(f"Generating new tokens for sub={sub}")
 
-        jwt_token = self._generate_token(
-            user["id"], user, settings.jwt_token_lifetime, scope=scope
-        )
+        jwt_token = self._generate_token(sub, settings.jwt_token_lifetime, scope=scope)
         refresh_token = RefreshToken(
             token=self._generate_refresh_token(),
             ttl=jwt_token.iat + settings.refresh_token_lifetime,
@@ -169,37 +157,48 @@ class AuthService:
         )
         self._token_service.delete_by_id(jwt_token.jti)
 
+    def _issue_service_token(
+        self, client_id: str, client_secret: str, scope: str | None = None
+    ) -> JWTToken:
+        if (
+            self._user_service_token
+            and self._user_service_token.exp > pendulum.now().int_timestamp
+        ):
+            return self._user_service_token
+
+        self._logger.info("Issuing new user service token")
+
+        jwt_token = self._generate_client_credentials(client_id, client_secret, scope)
+        self._user_service_token = jwt_token
+
+        return jwt_token
+
     def login(
         self, email: str, password: str, requested_scope: str | None = None
     ) -> tuple[str, str, int, str | None]:
-        user = self._user_repository.get_by_email(email)
+        jwt_token = self._issue_service_token(settings.app_name, settings.client_secret)
+        user = self._user_service_client.get_user_by_email(
+            email,
+            jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
+        )
 
         if user is None:
-            raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
+            raise InvalidCredentialsException(ERROR_MESSAGE_UNAUTHORIZED)
+
         try:
-            self._password_hasher.verify(user.password, password)
-
-            scope = self._derive_scope(user.roles, requested_scope)
-            user_dict = user.model_dump(
-                exclude={"password", "created_at", "deleted_at", "updated_at"}
-            )
-            jwt_token, refresh_token = self._generate_tokens_for_user(
-                user_dict, scope=scope
-            )
-
-            return (
-                jwt.encode(
-                    jwt_token.model_dump(exclude_none=True), settings.jwt_secret
-                ),
-                refresh_token.token,
-                settings.jwt_token_lifetime,
-                scope,
-            )
+            self._password_hasher.verify(user["password"], password)
         except (InvalidHash, VerifyMismatchError):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ERROR_MESSAGE_UNAUTHORIZED,
-            )
+            raise InvalidCredentialsException(ERROR_MESSAGE_UNAUTHORIZED)
+
+        scope = self._derive_scope(user.get("roles", []), requested_scope)
+        jwt_token, refresh_token = self._generate_tokens(user["id"], scope=scope)
+
+        return (
+            jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
+            refresh_token.token,
+            settings.jwt_token_lifetime,
+            scope,
+        )
 
     def logout(self, jwt_token: JWTToken):
         self._revoke_token(jwt_token)
@@ -217,9 +216,8 @@ class AuthService:
         self._token_service.delete_by_id(item["jwt_token"]["jti"])
 
         scope = item["jwt_token"].get("scope")
-        jwt_token, refresh_token = self._generate_tokens_for_user(
-            item["jwt_token"]["user"], scope=scope
-        )
+        sub = item["jwt_token"]["sub"]
+        jwt_token, refresh_token = self._generate_tokens(sub, scope=scope)
 
         return (
             jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
@@ -228,9 +226,9 @@ class AuthService:
             scope,
         )
 
-    def client_credentials(
+    def _generate_client_credentials(
         self, client_id: str, client_secret: str, requested_scope: str | None
-    ) -> tuple[str, int, str | None]:
+    ) -> JWTToken:
         service = self._service_repository.get_by_id(client_id)
         if service is None:
             raise OAuthException(
@@ -260,22 +258,25 @@ class AuthService:
 
         jwt_token = self._generate_token(
             sub=client_id,
-            user=None,
-            exp=settings.jwt_token_lifetime,
+            exp=settings.service_token_lifetime,
             scope=granted_scope,
         )
         self._token_service.create(
             jwt_token,
-            RefreshToken(
-                token=self._generate_refresh_token(),
-                ttl=jwt_token.iat + settings.jwt_token_lifetime,
-            ),
+            None,
         )
 
-        encoded = jwt.encode(
-            jwt_token.model_dump(exclude_none=True), settings.jwt_secret
+        return jwt_token
+
+    def client_credentials(
+        self, client_id: str, client_secret: str, scope: str | None = None
+    ) -> tuple[str, int, str | None]:
+        jwt_token = self._generate_client_credentials(client_id, client_secret, scope)
+        return (
+            jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
+            settings.service_token_lifetime,
+            jwt_token.scope,
         )
-        return encoded, settings.jwt_token_lifetime, granted_scope
 
     def authorize(
         self,
@@ -286,11 +287,15 @@ class AuthService:
         code_challenge: str | None = None,
         code_challenge_method: str | None = None,
     ) -> str:
-        user = self._user_repository.get_by_id(user_id)
+        jwt_token = self._issue_service_token(settings.app_name, settings.client_secret)
+        user = self._user_service_client.get_user_by_id(
+            user_id,
+            jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
+        )
         if user is None:
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
 
-        scope = self._derive_scope(user.roles, requested_scope)
+        scope = self._derive_scope(user.get("roles", []), requested_scope)
 
         code = self._authorization_code_repository.create(
             client_id=client_id,
@@ -329,15 +334,16 @@ class AuthService:
 
         self._authorization_code_repository.delete_by_id(auth_code.id)
 
-        user = self._user_repository.get_by_id(auth_code.user_id)
+        jwt_token = self._issue_service_token(settings.app_name, settings.client_secret)
+        user = self._user_service_client.get_user_by_id(
+            auth_code.user_id,
+            jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
+        )
         if user is None:
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
 
-        user_dict = user.model_dump(
-            exclude={"password", "created_at", "deleted_at", "updated_at"}
-        )
-        jwt_token, refresh_token = self._generate_tokens_for_user(
-            user_dict, scope=auth_code.scope
+        jwt_token, refresh_token = self._generate_tokens(
+            auth_code.user_id, scope=auth_code.scope
         )
 
         return (

@@ -22,6 +22,10 @@ variable "artifacts_bucket" {
   type = string
 }
 
+variable "client_secret_ssm_param_name" {
+  type = string
+}
+
 variable "default_timezone" {
   default = "UTC"
   type    = string
@@ -80,4 +84,8 @@ variable "tags" {
 variable "timeout" {
   default = 15
   type    = number
+}
+
+variable "user_service_base_url_ssm_param_name" {
+  type = string
 }

@@ -11,7 +11,6 @@ from moto import mock_aws
 
 from app.models.jwt import JWTToken, RefreshToken
 from app.models.service import ServiceCredential
-from app.models.user import User
 from app.settings import Settings
 
 
@@ -19,7 +18,14 @@ from app.settings import Settings
 def setup(monkeypatch):
     with mock_aws():
         monkeypatch.setenv(
+            "CLIENT_SECRET_SSM_PARAM_NAME", os.getenv("CLIENT_SECRET_SSM_PARAM_NAME")
+        )
+        monkeypatch.setenv(
             "JWT_SECRET_SSM_PARAM_NAME", os.getenv("JWT_SECRET_SSM_PARAM_NAME")
+        )
+        monkeypatch.setenv(
+            "USER_SERVICE_BASE_URL_SSM_PARAM_NAME",
+            os.getenv("USER_SERVICE_BASE_URL_SSM_PARAM_NAME"),
         )
         ssm_client = boto3.client(
             "ssm",
@@ -28,10 +34,21 @@ def setup(monkeypatch):
             aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
         )
         ssm_client.put_parameter(
+            Name=os.getenv("CLIENT_SECRET_SSM_PARAM_NAME"),
+            Value=os.getenv("CLIENT_SECRET_SSM_PARAM_VALUE"),
+            Type="SecureString",
+        )
+        ssm_client.put_parameter(
             Name=os.getenv("JWT_SECRET_SSM_PARAM_NAME"),
             Value=os.getenv("JWT_SECRET_SSM_PARAM_VALUE"),
             Type="SecureString",
         )
+        ssm_client.put_parameter(
+            Name=os.getenv("USER_SERVICE_BASE_URL_SSM_PARAM_NAME"),
+            Value=os.getenv("USER_SERVICE_BASE_URL_SSM_PARAM_VALUE"),
+            Type="String",
+        )
+
         yield
 
 
@@ -80,41 +97,6 @@ def initialize_authorization_codes_table(
 
 
 @pytest.fixture
-def initialize_users_table(dynamodb_resource, user: User, users_table_name: str):
-    users_table = dynamodb_resource.create_table(
-        AttributeDefinitions=[
-            {"AttributeName": "id", "AttributeType": "S"},
-            {"AttributeName": "email", "AttributeType": "S"},
-            {"AttributeName": "username", "AttributeType": "S"},
-        ],
-        TableName=users_table_name,
-        KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
-        GlobalSecondaryIndexes=[
-            {
-                "IndexName": "EmailIndex",
-                "KeySchema": [
-                    {"AttributeName": "email", "KeyType": "HASH"},
-                ],
-                "Projection": {
-                    "ProjectionType": "ALL",
-                },
-            },
-            {
-                "IndexName": "UsernameIndex",
-                "KeySchema": [
-                    {"AttributeName": "username", "KeyType": "HASH"},
-                ],
-                "Projection": {
-                    "ProjectionType": "ALL",
-                },
-            },
-        ],
-        ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
-    )
-    users_table.put_item(Item=user.model_dump())
-
-
-@pytest.fixture
 def initialize_services_table(
     dynamodb_resource, service_credential: ServiceCredential, services_table_name: str
 ):
@@ -132,6 +114,16 @@ def initialize_services_table(
             "secret": service_credential.secret,
             "scopes": service_credential.scopes,
             "created_at": service_credential.created_at,
+        }
+    )
+    services_table.put_item(
+        Item={
+            "id": "user-service",
+            "secret": PasswordHasher().hash(
+                os.getenv("SERVICE_TOKEN_SECRET", "test-service-token-secret")
+            ),
+            "scopes": ["users:read"],
+            "created_at": pendulum.now().to_iso8601_string(),
         }
     )
 
@@ -172,7 +164,7 @@ def initialize_tokens_table(
 
 
 @pytest.fixture
-def jwt_token(user: User) -> JWTToken:
+def jwt_token() -> JWTToken:
     iat = pendulum.now()
     exp = iat.add(hours=1)
     return JWTToken(
@@ -180,11 +172,8 @@ def jwt_token(user: User) -> JWTToken:
         iat=iat.int_timestamp,
         iss=None,
         jti=str(uuid.uuid4()),
-        sub=user.id,
+        sub=str(uuid.uuid4()),
         scope="tokens:revoke users:read users:write",
-        user=user.model_dump(
-            exclude={"password", "created_at", "deleted_at", "updated_at"}
-        ),
     )
 
 
@@ -228,43 +217,6 @@ def services_table_name() -> str:
 @pytest.fixture
 def tokens_table_name() -> str:
     return f"{os.getenv('STAGE')}-tokens"
-
-
-@pytest.fixture
-def user_dict(password: str) -> dict[str, Any]:
-    now = pendulum.now()
-    return {
-        "display_name": "root",
-        "email": "root@squarelabs.hu",
-        "password": PasswordHasher().hash(password),
-        "username": "root",
-        "roles": ["root"],
-        "created_at": now.to_iso8601_string(),
-        "updated_at": now.to_iso8601_string(),
-    }
-
-
-@pytest.fixture
-def user(user_dict: dict[str, Any]) -> User:
-    return User(
-        id=str(uuid.uuid4()),
-        display_name=user_dict["display_name"],
-        email=user_dict["email"],
-        password=user_dict["password"],
-        username=user_dict["username"],
-        roles=user_dict.get("roles", []),
-        created_at=user_dict["created_at"],
-    )
-
-
-@pytest.fixture
-def users_table(dynamodb_resource, initialize_users_table, users_table_name: str):
-    return dynamodb_resource.Table(users_table_name)
-
-
-@pytest.fixture
-def users_table_name() -> str:
-    return f"{os.getenv('STAGE')}-users"
 
 
 @pytest.fixture
