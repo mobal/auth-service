@@ -8,14 +8,16 @@ from fastapi.testclient import TestClient
 
 X_CORRELATION_ID = "X-Correlation-ID"
 USER_SERVICE_USERS_URL = f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users?email=root%40squarelabs.hu"
-USER_VERIFY_RESPONSE = [
-    {
-        "id": str(uuid.uuid4()),
-        "email": "root@squarelabs.hu",
-        "roles": ["root"],
-        "password": PasswordHasher().hash("password"),
-    }
-]
+USER_VERIFY_RESPONSE = {
+    "items": [
+        {
+            "id": str(uuid.uuid4()),
+            "email": "root@squarelabs.hu",
+            "roles": ["root"],
+            "password": PasswordHasher().hash("password"),
+        }
+    ]
+}
 
 
 class TestCorrelationIdMiddleware:

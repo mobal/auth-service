@@ -85,7 +85,9 @@ class TestApiHandler:
         response = botocore_error_handler(request, error)
 
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert b'"error":"An unspecified error occurred"' in response.body
+        assert (
+            b'"error":"BotoCoreError: An unspecified error occurred"' in response.body
+        )
 
     def test_successfully_handle_botocore_error_without_debug(self, monkeypatch):
         request = self._request()

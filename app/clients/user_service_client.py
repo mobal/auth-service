@@ -23,10 +23,10 @@ class UserServiceClient:
                 return None
             raise
 
-        users = response.json()
-        if not users:
+        result = response.json()
+        if not result:
             return None
-        return users[0]
+        return result["items"][0]
 
     def get_user_by_id(self, user_id: str, jwt_token: str) -> dict | None:
         logger.info(f"Fetching user from user-service user_id={user_id}")

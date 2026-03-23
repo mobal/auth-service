@@ -83,14 +83,16 @@ class TestAuthApi:
         httpx_mock.add_response(
             method="GET",
             url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users?email=root%40squarelabs.hu",
-            json=[
-                {
-                    "id": user_id,
-                    "email": "root@squarelabs.hu",
-                    "roles": ["root"],
-                    "password": PasswordHasher().hash("password"),
-                }
-            ],
+            json={
+                "items": [
+                    {
+                        "id": user_id,
+                        "email": "root@squarelabs.hu",
+                        "roles": ["root"],
+                        "password": PasswordHasher().hash("password"),
+                    }
+                ]
+            },
             status_code=status.HTTP_200_OK,
         )
 
