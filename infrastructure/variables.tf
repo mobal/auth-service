@@ -86,6 +86,6 @@ variable "timeout" {
   type    = number
 }
 
-variable "user_service_url_ssm_param_name" {
+variable "user_service_base_url_ssm_param_name" {
   type = string
 }

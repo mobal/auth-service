@@ -29,7 +29,7 @@ resource "aws_lambda_function" "fastapi" {
       POWERTOOLS_SERVICE_NAME              = var.powertools_service_name
       POWERTOOLS_DEBUG                     = var.powertools_debug
       STAGE                                = var.stage
-      USER_SERVICE_URL_SSM_PARAM_NAME      = var.user_service_url_ssm_param_name
+      USER_SERVICE_BASE_URL_SSM_PARAM_NAME = var.user_service_url_ssm_param_name
     }
   }
 
