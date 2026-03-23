@@ -24,7 +24,7 @@ class UserServiceClient:
             raise
 
         result = response.json()
-        if not result:
+        if not result or "items" not in result or not result["items"]:
             return None
         return result["items"][0]
 
