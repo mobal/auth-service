@@ -30,6 +30,9 @@ resource "aws_iam_policy" "lambda_policy" {
           "dynamodb:Query",
         ]
         Resource = [
+          aws_dynamodb_table.services.arn,
+          aws_dynamodb_table.authorization_codes.arn,
+          "${aws_dynamodb_table.authorization_codes.arn}/index/CodeIndex",
           aws_dynamodb_table.tokens.arn,
           "${aws_dynamodb_table.tokens.arn}/index/RefreshTokenIndex"
         ]
