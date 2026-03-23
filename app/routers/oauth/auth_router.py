@@ -26,6 +26,7 @@ ERROR_MESSAGE_UNSUPPORTED_GRANT_TYPE = "Unsupported grant type"
 
 def _parse_authorization_header(authorization: str | None) -> tuple[str, str]:
     logger.debug("Parsing Authorization header for client credentials grant")
+
     if not authorization or not authorization.startswith("Basic "):
         logger.warning("Missing or invalid Basic Authorization header")
         raise OAuthException(
@@ -116,10 +117,10 @@ def _handle_client_credentials_grant(
 ) -> OAuthTokenResponse:
     logger.info("Handling client_credentials grant")
     authorization = request.headers.get("Authorization")
-    client_id, client_secret = _parse_authorization_header(authorization)
+    client_name, client_secret = _parse_authorization_header(authorization)
 
     access_token, expires_in, scope = auth_service.client_credentials(
-        client_id, client_secret, body.scope
+        client_name, client_secret, body.scope
     )
 
     return OAuthTokenResponse(

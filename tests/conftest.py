@@ -103,14 +103,23 @@ def initialize_services_table(
     services_table = dynamodb_resource.create_table(
         AttributeDefinitions=[
             {"AttributeName": "id", "AttributeType": "S"},
+            {"AttributeName": "name", "AttributeType": "S"},
         ],
         TableName=services_table_name,
         KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
+        GlobalSecondaryIndexes=[
+            {
+                "IndexName": "NameIndex",
+                "KeySchema": [{"AttributeName": "name", "KeyType": "HASH"}],
+                "Projection": {"ProjectionType": "ALL"},
+            },
+        ],
         ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
     )
     services_table.put_item(
         Item={
             "id": service_credential.id,
+            "name": service_credential.name,
             "secret": service_credential.secret,
             "scopes": service_credential.scopes,
             "created_at": service_credential.created_at,
@@ -118,7 +127,8 @@ def initialize_services_table(
     )
     services_table.put_item(
         Item={
-            "id": "user-service",
+            "id": str(uuid.uuid4()),
+            "name": "user-service",
             "secret": PasswordHasher().hash(
                 os.getenv("SERVICE_TOKEN_SECRET", "test-service-token-secret")
             ),
@@ -193,6 +203,7 @@ def refresh_token() -> RefreshToken:
 @pytest.fixture
 def service_credential_dict(password: str) -> dict[str, Any]:
     return {
+        "name": "test-service",
         "secret": PasswordHasher().hash(password),
         "scopes": ["users:read", "users:write"],
         "created_at": pendulum.now().to_iso8601_string(),
@@ -203,6 +214,7 @@ def service_credential_dict(password: str) -> dict[str, Any]:
 def service_credential(service_credential_dict: dict[str, Any]) -> ServiceCredential:
     return ServiceCredential(
         id=str(uuid.uuid4()),
+        name=service_credential_dict["name"],
         secret=service_credential_dict["secret"],
         scopes=service_credential_dict["scopes"],
         created_at=service_credential_dict["created_at"],

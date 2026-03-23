@@ -189,7 +189,7 @@ class AuthService:
         self._token_service.delete_by_id(jwt_token.jti)
 
     def _issue_service_token(
-        self, client_id: str, client_secret: str, scope: str | None = None
+        self, client_name: str, client_secret: str, scope: str | None = None
     ) -> JWTToken:
         if (
             self._user_service_token
@@ -200,7 +200,7 @@ class AuthService:
 
         self._logger.info("Issuing new user service token")
 
-        jwt_token = self._generate_client_credentials(client_id, client_secret, scope)
+        jwt_token = self._generate_client_credentials(client_name, client_secret, scope)
         self._user_service_token = jwt_token
 
         return jwt_token
@@ -279,16 +279,16 @@ class AuthService:
         )
 
     def _generate_client_credentials(
-        self, client_id: str, client_secret: str, requested_scope: str | None
+        self, client_name: str, client_secret: str, requested_scope: str | None
     ) -> JWTToken:
         self._logger.info(
-            f"Generating client credentials token for client_id={client_id}",
+            f"Generating client credentials token for client_name={client_name}",
             extra={"requested_scope": requested_scope},
         )
-        service = self._service_repository.get_by_id(client_id)
+        service = self._service_repository.get_by_name(client_name)
         if service is None:
             self._logger.warning(
-                f"Client credentials failed, service not found for client_id={client_id}"
+                f"Client credentials failed, service not found for client_name={client_name}"
             )
             raise OAuthException(
                 "invalid_client",
@@ -299,7 +299,7 @@ class AuthService:
             self._password_hasher.verify(service.secret, client_secret)
         except (InvalidHash, VerifyMismatchError):
             self._logger.warning(
-                f"Client credentials failed, invalid secret for client_id={client_id}"
+                f"Client credentials failed, invalid secret for client_name={client_name}"
             )
             raise OAuthException(
                 "invalid_client",
@@ -313,7 +313,10 @@ class AuthService:
             if not requested.issubset(allowed):
                 self._logger.warning(
                     "Client credentials requested invalid scope",
-                    extra={"client_id": client_id, "requested_scope": requested_scope},
+                    extra={
+                        "client_name": client_name,
+                        "requested_scope": requested_scope,
+                    },
                 )
                 raise OAuthException(
                     "invalid_scope", status_code=status.HTTP_400_BAD_REQUEST
@@ -323,7 +326,7 @@ class AuthService:
             granted_scope = " ".join(sorted(allowed)) if allowed else None
 
         jwt_token = self._generate_token(
-            sub=client_id,
+            sub=client_name,
             exp=settings.service_token_lifetime,
             scope=granted_scope,
         )
@@ -333,20 +336,20 @@ class AuthService:
         )
 
         self._logger.info(
-            f"Client credentials token created for client_id={client_id}",
+            f"Client credentials token created for client_name={client_name}",
             extra={"has_scope": granted_scope is not None},
         )
 
         return jwt_token
 
     def client_credentials(
-        self, client_id: str, client_secret: str, scope: str | None = None
+        self, client_name: str, client_secret: str, scope: str | None = None
     ) -> tuple[str, int, str | None]:
         self._logger.info(
-            f"Client credentials flow requested for client_id={client_id}",
+            f"Client credentials flow requested for client_name={client_name}",
             extra={"requested_scope": scope},
         )
-        jwt_token = self._generate_client_credentials(client_id, client_secret, scope)
+        jwt_token = self._generate_client_credentials(client_name, client_secret, scope)
         return (
             jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
             settings.service_token_lifetime,

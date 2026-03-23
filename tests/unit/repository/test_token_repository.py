@@ -64,7 +64,6 @@ class TestTokenRepository:
 
     def test_successfully_get_by_refresh_token(
         self,
-        jwt_token: JWTToken,
         refresh_token: RefreshToken,
         token: dict[str, Any],
         token_repository: TokenRepository,

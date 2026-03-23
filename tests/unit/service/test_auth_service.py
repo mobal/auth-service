@@ -302,19 +302,19 @@ class TestAuthService:
         settings: Settings,
     ):
         mocker.patch(
-            "app.services.auth_service.ServiceRepository.get_by_id",
+            "app.services.auth_service.ServiceRepository.get_by_name",
             return_value=service_credential,
         )
         mocker.patch.object(TokenService, "create")
 
         token, expires_in, scope = auth_service.client_credentials(
-            service_credential.id, password, None
+            service_credential.name, password, None
         )
         decoded = JWTToken(
             **jwt.decode(token, settings.jwt_secret, algorithms=ALGORITHMS)
         )
 
-        assert decoded.sub == service_credential.id
+        assert decoded.sub == service_credential.name
         assert decoded.scope == scope
         assert expires_in == settings.service_token_lifetime
         assert scope == "users:read users:write"
@@ -328,13 +328,13 @@ class TestAuthService:
         service_credential: ServiceCredential,
     ):
         mocker.patch(
-            "app.services.auth_service.ServiceRepository.get_by_id",
+            "app.services.auth_service.ServiceRepository.get_by_name",
             return_value=service_credential,
         )
         mocker.patch.object(TokenService, "create")
 
         _, _, scope = auth_service.client_credentials(
-            service_credential.id, password, "users:read"
+            service_credential.name, password, "users:read"
         )
 
         assert scope == "users:read"
@@ -344,7 +344,7 @@ class TestAuthService:
         self, mocker, auth_service: AuthService
     ):
         mocker.patch(
-            "app.services.auth_service.ServiceRepository.get_by_id",
+            "app.services.auth_service.ServiceRepository.get_by_name",
             return_value=None,
         )
 
@@ -362,12 +362,14 @@ class TestAuthService:
         service_credential: ServiceCredential,
     ):
         mocker.patch(
-            "app.services.auth_service.ServiceRepository.get_by_id",
+            "app.services.auth_service.ServiceRepository.get_by_name",
             return_value=service_credential,
         )
 
         with pytest.raises(OAuthException) as excinfo:
-            auth_service.client_credentials(service_credential.id, "wrong-secret", None)
+            auth_service.client_credentials(
+                service_credential.name, "wrong-secret", None
+            )
 
         assert excinfo.value.status_code == status.HTTP_401_UNAUTHORIZED
         assert excinfo.value.oauth_error == "invalid_client"
@@ -380,13 +382,13 @@ class TestAuthService:
         service_credential: ServiceCredential,
     ):
         mocker.patch(
-            "app.services.auth_service.ServiceRepository.get_by_id",
+            "app.services.auth_service.ServiceRepository.get_by_name",
             return_value=service_credential,
         )
 
         with pytest.raises(OAuthException) as excinfo:
             auth_service.client_credentials(
-                service_credential.id, password, "tokens:revoke"
+                service_credential.name, password, "tokens:revoke"
             )
 
         assert excinfo.value.oauth_error == "invalid_scope"

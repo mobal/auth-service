@@ -7,6 +7,22 @@ resource "aws_dynamodb_table" "services" {
     name = "id"
     type = "S"
   }
+
+  attribute {
+    name = "name"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "NameIndex"
+
+    key_schema {
+      attribute_name = "name"
+      key_type = "HASH"
+    }
+
+    projection_type = "ALL"
+  }
 }
 
 resource "aws_dynamodb_table" "tokens" {

@@ -13,9 +13,9 @@ class TestServiceRepository:
         service_repository: ServiceRepository,
         services_table,
     ):
-        service_credential.id = str(uuid.uuid4())
+        service_credential.name = str(uuid.uuid4())
         credential = {
-            "id": service_credential.id,
+            "id": service_credential.name,
             "secret": service_credential.secret,
             "scopes": service_credential.scopes,
             "created_at": pendulum.now().to_iso8601_string(),
@@ -40,8 +40,24 @@ class TestServiceRepository:
 
     def test_get_by_id_returns_none_if_service_not_found(
         self,
-        service_credential: ServiceCredential,
         service_repository: ServiceRepository,
         services_table,
     ):
         assert service_repository.get_by_id(str(uuid.uuid4())) is None
+
+    def test_successfully_get_by_name(
+        self,
+        service_credential: ServiceCredential,
+        service_repository: ServiceRepository,
+        services_table,
+    ):
+        item = service_repository.get_by_name("test-service")
+
+        assert item == service_credential
+
+    def test_get_by_name_returns_none_if_service_not_found(
+        self,
+        service_repository: ServiceRepository,
+        services_table,
+    ):
+        assert service_repository.get_by_name("non-existent-service") is None

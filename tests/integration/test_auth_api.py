@@ -209,7 +209,7 @@ class TestAuthApi:
     def test_successfully_client_credentials(
         self, token_url: str, password: str, service_credential, test_client: TestClient
     ):
-        basic = b64encode(f"{service_credential.id}:{password}".encode()).decode()
+        basic = b64encode(f"{service_credential.name}:{password}".encode()).decode()
         response = test_client.post(
             token_url,
             data={"grant_type": "client_credentials"},
@@ -243,7 +243,7 @@ class TestAuthApi:
     def test_fail_to_client_credentials_due_to_missing_secret_in_basic_auth(
         self, token_url: str, service_credential, test_client: TestClient
     ):
-        basic = b64encode(service_credential.id.encode()).decode()
+        basic = b64encode(service_credential.name.encode()).decode()
         response = test_client.post(
             token_url,
             data={"grant_type": "client_credentials"},
