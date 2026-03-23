@@ -214,9 +214,13 @@ class TestAuthApi:
             headers={"Authorization": f"Basic {basic}"},
         )
 
-        # Current implementation stores client_credentials tokens with a null
-        # refresh token, which violates the RefreshTokenIndex schema.
-        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert "access_token" in body
+        assert "refresh_token" not in body
+        assert body["token_type"] == "Bearer"
+        assert "expires_in" in body
+        self._assert_cache_headers(response)
 
     def test_fail_to_client_credentials_due_to_malformed_basic_auth(
         self, token_url: str, test_client: TestClient

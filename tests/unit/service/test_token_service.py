@@ -1,5 +1,6 @@
 from typing import Any
 
+import pendulum
 import pytest
 
 from app.exceptions import TokenNotFoundException
@@ -23,6 +24,29 @@ class TestTokenService:
         token_service.create(jwt_token, refresh_token)
 
         token_repository.create_token.assert_called_once_with(token)
+
+    def test_successfully_create_token_without_refresh_token(
+        self,
+        mocker,
+        jwt_token: JWTToken,
+        token_repository: TokenRepository,
+        token_service: TokenService,
+    ):
+        mocker.patch.object(TokenRepository, "create_token")
+
+        token_service.create(jwt_token, None)
+
+        token_repository.create_token.assert_called_once_with(
+            {
+                "jti": jwt_token.jti,
+                "jwt_token": jwt_token.model_dump(),
+                "created_at": pendulum.from_timestamp(
+                    jwt_token.iat
+                ).to_iso8601_string(),
+                "expire_at": pendulum.from_timestamp(jwt_token.exp).to_iso8601_string(),
+                "ttl": jwt_token.exp,
+            }
+        )
 
     def test_successfully_delete_by_id(
         self,

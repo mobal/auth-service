@@ -15,20 +15,20 @@ class TokenService:
         self._token_repository = TokenRepository()
 
     def create(self, jwt_token: JWTToken, refresh_token: RefreshToken | None):
-        self._token_repository.create_token(
-            {
-                "jti": jwt_token.jti,
-                "jwt_token": jwt_token.model_dump(),
-                "refresh_token": refresh_token.token if refresh_token else None,
-                "created_at": pendulum.from_timestamp(
-                    jwt_token.iat
-                ).to_iso8601_string(),
-                "expire_at": pendulum.from_timestamp(
-                    refresh_token.ttl if refresh_token else jwt_token.exp
-                ).to_iso8601_string(),
-                "ttl": refresh_token.ttl if refresh_token else jwt_token.exp,
-            }
-        )
+        token_data = {
+            "jti": jwt_token.jti,
+            "jwt_token": jwt_token.model_dump(),
+            "created_at": pendulum.from_timestamp(jwt_token.iat).to_iso8601_string(),
+            "expire_at": pendulum.from_timestamp(
+                refresh_token.ttl if refresh_token else jwt_token.exp
+            ).to_iso8601_string(),
+            "ttl": refresh_token.ttl if refresh_token else jwt_token.exp,
+        }
+
+        if refresh_token:
+            token_data["refresh_token"] = refresh_token.token
+
+        self._token_repository.create_token(token_data)
 
     def delete_by_id(self, jti: str):
         response = self._token_repository.delete_by_id(jti)
