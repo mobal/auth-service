@@ -20,6 +20,7 @@ resource "aws_lambda_function" "fastapi" {
   environment {
     variables = {
       APP_NAME                             = var.app_name
+      CLIENT_SECRET_SSM_PARAM_NAME         = var.client_secret_ssm_param_name
       DEBUG                                = var.debug
       DEFAULT_TIMEZONE                     = var.default_timezone
       JWT_SECRET_SSM_PARAM_NAME            = var.jwt_secret_ssm_param_name
@@ -28,6 +29,7 @@ resource "aws_lambda_function" "fastapi" {
       POWERTOOLS_SERVICE_NAME              = var.powertools_service_name
       POWERTOOLS_DEBUG                     = var.powertools_debug
       STAGE                                = var.stage
+      USER_SERVICE_URL_SSM_PARAM_NAME      = var.user_service_url_ssm_param_name
     }
   }
 
