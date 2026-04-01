@@ -21,9 +21,7 @@ class TestTokenRepository:
             "jwt_token": jwt_token.model_dump(),
             "refresh_token": refresh_token.token,
             "created_at": pendulum.now().to_iso8601_string(),
-            "expire_at": pendulum.from_timestamp(
-                refresh_token.ttl
-            ).to_iso8601_string(),
+            "expire_at": pendulum.from_timestamp(refresh_token.ttl).to_iso8601_string(),
             "ttl": refresh_token.ttl,
         }
         token_repository.create_token(token)
@@ -66,7 +64,6 @@ class TestTokenRepository:
 
     def test_successfully_get_by_refresh_token(
         self,
-        jwt_token: JWTToken,
         refresh_token: RefreshToken,
         token: dict[str, Any],
         token_repository: TokenRepository,

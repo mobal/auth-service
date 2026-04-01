@@ -24,25 +24,16 @@ resource "aws_iam_policy" "lambda_policy" {
       {
         Effect   = "Allow"
         Action   = [
-          "dynamodb:PutItem",
-          "dynamodb:Query",
-          "dynamodb:Scan",
-          "dynamodb:UpdateItem"
-        ]
-        Resource = [
-          aws_dynamodb_table.users.arn,
-          "${aws_dynamodb_table.users.arn}/index/EmailIndex"
-        ]
-      },
-      {
-        Effect   = "Allow"
-        Action   = [
           "dynamodb:DeleteItem",
           "dynamodb:GetItem",
           "dynamodb:PutItem",
           "dynamodb:Query",
         ]
         Resource = [
+          aws_dynamodb_table.services.arn,
+          "${aws_dynamodb_table.services.arn}/index/NameIndex",
+          aws_dynamodb_table.authorization_codes.arn,
+          "${aws_dynamodb_table.authorization_codes.arn}/index/CodeIndex",
           aws_dynamodb_table.tokens.arn,
           "${aws_dynamodb_table.tokens.arn}/index/RefreshTokenIndex"
         ]

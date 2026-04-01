@@ -14,20 +14,22 @@ resource "aws_lambda_function" "fastapi" {
 
   layers = [
     aws_lambda_layer_version.requirements_lambda_layer.arn,
-    "arn:aws:lambda:${var.aws_region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python313-${var.architecture}:18"
+    "arn:aws:lambda:${var.aws_region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python314-${var.architecture}:28"
   ]
 
   environment {
     variables = {
       APP_NAME                             = var.app_name
+      CLIENT_SECRET_SSM_PARAM_NAME         = var.client_secret_ssm_param_name
       DEBUG                                = var.debug
       DEFAULT_TIMEZONE                     = var.default_timezone
       JWT_SECRET_SSM_PARAM_NAME            = var.jwt_secret_ssm_param_name
       LOG_LEVEL                            = var.log_level
       POWERTOOLS_LOGGER_LOG_EVENT          = var.powertools_logger_log_event
-      POWERTOOLS_SERVICE_NAME              = var.power_tools_service_name
+      POWERTOOLS_SERVICE_NAME              = var.powertools_service_name
       POWERTOOLS_DEBUG                     = var.powertools_debug
       STAGE                                = var.stage
+      USER_SERVICE_BASE_URL_SSM_PARAM_NAME = var.user_service_base_url_ssm_param_name
     }
   }
 

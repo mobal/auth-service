@@ -8,13 +8,27 @@ class AlreadyExistsException(HTTPException):
         super().__init__(status_code=status.HTTP_409_CONFLICT, detail=detail)
 
 
+class InvalidCredentialsException(HTTPException):
+    def __init__(self, detail: Any):
+        super().__init__(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
+
+
 class NotFoundException(HTTPException):
     def __init__(self, detail: Any):
         super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
 
 
-class UserNotFoundException(NotFoundException):
-    pass
+class OAuthException(HTTPException):
+    def __init__(
+        self,
+        error: str,
+        error_description: str | None = None,
+        status_code: int = status.HTTP_400_BAD_REQUEST,
+        headers: dict | None = None,
+    ):
+        super().__init__(status_code=status_code, detail=error, headers=headers)
+        self.oauth_error = error
+        self.oauth_error_description = error_description
 
 
 class TokenExpiredException(HTTPException):
@@ -24,14 +38,12 @@ class TokenExpiredException(HTTPException):
 
 class TokenMismatchException(HTTPException):
     def __init__(self, detail: Any):
-        super().__init__(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail
-        )
+        super().__init__(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
 
 
 class TokenNotFoundException(NotFoundException):
     pass
 
 
-class UserAlreadyExistsException(AlreadyExistsException):
+class UserNotFoundException(NotFoundException):
     pass

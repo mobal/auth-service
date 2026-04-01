@@ -1,5 +1,5 @@
-resource "aws_dynamodb_table" "users" {
-  name         = "${var.stage}-users"
+resource "aws_dynamodb_table" "services" {
+  name         = "${var.stage}-services"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "id"
 
@@ -9,31 +9,15 @@ resource "aws_dynamodb_table" "users" {
   }
 
   attribute {
-    name = "email"
-    type = "S"
-  }
-
-  attribute {
-    name = "username"
+    name = "name"
     type = "S"
   }
 
   global_secondary_index {
-    name = "EmailIndex"
+    name            = "NameIndex"
 
     key_schema {
-      attribute_name = "email"
-      key_type = "HASH"
-    }
-
-    projection_type = "ALL"
-  }
-
-  global_secondary_index {
-    name = "UsernameIndex"
-
-    key_schema {
-      attribute_name = "username"
+      attribute_name = "name"
       key_type = "HASH"
     }
 
@@ -61,6 +45,38 @@ resource "aws_dynamodb_table" "tokens" {
 
     key_schema {
       attribute_name = "refresh_token"
+      key_type = "HASH"
+    }
+
+    projection_type = "ALL"
+  }
+
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+}
+
+resource "aws_dynamodb_table" "authorization_codes" {
+  name         = "${var.stage}-authorization-codes"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  attribute {
+    name = "code"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "CodeIndex"
+
+    key_schema {
+      attribute_name = "code"
       key_type = "HASH"
     }
 

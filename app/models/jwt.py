@@ -7,9 +7,10 @@ class JWTToken(BaseModel):
     exp: int
     iat: int
     iss: str | None = None
+    aud: str | None = None
     jti: str
     sub: Any
-    user: dict[str, Any]
+    scope: str | None = None
 
 
 class RefreshToken(BaseModel):
