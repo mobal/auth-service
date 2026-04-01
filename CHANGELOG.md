@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.8.0](https://github.com/mobal/auth-service/compare/v0.7.0...v0.8.0) (2026-04-01)
+
+
+### Features
+
+* add authorize endpoint ([553e74a](https://github.com/mobal/auth-service/commit/553e74a7aca9965cb8a95268ab2524527e49d1bc))
+* add main.tf ([a11b6d1](https://github.com/mobal/auth-service/commit/a11b6d1e793ecc362d35c2e5ae3b7b7a86671ca9))
+* add more test to reach 90%+ test coverage ([9a2b361](https://github.com/mobal/auth-service/commit/9a2b361152954955cae98a2f22b88953eadbb5f4))
+* add services table ([954090e](https://github.com/mobal/auth-service/commit/954090efb3881f25855e0910546f96f612d70a78))
+* **auth:** implement RFC 6749 compliant client credentials for service-to-service communication ([a8237e7](https://github.com/mobal/auth-service/commit/a8237e78d703a1b4f57cc54a18a1428d558e5496))
+* enrich logging ([1335212](https://github.com/mobal/auth-service/commit/13352120aa093f45109908f1316a51023e86e65e))
+* get service by name instead of id ([a16f214](https://github.com/mobal/auth-service/commit/a16f214c75a5d481cad9b892a265c67e9e704c42))
+* Harden client credentials Basic auth validation with strict Base64 decoding ([3ae92c8](https://github.com/mobal/auth-service/commit/3ae92c828b5932dab21200269d30cc739a89bdcc))
+* set default refresh token length to 32 ([3a7155c](https://github.com/mobal/auth-service/commit/3a7155ccb92c0f21e9620e561040e0df26193f74))
+* updated users api url to /api/v1/ ([8111a61](https://github.com/mobal/auth-service/commit/8111a61a868324b15d5e142b86fc3f2041e21993))
+
+
+### Bug Fixes
+
+* add missing iam roles ([f713a8c](https://github.com/mobal/auth-service/commit/f713a8cf746e4d966d911aaea3ed499ed9c9ecff))
+* added missing env variables ([8cb64b9](https://github.com/mobal/auth-service/commit/8cb64b9aa17c5cbf3e22c4d20073844588cab573))
+* bug fixes based on claude's advice ([144bb6a](https://github.com/mobal/auth-service/commit/144bb6a8aa4f60e87b8c68944019f1a82dfe4d99))
+* bugs ([d8de007](https://github.com/mobal/auth-service/commit/d8de007275ed8e2e6bf0372ed8f2dc0d1cdf1f85))
+* check for empty items array ([76ed718](https://github.com/mobal/auth-service/commit/76ed718c2fcc58a249cc5ae5c13481ba31544962))
+* do not require jwt token during refresh ([a359a4b](https://github.com/mobal/auth-service/commit/a359a4baa8d6778374e2676db142569eb60cfab7))
+* do not set refresh token as none if not exists ([25f9d7e](https://github.com/mobal/auth-service/commit/25f9d7e132cabb900dfaafe81d49a7df0042ab6d))
+* fixed some bugs / misconfiguration in ci.yml ([78f8fad](https://github.com/mobal/auth-service/commit/78f8fad69683d344c84365b7355680d9ff262c42))
+* get user data from items array ([fc7947d](https://github.com/mobal/auth-service/commit/fc7947dac92368037feacfa80496492b428e1481))
+* moved cors middleware to the last ([65d97fc](https://github.com/mobal/auth-service/commit/65d97fc6c55a6123a2893011625db2b4b9eed1bd))
+* remove unused policy ([16eb00d](https://github.com/mobal/auth-service/commit/16eb00dfa155a96f83ce54d27a086af95f1ca2e4))
+* removed duplications ([2b2adbc](https://github.com/mobal/auth-service/commit/2b2adbc8c03c164190a778e291f7e336003e563e))
+* removed unused attr and index (copy'n'paste failure) ([11909ac](https://github.com/mobal/auth-service/commit/11909aca282e888e65befa99587204d7bb9d48bb))
+* replaced test email domain ([a29cfab](https://github.com/mobal/auth-service/commit/a29cfab348ac4ad1efeaa8e2f7fb0675bcf29f4a))
+* replaced usjonresponse with jsonreaponse (deprecated) ([32622e9](https://github.com/mobal/auth-service/commit/32622e9bcbb2361da7409d2aa0da72fcf3e1ece4))
+* restore run check on every branch after push or new pr ([c9fce72](https://github.com/mobal/auth-service/commit/c9fce72ee06856a55154c572602f196dd07a1ddd))
+* typo ([2a99da6](https://github.com/mobal/auth-service/commit/2a99da645f49b78a5d1ac289f4b9599508aeb296))
+* urls ([e986957](https://github.com/mobal/auth-service/commit/e986957d591d7963ee8386b6756faee51410eca4))
+* use proper cache headers (RFC 6749) ([cf7ea6e](https://github.com/mobal/auth-service/commit/cf7ea6e94ffe9f63701219f63992caa247e6075f))
+* use revoke token during logout ([6b19d61](https://github.com/mobal/auth-service/commit/6b19d6160f84a640323a4c7f38fe3a89b35a7fcd))
+* user service base url ssm param name ([f82570a](https://github.com/mobal/auth-service/commit/f82570a2fed84495b6f8b84f3a18b7648678af0b))
+* user service ssm param name [#2](https://github.com/mobal/auth-service/issues/2) ([315bf0b](https://github.com/mobal/auth-service/commit/315bf0b7b6d2ac66d5bfab99f63a373dc0aa6cd5))
+
 ## [0.7.0](https://github.com/mobal/auth-service/compare/v0.6.0...v0.7.0) (2026-02-26)
 
 
