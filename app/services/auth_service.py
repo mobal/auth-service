@@ -200,10 +200,12 @@ class AuthService:
 
         self._logger.info("Issuing new user service token")
 
-        jwt_token = self._generate_client_credentials(client_name, client_secret, scope)
-        self._user_service_token = jwt_token
+        service_token = self._generate_client_credentials(
+            client_name, client_secret, scope
+        )
+        self._user_service_token = service_token
 
-        return jwt_token
+        return service_token
 
     def login(
         self, email: str, password: str, requested_scope: str | None = None
@@ -212,31 +214,41 @@ class AuthService:
             "Login requested",
             extra={"requested_scope": requested_scope},
         )
-        jwt_token = self._issue_service_token(settings.app_name, settings.client_secret)
+        service_token = self._issue_service_token(
+            settings.app_name, settings.client_secret
+        )
         user = self._user_service_client.get_user_by_email(
             email,
-            jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
+            jwt.encode(
+                service_token.model_dump(exclude_none=True), settings.jwt_secret
+            ),
         )
 
         if user is None:
             self._logger.warning("Login failed, user not found")
             raise InvalidCredentialsException(ERROR_MESSAGE_UNAUTHORIZED)
 
-        try:
-            self._password_hasher.verify(user["password"], password)
-        except (InvalidHash, VerifyMismatchError):
+        if not self._user_service_client.validate_user_password(
+            user["id"],
+            password,
+            jwt.encode(
+                service_token.model_dump(exclude_none=True), settings.jwt_secret
+            ),
+        ):
             self._logger.warning("Login failed, invalid credentials")
             raise InvalidCredentialsException(ERROR_MESSAGE_UNAUTHORIZED)
 
         scope = self._derive_scope(user.get("roles", []), requested_scope)
-        jwt_token, refresh_token = self._generate_tokens(user["id"], scope=scope)
+        service_token, refresh_token = self._generate_tokens(user["id"], scope=scope)
         self._logger.info(
             f"Login succeeded for sub={user['id']}",
             extra={"has_scope": scope is not None},
         )
 
         return (
-            jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
+            jwt.encode(
+                service_token.model_dump(exclude_none=True), settings.jwt_secret
+            ),
             refresh_token.token,
             settings.jwt_token_lifetime,
             scope,
@@ -369,10 +381,14 @@ class AuthService:
             f"Authorization code requested for user_id={user_id}",
             extra={"client_id": client_id, "requested_scope": requested_scope},
         )
-        jwt_token = self._issue_service_token(settings.app_name, settings.client_secret)
+        service_token = self._issue_service_token(
+            settings.app_name, settings.client_secret
+        )
         user = self._user_service_client.get_user_by_id(
             user_id,
-            jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
+            jwt.encode(
+                service_token.model_dump(exclude_none=True), settings.jwt_secret
+            ),
         )
         if user is None:
             self._logger.warning(

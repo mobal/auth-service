@@ -2,19 +2,19 @@ import os
 import uuid
 
 import pytest
-from argon2 import PasswordHasher
 from fastapi import status
 from fastapi.testclient import TestClient
 
 X_CORRELATION_ID = "X-Correlation-ID"
 USER_SERVICE_USERS_URL = f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users?email=root%40squarelabs.hu"
+USER_ID = str(uuid.uuid4())
+USER_SERVICE_VALIDATE_URL = f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{USER_ID}/validate"
 USER_VERIFY_RESPONSE = {
     "items": [
         {
-            "id": str(uuid.uuid4()),
+            "id": USER_ID,
             "email": "root@squarelabs.hu",
             "roles": ["root"],
-            "password": PasswordHasher().hash("password"),
         }
     ]
 }
@@ -36,6 +36,12 @@ class TestCorrelationIdMiddleware:
             method="GET",
             url=USER_SERVICE_USERS_URL,
             json=USER_VERIFY_RESPONSE,
+            status_code=status.HTTP_200_OK,
+        )
+        httpx_mock.add_response(
+            method="POST",
+            url=USER_SERVICE_VALIDATE_URL,
+            json={"id": USER_ID, "email": "root@squarelabs.hu", "roles": ["root"]},
             status_code=status.HTTP_200_OK,
         )
 
@@ -61,6 +67,12 @@ class TestCorrelationIdMiddleware:
             json=USER_VERIFY_RESPONSE,
             status_code=status.HTTP_200_OK,
         )
+        httpx_mock.add_response(
+            method="POST",
+            url=USER_SERVICE_VALIDATE_URL,
+            json={"id": USER_ID, "email": "root@squarelabs.hu", "roles": ["root"]},
+            status_code=status.HTTP_200_OK,
+        )
         correlation_id_value = str(uuid.uuid4())
 
         response = test_client.post(
@@ -84,6 +96,12 @@ class TestCorrelationIdMiddleware:
             method="GET",
             url=USER_SERVICE_USERS_URL,
             json=USER_VERIFY_RESPONSE,
+            status_code=status.HTTP_200_OK,
+        )
+        httpx_mock.add_response(
+            method="POST",
+            url=USER_SERVICE_VALIDATE_URL,
+            json={"id": USER_ID, "email": "root@squarelabs.hu", "roles": ["root"]},
             status_code=status.HTTP_200_OK,
         )
 

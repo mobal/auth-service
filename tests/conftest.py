@@ -174,6 +174,22 @@ def initialize_tokens_table(
 
 
 @pytest.fixture
+def user_id() -> str:
+    return str(uuid.uuid4())
+
+
+@pytest.fixture
+def user_data(user_id: str) -> dict:
+    return {
+        "id": user_id,
+        "email": "root@squarelabs.hu",
+        "username": "root",
+        "display_name": "root",
+        "roles": ["root"],
+    }
+
+
+@pytest.fixture
 def jwt_token() -> JWTToken:
     iat = pendulum.now()
     exp = iat.add(hours=1)

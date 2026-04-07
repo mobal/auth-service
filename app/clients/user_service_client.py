@@ -30,6 +30,30 @@ class UserServiceClient:
         logger.info("User fetched from user-service by email")
         return result["items"][0]
 
+    def validate_user_password(
+        self, user_id: str, password: str, jwt_token: str
+    ) -> bool:
+        logger.info(f"Validating user password user_id={user_id}")
+
+        response = httpx.post(
+            f"{settings.user_service_base_url}/api/v1/users/{user_id}/validate",
+            json={"password": password},
+            headers={"Authorization": f"Bearer {jwt_token}"},
+        )
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as err:
+            if 400 <= err.response.status_code < 500:
+                logger.warning(
+                    f"Password validation failed user_id={user_id}",
+                    extra={"status_code": err.response.status_code},
+                )
+                return False
+            raise
+
+        logger.info(f"Password validated for user_id={user_id}")
+        return True
+
     def get_user_by_id(self, user_id: str, jwt_token: str) -> dict | None:
         logger.info(f"Fetching user from user-service user_id={user_id}")
 

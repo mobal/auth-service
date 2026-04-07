@@ -51,23 +51,6 @@ class TestAuthService:
     def auth_service(self) -> AuthService:
         return AuthService()
 
-    @pytest.fixture
-    def user_id(self) -> str:
-        return str(uuid.uuid4())
-
-    @pytest.fixture
-    def user_data(self, user_id: str) -> dict:
-        from argon2 import PasswordHasher
-
-        return {
-            "id": user_id,
-            "email": "root@squarelabs.hu",
-            "username": "root",
-            "display_name": "root",
-            "roles": ["root"],
-            "password": PasswordHasher().hash("password"),
-        }
-
     def test_successfully_login(
         self,
         mocker,
@@ -78,6 +61,9 @@ class TestAuthService:
     ):
         mocker.patch.object(
             UserServiceClient, "get_user_by_email", return_value=user_data
+        )
+        mocker.patch.object(
+            UserServiceClient, "validate_user_password", return_value=True
         )
         mocker.patch.object(TokenService, "create")
 
@@ -91,6 +77,9 @@ class TestAuthService:
         auth_service._user_service_client.get_user_by_email.assert_called_once_with(
             user_data["email"], ANY
         )
+        auth_service._user_service_client.validate_user_password.assert_called_once_with(
+            user_data["id"], "password", ANY
+        )
         token_service.create.assert_called_once_with(decoded, ANY)
 
     def test_fail_to_login_due_to_invalid_credentials(
@@ -99,12 +88,16 @@ class TestAuthService:
         auth_service: AuthService,
     ):
         mocker.patch.object(UserServiceClient, "get_user_by_email", return_value=None)
+        mocker.patch.object(
+            UserServiceClient, "validate_user_password", return_value=True
+        )
 
         with pytest.raises(HTTPException) as excinfo:
             auth_service.login("user@example.com", "wrong_password")
 
         assert excinfo.value.status_code == status.HTTP_401_UNAUTHORIZED
         assert excinfo.value.detail == "Unauthorized"
+        auth_service._user_service_client.validate_user_password.assert_not_called()
 
     def test_fail_to_login_due_to_wrong_password(
         self,
@@ -114,6 +107,9 @@ class TestAuthService:
     ):
         mocker.patch.object(
             UserServiceClient, "get_user_by_email", return_value=user_data
+        )
+        mocker.patch.object(
+            UserServiceClient, "validate_user_password", return_value=False
         )
 
         with pytest.raises(HTTPException) as excinfo:

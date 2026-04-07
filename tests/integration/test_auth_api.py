@@ -46,14 +46,20 @@ class TestAuthApi:
         httpx_mock,
         token_url: str,
         test_client: TestClient,
+        user_data: dict,
     ):
         import os
 
         httpx_mock.add_response(
             method="GET",
             url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users?email=root%40squarelabs.hu",
-            json=[],
+            json={"items": [user_data]},
             status_code=status.HTTP_200_OK,
+        )
+        httpx_mock.add_response(
+            method="POST",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{user_data['id']}/validate",
+            status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
         response = test_client.post(
@@ -73,26 +79,20 @@ class TestAuthApi:
         httpx_mock,
         token_url: str,
         test_client: TestClient,
+        user_data: dict,
     ):
         import os
-        import uuid
 
-        from argon2 import PasswordHasher
-
-        user_id = str(uuid.uuid4())
         httpx_mock.add_response(
             method="GET",
             url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users?email=root%40squarelabs.hu",
-            json={
-                "items": [
-                    {
-                        "id": user_id,
-                        "email": "root@squarelabs.hu",
-                        "roles": ["root"],
-                        "password": PasswordHasher().hash("password"),
-                    }
-                ]
-            },
+            json={"items": [user_data]},
+            status_code=status.HTTP_200_OK,
+        )
+        httpx_mock.add_response(
+            method="POST",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{user_data['id']}/validate",
+            json=user_data,
             status_code=status.HTTP_200_OK,
         )
 
