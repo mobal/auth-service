@@ -65,6 +65,22 @@ class TestJWTAuth:
         assert NOT_AUTHENTICATED == excinfo.value.detail
         assert status.HTTP_403_FORBIDDEN == excinfo.value.status_code
 
+    def test_fail_to_authorize_request_due_to_malformed_jwt_payload(
+        self,
+        empty_request: Mock,
+        jwt_bearer: JWTBearer,
+        settings: Settings,
+    ):
+        empty_request.headers = {
+            "Authorization": f"Bearer {jwt.encode({'sub': 'user-1'}, settings.jwt_secret)}"
+        }
+
+        with pytest.raises(HTTPException) as excinfo:
+            jwt_bearer(empty_request)
+
+        assert NOT_AUTHENTICATED == excinfo.value.detail
+        assert status.HTTP_403_FORBIDDEN == excinfo.value.status_code
+
     def test_fail_to_authorize_request_due_to_bearer_token_is_invalid_with_auto_error_false(
         self, empty_request: Mock
     ):
