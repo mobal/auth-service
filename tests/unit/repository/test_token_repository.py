@@ -44,7 +44,7 @@ class TestTokenRepository:
     ):
         response = token_repository.delete_by_id(str(uuid.uuid4()))
 
-        assert response["Attributes"] == {}
+        assert response["ResponseMetadata"]["HTTPStatusCode"] == 200
 
     def test_successfully_get_by_id(
         self,

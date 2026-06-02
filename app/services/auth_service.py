@@ -427,12 +427,20 @@ class AuthService:
                 "invalid_grant", status_code=status.HTTP_400_BAD_REQUEST
             )
 
+        if not self._authorization_code_repository.consume_by_id(auth_code.id):
+            self._logger.warning(
+                "Authorization code exchange failed, code already consumed",
+                extra={"authorization_code_id": auth_code.id},
+            )
+            raise OAuthException(
+                "invalid_grant", status_code=status.HTTP_400_BAD_REQUEST
+            )
+
         if auth_code.ttl < now:
             self._logger.warning(
                 "Authorization code exchange failed, code expired",
                 extra={"authorization_code_id": auth_code.id},
             )
-            self._authorization_code_repository.delete_by_id(auth_code.id)
             raise OAuthException(
                 "invalid_grant", status_code=status.HTTP_400_BAD_REQUEST
             )
@@ -447,8 +455,6 @@ class AuthService:
             )
 
         self._validate_pkce(auth_code, code_verifier)
-
-        self._authorization_code_repository.delete_by_id(auth_code.id)
 
         jwt_token = self._issue_service_token(settings.app_name, settings.client_secret)
         user = self._user_service_client.get_user_by_id(

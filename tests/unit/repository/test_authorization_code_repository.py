@@ -189,6 +189,49 @@ class TestAuthorizationCodeRepository:
         auth_code = repository.get_by_code(code)
         assert auth_code is None
 
+    def test_successfully_consume_authorization_code(
+        self, repository: AuthorizationCodeRepository
+    ):
+        client_id = str(uuid.uuid4())
+        user_id = str(uuid.uuid4())
+        redirect_uri = "https://example.com/callback"
+
+        code = repository.create(
+            client_id=client_id,
+            user_id=user_id,
+            redirect_uri=redirect_uri,
+        )
+
+        auth_code = repository.get_by_code(code)
+        assert auth_code is not None
+
+        assert repository.consume_by_id(auth_code.id) is True
+        assert repository.consume_by_id(auth_code.id) is False
+
+    def test_fail_to_consume_authorization_code_twice(
+        self, repository: AuthorizationCodeRepository
+    ):
+        client_id = str(uuid.uuid4())
+        user_id = str(uuid.uuid4())
+        redirect_uri = "https://example.com/callback"
+
+        code = repository.create(
+            client_id=client_id,
+            user_id=user_id,
+            redirect_uri=redirect_uri,
+        )
+
+        auth_code = repository.get_by_code(code)
+        assert auth_code is not None
+
+        assert repository.consume_by_id(auth_code.id) is True
+        assert repository.consume_by_id(auth_code.id) is False
+
+    def test_fail_to_consume_authorization_code_nonexistent_id(
+        self, repository: AuthorizationCodeRepository
+    ):
+        assert repository.consume_by_id("nonexistent-id") is False
+
     def test_authorization_code_has_correct_ttl(
         self, repository: AuthorizationCodeRepository
     ):

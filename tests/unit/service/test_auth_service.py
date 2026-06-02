@@ -509,8 +509,9 @@ class TestAuthService:
         )
         mocker.patch.object(UserServiceClient, "get_user_by_id", return_value=user_data)
         mocker.patch("app.services.auth_service.TokenService.create")
-        delete_mock = mocker.patch(
-            "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
+        consume_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
         )
 
         jwt_str, refresh_token, exp, scope = auth_service.exchange_code(
@@ -522,7 +523,7 @@ class TestAuthService:
         assert refresh_token is not None
         assert exp == 3600
         assert scope == "users:read"
-        delete_mock.assert_called_once_with("auth-code-id-123")
+        consume_mock.assert_called_once_with("auth-code-id-123")
 
     def test_fail_to_exchange_code_due_to_invalid_code(
         self,
@@ -558,8 +559,9 @@ class TestAuthService:
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
             return_value=auth_code,
         )
-        delete_mock = mocker.patch(
-            "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
+        consume_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
         )
 
         with pytest.raises(OAuthException) as excinfo:
@@ -569,7 +571,7 @@ class TestAuthService:
             )
 
         assert excinfo.value.oauth_error == "invalid_grant"
-        delete_mock.assert_called_once_with("expired-code-id")
+        consume_mock.assert_called_once_with("expired-code-id")
 
     def test_fail_to_exchange_code_due_to_redirect_uri_mismatch(
         self,
@@ -586,6 +588,10 @@ class TestAuthService:
         mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
             return_value=auth_code,
+        )
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
         )
 
         with pytest.raises(OAuthException) as excinfo:
@@ -610,6 +616,10 @@ class TestAuthService:
         mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
             return_value=auth_code,
+        )
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
         )
 
         with pytest.raises(OAuthException) as excinfo:
@@ -636,6 +646,10 @@ class TestAuthService:
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
             return_value=auth_code,
         )
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
+        )
 
         with pytest.raises(OAuthException) as excinfo:
             auth_service.exchange_code(
@@ -660,6 +674,10 @@ class TestAuthService:
         mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
             return_value=auth_code,
+        )
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
         )
 
         with pytest.raises(OAuthException) as excinfo:
@@ -703,8 +721,9 @@ class TestAuthService:
         )
         mocker.patch.object(UserServiceClient, "get_user_by_id", return_value=user_data)
         mocker.patch("app.services.auth_service.TokenService.create")
-        delete_mock = mocker.patch(
-            "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
+        consume_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
         )
 
         jwt_str, refresh_token, exp, scope = auth_service.exchange_code(
@@ -717,7 +736,7 @@ class TestAuthService:
         assert refresh_token is not None
         assert exp == 3600
         assert scope == "users:read"
-        delete_mock.assert_called_once_with("auth-code-id-s256")
+        consume_mock.assert_called_once_with("auth-code-id-s256")
 
     def test_successfully_exchange_code_with_pkce_plain(
         self,
@@ -741,8 +760,9 @@ class TestAuthService:
         )
         mocker.patch.object(UserServiceClient, "get_user_by_id", return_value=user_data)
         mocker.patch("app.services.auth_service.TokenService.create")
-        delete_mock = mocker.patch(
-            "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
+        consume_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
         )
 
         jwt_str, refresh_token, exp, scope = auth_service.exchange_code(
@@ -755,7 +775,7 @@ class TestAuthService:
         assert refresh_token is not None
         assert exp == 3600
         assert scope == "users:read"
-        delete_mock.assert_called_once_with("auth-code-id-plain")
+        consume_mock.assert_called_once_with("auth-code-id-plain")
 
     def test_fail_to_exchange_code_due_to_user_not_found(
         self,
@@ -775,8 +795,9 @@ class TestAuthService:
             return_value=auth_code,
         )
         mocker.patch.object(UserServiceClient, "get_user_by_id", return_value=None)
-        delete_mock = mocker.patch(
-            "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
+        consume_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
         )
 
         with pytest.raises(UserNotFoundException) as excinfo:
@@ -786,4 +807,4 @@ class TestAuthService:
             )
 
         assert "not found" in str(excinfo.value.detail).lower()
-        delete_mock.assert_called_once_with("auth-code-id-user-not-found")
+        consume_mock.assert_called_once_with("auth-code-id-user-not-found")

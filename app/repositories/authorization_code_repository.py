@@ -3,7 +3,8 @@ import uuid
 
 import pendulum
 from aws_lambda_powertools import Logger
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
+from botocore.exceptions import ClientError
 
 from app import settings
 from app.models.authorization_code import AuthorizationCode
@@ -52,6 +53,23 @@ class AuthorizationCodeRepository:
     def delete_by_id(self, code_id: str) -> None:
         self._table.delete_item(Key={"id": code_id})
         self._logger.info(f"Deleted authorization code {code_id}")
+
+    def consume_by_id(self, code_id: str) -> bool:
+        try:
+            self._table.update_item(
+                Key={"id": code_id},
+                UpdateExpression="SET #c = :val",
+                ConditionExpression=Attr("id").exists() & Attr("consumed").not_exists(),
+                ExpressionAttributeNames={"#c": "consumed"},
+                ExpressionAttributeValues={":val": True},
+            )
+            self._logger.info(f"Consumed authorization code {code_id}")
+            return True
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+                self._logger.warning(f"Authorization code already consumed {code_id}")
+                return False
+            raise
 
     def get_by_code(self, code: str) -> AuthorizationCode | None:
         self._logger.debug("Querying authorization code by code value")

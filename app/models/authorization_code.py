@@ -11,3 +11,4 @@ class AuthorizationCode(BaseModel):
     code_challenge: str | None = None
     code_challenge_method: str | None = None
     ttl: int
+    consumed: bool = False
