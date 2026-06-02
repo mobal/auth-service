@@ -171,7 +171,7 @@ class TestAuthService:
         }
         mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
         mocker.patch.object(TokenService, "create")
-        mocker.patch.object(TokenService, "delete_by_id")
+        consume_mock = mocker.patch.object(TokenService, "consume_by_id", return_value=True)
 
         new_jwt_token, _, _, _ = auth_service.refresh(refresh_token)
 
@@ -186,7 +186,7 @@ class TestAuthService:
             ),
             ANY,
         )
-        token_service.delete_by_id.assert_called_once_with(jwt_token.jti)
+        consume_mock.assert_called_once_with(jwt_token.jti)
 
     def test_fail_to_refresh_due_to_missing_token(
         self,
@@ -229,11 +229,11 @@ class TestAuthService:
         }
         mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
         mocker.patch.object(TokenService, "create")
-        mocker.patch.object(TokenService, "delete_by_id")
+        consume_mock = mocker.patch.object(TokenService, "consume_by_id", return_value=True)
 
         auth_service.refresh(refresh_token.token)
 
-        token_service.delete_by_id.assert_called_once_with(stored_jti)
+        consume_mock.assert_called_once_with(stored_jti)
         token_service.get_by_refresh_token.assert_called_once_with(refresh_token.token)
 
     def test_fail_to_refresh_due_to_expired_token(
@@ -270,6 +270,35 @@ class TestAuthService:
         assert "The requested token has expired" == excinfo.value.detail
 
         token_service.get_by_refresh_token.assert_called_once_with(refresh_token)
+
+    def test_fail_to_refresh_due_to_token_already_consumed(
+        self,
+        mocker,
+        auth_service: AuthService,
+        refresh_token: str,
+        token_service: TokenService,
+    ):
+        now = pendulum.now().int_timestamp
+        item = {
+            "jti": str(uuid.uuid4()),
+            "jwt_token": {
+                "exp": now,
+                "iat": now,
+                "iss": None,
+                "jti": str(uuid.uuid4()),
+                "sub": "user-1",
+            },
+            "refresh_token": refresh_token,
+            "created_at": pendulum.now().to_iso8601_string(),
+            "ttl": now + 3600,
+        }
+        mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
+        mocker.patch.object(TokenService, "consume_by_id", return_value=False)
+
+        with pytest.raises(TokenNotFoundException) as excinfo:
+            auth_service.refresh(refresh_token)
+
+        assert "not found" in str(excinfo.value.detail).lower()
 
     def test_successfully_derive_scope_without_request(self, auth_service: AuthService):
         scope = auth_service._derive_scope(["root"], None)

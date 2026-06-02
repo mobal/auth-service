@@ -273,7 +273,12 @@ class AuthService:
             )
             raise TokenExpiredException("The requested token has expired")
 
-        self._token_service.delete_by_id(item["jwt_token"]["jti"])
+        if not self._token_service.consume_by_id(item["jwt_token"]["jti"]):
+            self._logger.warning(
+                "Token refresh failed, token already consumed",
+                extra={"jti": item["jwt_token"]["jti"]},
+            )
+            raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
 
         scope = item["jwt_token"].get("scope")
         sub = item["jwt_token"]["sub"]

@@ -43,6 +43,10 @@ class TokenService:
             self._logger.warning(f"Token delete failed for jti={jti}")
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
 
+    def consume_by_id(self, jti: str) -> bool:
+        self._logger.info(f"Consuming token record for jti={jti}")
+        return self._token_repository.consume_by_id(jti)
+
     def get_by_id(self, jti: str) -> tuple[JWTToken, str] | None:
         self._logger.debug(f"Fetching token record by jti={jti}")
         return self._token_repository.get_by_id(jti)

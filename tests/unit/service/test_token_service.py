@@ -86,6 +86,34 @@ class TestTokenService:
 
         token_repository.delete_by_id.assert_called_once_with(jwt_token.jti)
 
+    def test_successfully_consume_by_id(
+        self,
+        mocker,
+        jwt_token: JWTToken,
+        token_repository: TokenRepository,
+        token_service: TokenService,
+    ):
+        mocker.patch.object(TokenRepository, "consume_by_id", return_value=True)
+
+        result = token_service.consume_by_id(jwt_token.jti)
+
+        assert result is True
+        token_repository.consume_by_id.assert_called_once_with(jwt_token.jti)
+
+    def test_consume_by_id_returns_false_when_token_not_found(
+        self,
+        mocker,
+        jwt_token: JWTToken,
+        token_repository: TokenRepository,
+        token_service: TokenService,
+    ):
+        mocker.patch.object(TokenRepository, "consume_by_id", return_value=False)
+
+        result = token_service.consume_by_id(jwt_token.jti)
+
+        assert result is False
+        token_repository.consume_by_id.assert_called_once_with(jwt_token.jti)
+
     def test_successfully_get_token_by_id(
         self,
         mocker,

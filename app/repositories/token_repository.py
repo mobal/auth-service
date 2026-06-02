@@ -23,6 +23,14 @@ class TokenRepository:
         self._logger.debug(f"Deleting token record jti={jti}")
         return self._table.delete_item(Key={"jti": jti})
 
+    def consume_by_id(self, jti: str) -> bool:
+        self._logger.debug(f"Consuming token record jti={jti}")
+        response = self._table.delete_item(
+            Key={"jti": jti},
+            ReturnValues="ALL_OLD",
+        )
+        return "Attributes" in response
+
     def get_by_id(self, jti: str) -> tuple[JWTToken, str] | None:
         self._logger.debug(f"Querying token record by jti={jti}")
         response = self._table.get_item(
