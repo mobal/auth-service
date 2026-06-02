@@ -171,7 +171,9 @@ class TestAuthService:
         }
         mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
         mocker.patch.object(TokenService, "create")
-        consume_mock = mocker.patch.object(TokenService, "consume_by_id", return_value=True)
+        consume_mock = mocker.patch.object(
+            TokenService, "consume_by_id", return_value=True
+        )
 
         new_jwt_token, _, _, _ = auth_service.refresh(refresh_token)
 
@@ -229,7 +231,9 @@ class TestAuthService:
         }
         mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
         mocker.patch.object(TokenService, "create")
-        consume_mock = mocker.patch.object(TokenService, "consume_by_id", return_value=True)
+        consume_mock = mocker.patch.object(
+            TokenService, "consume_by_id", return_value=True
+        )
 
         auth_service.refresh(refresh_token.token)
 
