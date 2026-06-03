@@ -1,4 +1,3 @@
-from typing import Any
 
 import pendulum
 from aws_lambda_powertools import Logger
@@ -47,10 +46,18 @@ class TokenService:
         self._logger.info(f"Consuming token record for jti={jti}")
         return self._token_repository.consume_by_id(jti)
 
-    def get_by_id(self, jti: str) -> tuple[JWTToken, str] | None:
+    def get_by_id(self, jti: str) -> tuple[JWTToken, str, int] | None:
         self._logger.debug(f"Fetching token record by jti={jti}")
-        return self._token_repository.get_by_id(jti)
+        item = self._token_repository.get_by_id(jti)
+        if item is None:
+            return None
+        return JWTToken(**item["jwt_token"]), item.get("refresh_token", ""), item["ttl"]
 
-    def get_by_refresh_token(self, refresh_token: str) -> dict[str, Any] | None:
+    def get_by_refresh_token(
+        self, refresh_token: str
+    ) -> tuple[JWTToken, str, int] | None:
         self._logger.debug("Fetching token record by refresh token")
-        return self._token_repository.get_by_refresh_token(refresh_token)
+        item = self._token_repository.get_by_refresh_token(refresh_token)
+        if item is None:
+            return None
+        return JWTToken(**item["jwt_token"]), item.get("refresh_token", ""), item["ttl"]

@@ -118,12 +118,11 @@ class TestTokenService:
         self,
         mocker,
         jwt_token: JWTToken,
+        token: dict[str, Any],
         token_repository: TokenRepository,
         token_service: TokenService,
     ):
-        mocker.patch.object(
-            TokenRepository, "get_by_id", return_value=(jwt_token, "refresh_token")
-        )
+        mocker.patch.object(TokenRepository, "get_by_id", return_value=token)
 
         token_service.get_by_id(jwt_token.jti)
 

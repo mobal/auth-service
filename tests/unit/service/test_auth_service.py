@@ -161,15 +161,11 @@ class TestAuthService:
         refresh_token: RefreshToken,
         token_service: TokenService,
     ):
-        item = {
-            "jti": jwt_token.jti,
-            "jwt_token": jwt_token.model_dump(),
-            "refresh_token": refresh_token.token,
-            "created_at": pendulum.now().to_iso8601_string(),
-            "expire_at": pendulum.from_timestamp(refresh_token.ttl).to_iso8601_string(),
-            "ttl": jwt_token.exp,
-        }
-        mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
+        mocker.patch.object(
+            TokenService,
+            "get_by_refresh_token",
+            return_value=(jwt_token, refresh_token.token, jwt_token.exp),
+        )
         mocker.patch.object(TokenService, "create")
         consume_mock = mocker.patch.object(
             TokenService, "consume_by_id", return_value=True
@@ -216,20 +212,12 @@ class TestAuthService:
     ):
         stored_jti = str(uuid.uuid4())
         now = pendulum.now().int_timestamp
-        item = {
-            "jti": stored_jti,
-            "jwt_token": {
-                "exp": now,
-                "iat": now,
-                "iss": None,
-                "jti": stored_jti,
-                "sub": "user-1",
-            },
-            "refresh_token": refresh_token.token,
-            "created_at": pendulum.now().to_iso8601_string(),
-            "ttl": now + 3600,
-        }
-        mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
+        jwt_token_obj = JWTToken(exp=now, iat=now, jti=stored_jti, sub="user-1")
+        mocker.patch.object(
+            TokenService,
+            "get_by_refresh_token",
+            return_value=(jwt_token_obj, refresh_token.token, now + 3600),
+        )
         mocker.patch.object(TokenService, "create")
         consume_mock = mocker.patch.object(
             TokenService, "consume_by_id", return_value=True
@@ -251,20 +239,12 @@ class TestAuthService:
 
         expired_time = pendulum.now().subtract(days=1).int_timestamp
         now = pendulum.now().int_timestamp
-        item = {
-            "jti": str(uuid.uuid4()),
-            "jwt_token": {
-                "exp": now,
-                "iat": now,
-                "iss": None,
-                "jti": str(uuid.uuid4()),
-                "sub": "user-1",
-            },
-            "refresh_token": refresh_token,
-            "created_at": pendulum.now().to_iso8601_string(),
-            "ttl": expired_time,
-        }
-        mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
+        jwt_token_obj = JWTToken(exp=now, iat=now, jti=str(uuid.uuid4()), sub="user-1")
+        mocker.patch.object(
+            TokenService,
+            "get_by_refresh_token",
+            return_value=(jwt_token_obj, refresh_token, expired_time),
+        )
 
         with pytest.raises(TokenExpiredException) as excinfo:
             auth_service.refresh(refresh_token)
@@ -283,20 +263,12 @@ class TestAuthService:
         token_service: TokenService,
     ):
         now = pendulum.now().int_timestamp
-        item = {
-            "jti": str(uuid.uuid4()),
-            "jwt_token": {
-                "exp": now,
-                "iat": now,
-                "iss": None,
-                "jti": str(uuid.uuid4()),
-                "sub": "user-1",
-            },
-            "refresh_token": refresh_token,
-            "created_at": pendulum.now().to_iso8601_string(),
-            "ttl": now + 3600,
-        }
-        mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
+        jwt_token_obj = JWTToken(exp=now, iat=now, jti=str(uuid.uuid4()), sub="user-1")
+        mocker.patch.object(
+            TokenService,
+            "get_by_refresh_token",
+            return_value=(jwt_token_obj, refresh_token, now + 3600),
+        )
         mocker.patch.object(TokenService, "consume_by_id", return_value=False)
 
         with pytest.raises(TokenNotFoundException) as excinfo:

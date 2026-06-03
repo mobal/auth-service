@@ -5,7 +5,6 @@ from aws_lambda_powertools import Logger
 from boto3.dynamodb.conditions import Key
 
 from app import settings
-from app.models.jwt import JWTToken
 
 
 class TokenRepository:
@@ -31,16 +30,13 @@ class TokenRepository:
         )
         return "Attributes" in response
 
-    def get_by_id(self, jti: str) -> tuple[JWTToken, str] | None:
+    def get_by_id(self, jti: str) -> dict[str, Any] | None:
         self._logger.debug(f"Querying token record by jti={jti}")
         response = self._table.get_item(
             Key={"jti": jti},
         )
         if "Item" in response:
-            return (
-                JWTToken(**response["Item"]["jwt_token"]),
-                response["Item"]["refresh_token"],
-            )
+            return response["Item"]
         self._logger.debug(f"Token record not found for jti={jti}")
         return None
 

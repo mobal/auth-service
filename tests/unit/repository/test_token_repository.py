@@ -69,12 +69,13 @@ class TestTokenRepository:
         self,
         jwt_token: JWTToken,
         refresh_token: RefreshToken,
+        token: dict[str, Any],
         token_repository: TokenRepository,
         tokens_table,
     ):
         item = token_repository.get_by_id(jwt_token.jti)
 
-        assert item == (jwt_token, refresh_token.token)
+        assert item == token
 
     def test_get_by_id_returns_none_if_id_not_found(
         self, token_repository: TokenRepository, tokens_table

@@ -266,22 +266,24 @@ class AuthService:
             self._logger.warning("The requested token was not found!")
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
 
-        if item["ttl"] < pendulum.now().int_timestamp:
+        jwt_token, _, ttl = item
+
+        if ttl < pendulum.now().int_timestamp:
             self._logger.warning(
                 "Refresh token expired",
-                extra={"jti": item["jwt_token"]["jti"]},
+                extra={"jti": jwt_token.jti},
             )
             raise TokenExpiredException("The requested token has expired")
 
-        if not self._token_service.consume_by_id(item["jwt_token"]["jti"]):
+        if not self._token_service.consume_by_id(jwt_token.jti):
             self._logger.warning(
                 "Token refresh failed, token already consumed",
-                extra={"jti": item["jwt_token"]["jti"]},
+                extra={"jti": jwt_token.jti},
             )
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
 
-        scope = item["jwt_token"].get("scope")
-        sub = item["jwt_token"]["sub"]
+        scope = jwt_token.scope
+        sub = jwt_token.sub
         jwt_token, refresh_token = self._generate_tokens(sub, scope=scope)
         self._logger.info(
             f"Token refresh succeeded for sub={sub}",
