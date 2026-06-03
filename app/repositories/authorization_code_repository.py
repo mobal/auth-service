@@ -28,7 +28,8 @@ class AuthorizationCodeRepository:
     ) -> str:
         code = secrets.token_urlsafe(32)
         now = pendulum.now()
-        ttl = (now.add(minutes=10)).int_timestamp
+        expire_at = now.add(minutes=10)
+        ttl = expire_at.int_timestamp
 
         self._table.put_item(
             Item={
@@ -41,7 +42,7 @@ class AuthorizationCodeRepository:
                 "code_challenge": code_challenge,
                 "code_challenge_method": code_challenge_method,
                 "created_at": now.to_iso8601_string(),
-                "expire_at": pendulum.from_timestamp(ttl).to_iso8601_string(),
+                "expire_at": expire_at.to_iso8601_string(),
                 "ttl": ttl,
             }
         )
