@@ -2,6 +2,7 @@ import base64
 import hashlib
 import secrets
 import uuid
+from urllib.parse import urlparse, urlunparse
 
 import jwt
 import pendulum
@@ -78,7 +79,9 @@ class AuthService:
         code_verifier: str,
         code_challenge_method: str | None,
     ) -> str:
-        if code_challenge_method == "S256":
+        method = code_challenge_method or "plain"
+
+        if method == "S256":
             logger.debug("Computing PKCE challenge using S256")
             return (
                 base64.urlsafe_b64encode(
@@ -88,19 +91,34 @@ class AuthService:
                 .rstrip("=")
             )
 
-        if code_challenge_method == "plain":
+        if method == "plain":
             logger.debug("Computing PKCE challenge using plain method")
             return code_verifier
 
         logger.warning(
             "Unsupported PKCE code challenge method",
-            extra={"code_challenge_method": code_challenge_method},
+            extra={"code_challenge_method": method},
         )
 
         raise OAuthException(
             "invalid_request",
             "Unsupported code_challenge_method",
             status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    @staticmethod
+    def _normalize_uri(uri: str) -> str:
+        parsed = urlparse(uri)
+        scheme = parsed.scheme.lower()
+        host = parsed.hostname.lower() if parsed.hostname else ""
+        port = parsed.port
+        default_port = {"https": 443, "http": 80}.get(scheme)
+        if port == default_port:
+            port = None
+        path = parsed.path.rstrip("/") or "/"
+        netloc = f"{host}:{port}" if port else host
+        return urlunparse(
+            (scheme, netloc, path, parsed.params, parsed.query, parsed.fragment)
         )
 
     def _validate_pkce(
@@ -184,19 +202,23 @@ class AuthService:
 
     def _revoke_token(self, jwt_token: JWTToken):
         self._logger.info(
-            f"Revoking token with jti={jwt_token.jti}", extra={"jwt_token": jwt_token}
+            "Revoking token with jti=%s",
+            jwt_token.jti,
+            extra={"token_sub": jwt_token.sub, "token_scope": jwt_token.scope},
         )
         self._token_service.delete_by_id(jwt_token.jti)
 
     def _issue_service_token(
         self, client_name: str, client_secret: str, scope: str | None = None
     ) -> JWTToken:
-        if (
-            self._user_service_token
-            and self._user_service_token.exp > pendulum.now().int_timestamp
-        ):
-            self._logger.debug("Reusing cached user service token")
-            return self._user_service_token
+        if self._user_service_token is not None:
+            remaining = self._user_service_token.exp - pendulum.now().int_timestamp
+            # Cache with a safety buffer: refresh when less than 20% of lifetime remains
+            # or at most 60s before expiry, to reduce the window for serving revoked tokens
+            safety_buffer = max(settings.service_token_lifetime_seconds // 5, 60)
+            if remaining > safety_buffer:
+                self._logger.debug("Reusing cached user service token")
+                return self._user_service_token
 
         self._logger.info("Issuing new user service token")
 
@@ -452,7 +474,9 @@ class AuthService:
                 "invalid_grant", status_code=status.HTTP_400_BAD_REQUEST
             )
 
-        if auth_code.redirect_uri != redirect_uri:
+        if self._normalize_uri(auth_code.redirect_uri) != self._normalize_uri(
+            redirect_uri
+        ):
             self._logger.warning(
                 "Authorization code exchange failed, redirect_uri mismatch",
                 extra={"authorization_code_id": auth_code.id},

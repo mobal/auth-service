@@ -59,7 +59,7 @@ class TestAuthApi:
         httpx_mock.add_response(
             method="POST",
             url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{user_data['id']}/validate",
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
         response = test_client.post(

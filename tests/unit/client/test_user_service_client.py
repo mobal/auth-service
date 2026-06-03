@@ -1,5 +1,5 @@
 import pytest
-from pytest_httpx import HTTPXMock
+from pytest_httpx2 import HTTPXMock
 
 from app.clients.user_service_client import UserServiceClient
 
@@ -128,7 +128,7 @@ class TestUserServiceClient:
         self._assert_bearer(request, jwt_token)
         assert request.content.decode() == '{"password":"password"}'
 
-    def test_validate_user_password_returns_false_on_unauthorized(
+    def test_validate_user_password_returns_false_on_bad_request(
         self,
         httpx_mock: HTTPXMock,
         client: UserServiceClient,
@@ -138,7 +138,7 @@ class TestUserServiceClient:
         httpx_mock.add_response(
             method="POST",
             url=f"http://user-service/api/v1/users/{user_id}/validate",
-            status_code=401,
+            status_code=400,
         )
 
         result = client.validate_user_password(user_id, "wrong_password", jwt_token)
