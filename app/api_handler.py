@@ -125,7 +125,7 @@ def request_validation_error_handler(
 
 
 @app.get("/health")
-async def health_check():
+async def health_check() -> dict[str, str]:
     logger.debug("Health check endpoint called")
     return {"status": "healthy"}
 

@@ -14,7 +14,7 @@ class TokenService:
         self._logger = Logger()
         self._token_repository = TokenRepository()
 
-    def create(self, jwt_token: JWTToken, refresh_token: RefreshToken | None):
+    def create(self, jwt_token: JWTToken, refresh_token: RefreshToken | None) -> None:
         self._logger.info(
             "Creating token record for jti=%s",
             jwt_token.jti,
@@ -35,7 +35,7 @@ class TokenService:
 
         self._token_repository.create_token(token_data)
 
-    def delete_by_id(self, jti: str):
+    def delete_by_id(self, jti: str) -> None:
         self._logger.info("Deleting token record for jti=%s", jti)
         response = self._token_repository.delete_by_id(jti)
         if response["ResponseMetadata"]["HTTPStatusCode"] != status.HTTP_200_OK:

@@ -10,7 +10,7 @@ env_files = [".env", ".env.dev", ".env.local", ".env.prod"]
 logger = Logger()
 
 
-def load_env_files():
+def load_env_files() -> None:
     logger.debug("Loading environment files")
     root_dir = Path(__file__).parent.parent
     for env in env_files:
