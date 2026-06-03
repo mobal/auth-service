@@ -204,6 +204,11 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert "access_token" in body
+        assert "refresh_token" in body
+        assert body["token_type"] == "Bearer"
+        assert "expires_in" in body
         self._assert_cache_headers(response)
 
     def test_successfully_client_credentials(

@@ -128,3 +128,38 @@ class TestServiceRepository:
         )
         with pytest.raises(ClientError):
             service_repository.get_by_name("test-service")
+
+    def test_get_by_id_returns_none_for_empty_id(
+        self,
+        service_repository: ServiceRepository,
+        services_table,
+    ):
+        with pytest.raises(ClientError):
+            service_repository.get_by_id("")
+
+    def test_get_by_name_returns_none_for_empty_name(
+        self,
+        service_repository: ServiceRepository,
+        services_table,
+    ):
+        with pytest.raises(ClientError):
+            service_repository.get_by_name("")
+
+    def test_create_service_with_empty_scopes(
+        self,
+        service_credential: ServiceCredential,
+        service_repository: ServiceRepository,
+        services_table,
+    ):
+        credential = {
+            "id": str(uuid.uuid4()),
+            "name": "test-empty-scopes",
+            "secret": service_credential.secret,
+            "scopes": [],
+            "created_at": pendulum.now().to_iso8601_string(),
+        }
+        service_repository.create_service(credential)
+
+        response = services_table.get_item(Key={"id": credential["id"]})
+
+        assert response["Item"] == credential

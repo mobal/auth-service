@@ -15,7 +15,6 @@ class TestTokenService:
         mocker,
         jwt_token: JWTToken,
         refresh_token: RefreshToken,
-        token: dict[str, Any],
         token_repository: TokenRepository,
         token_service: TokenService,
     ):
@@ -23,7 +22,16 @@ class TestTokenService:
 
         token_service.create(jwt_token, refresh_token)
 
-        token_repository.create_token.assert_called_once_with(token)
+        token_repository.create_token.assert_called_once_with(
+            {
+                "jti": jwt_token.jti,
+                "jwt_token": jwt_token.model_dump(),
+                "refresh_token": refresh_token.token,
+                "created_at": mocker.ANY,
+                "expire_at": mocker.ANY,
+                "ttl": refresh_token.ttl,
+            }
+        )
 
     def test_successfully_create_token_without_refresh_token(
         self,

@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import Mock
 
 import jwt
@@ -6,7 +7,7 @@ from fastapi import HTTPException, status
 from fastapi.requests import Request
 
 from app.jwt_bearer import JWTBearer
-from app.models.jwt import JWTToken
+from app.models.jwt import JWTToken, RefreshToken
 from app.services.token_service import TokenService
 from app.settings import Settings
 
@@ -69,6 +70,31 @@ class TestJWTAuth:
     ):
         empty_request.headers = {
             "Authorization": f"Bearer {jwt.encode({'sub': 'user-1'}, settings.jwt_secret)}"
+        }
+
+        with pytest.raises(HTTPException) as excinfo:
+            jwt_bearer(empty_request)
+
+        assert NOT_AUTHENTICATED == excinfo.value.detail
+        assert status.HTTP_403_FORBIDDEN == excinfo.value.status_code
+
+    def test_fail_to_authorize_request_due_to_expired_token(
+        self,
+        empty_request: Mock,
+        jwt_bearer: JWTBearer,
+        settings: Settings,
+    ):
+        import time
+
+        expired_payload = {
+            "jti": str(uuid.uuid4()),
+            "sub": str(uuid.uuid4()),
+            "exp": int(time.time()) - 3600,
+            "iat": int(time.time()) - 7200,
+            "scope": "users:read",
+        }
+        empty_request.headers = {
+            "Authorization": f"Bearer {jwt.encode(expired_payload, settings.jwt_secret)}"
         }
 
         with pytest.raises(HTTPException) as excinfo:
@@ -179,14 +205,14 @@ class TestJWTAuth:
         mocker,
         jwt_bearer: JWTBearer,
         jwt_token: JWTToken,
-        refresh_token: str,
+        refresh_token: RefreshToken,
         token_service: TokenService,
         valid_request: Request,
     ):
         mocker.patch.object(
             TokenService,
             "get_by_id",
-            return_value=(jwt_token.model_dump(), refresh_token),
+            return_value=(jwt_token, refresh_token.token, jwt_token.exp),
         )
 
         result = jwt_bearer(valid_request)
@@ -200,14 +226,14 @@ class TestJWTAuth:
         empty_request: Request,
         jwt_bearer: JWTBearer,
         jwt_token: JWTToken,
-        refresh_token: str,
+        refresh_token: RefreshToken,
         settings: Settings,
         token_service: TokenService,
     ):
         mocker.patch.object(
             TokenService,
             "get_by_id",
-            return_value=(jwt_token.model_dump(), refresh_token),
+            return_value=(jwt_token, refresh_token.token, jwt_token.exp),
         )
         empty_request.query_params = {
             "token": f"{jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret)}"

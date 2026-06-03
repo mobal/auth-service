@@ -87,7 +87,7 @@ class TestCorrelationIdMiddleware:
 
         assert response.status_code == status.HTTP_200_OK
         assert X_CORRELATION_ID in response.headers
-        assert response.headers[X_CORRELATION_ID] is not None
+        assert response.headers[X_CORRELATION_ID] == correlation_id_value
 
     def test_correlation_id_is_generated_when_not_provided(
         self, httpx_mock, token_url: str, test_client: TestClient
@@ -124,3 +124,60 @@ class TestCorrelationIdMiddleware:
             pytest.fail(
                 f"Invalid UUID format for correlation ID: {correlation_id_value}"
             )
+
+    def test_correlation_id_from_aws_lambda_context(
+        self,
+        httpx_mock,
+        token_url: str,
+        initialize_tokens_table,
+        initialize_services_table,
+    ):
+        """Test that the correlation ID falls back to AWS Lambda request ID when no header is provided."""
+        from unittest.mock import Mock
+
+        from fastapi.testclient import TestClient
+
+        from app.api_handler import app
+
+        aws_request_id = str(uuid.uuid4())
+        mock_context = Mock()
+        mock_context.aws_request_id = aws_request_id
+
+        # Wrap the app to inject aws.context into the ASGI scope
+        # before the CorrelationIdMiddleware processes the request.
+        class _LambdaContextInjector:
+            def __init__(self, inner):
+                self.inner = inner
+
+            async def __call__(self, scope, receive, send):
+                if scope["type"] == "http":
+                    scope["aws.context"] = mock_context
+                await self.inner(scope, receive, send)
+
+        wrapped_app = _LambdaContextInjector(app)
+        test_client = TestClient(wrapped_app, raise_server_exceptions=True)
+
+        httpx_mock.add_response(
+            method="GET",
+            url=USER_SERVICE_USERS_URL,
+            json=USER_VERIFY_RESPONSE,
+            status_code=status.HTTP_200_OK,
+        )
+        httpx_mock.add_response(
+            method="POST",
+            url=USER_SERVICE_VALIDATE_URL,
+            json={"id": USER_ID, "email": "root@squarelabs.hu", "roles": ["root"]},
+            status_code=status.HTTP_200_OK,
+        )
+
+        response = test_client.post(
+            token_url,
+            data={
+                "grant_type": "password",
+                "username": "root@squarelabs.hu",
+                "password": "password",
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.headers[X_CORRELATION_ID] == aws_request_id
