@@ -255,7 +255,7 @@ class AuthService:
         )
 
     def logout(self, jwt_token: JWTToken):
-        self._logger.info(f"Logout requested for jti={jwt_token.jti}")
+        self._logger.info("Logout requested for jti=%s", jwt_token.jti)
         self._revoke_token(jwt_token)
 
     def refresh(self, refresh_token: str) -> tuple[str, str, int, str | None]:

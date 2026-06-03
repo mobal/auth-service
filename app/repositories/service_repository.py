@@ -18,17 +18,17 @@ class ServiceRepository:
         return self._table.put_item(Item=data)
 
     def get_by_id(self, client_id: str) -> ServiceCredential | None:
-        self._logger.debug(f"Fetching service credential by client_id={client_id}")
+        self._logger.debug("Fetching service credential by client_id=%s", client_id)
 
         response = self._table.get_item(Key={"id": client_id})
         if "Item" in response:
             return ServiceCredential(**response["Item"])
-        self._logger.warning(f"Service credential not found for client_id={client_id}")
+        self._logger.warning("Service credential not found for client_id=%s", client_id)
 
         return None
 
     def get_by_name(self, name: str) -> ServiceCredential | None:
-        self._logger.debug(f"Fetching service credential by name={name}")
+        self._logger.debug("Fetching service credential by name=%s", name)
 
         response = self._table.query(
             IndexName="NameIndex",
@@ -37,5 +37,5 @@ class ServiceRepository:
         if "Items" in response and response["Items"]:
             return ServiceCredential(**response["Items"][0])
 
-        self._logger.warning(f"Service credential not found for name={name}")
+        self._logger.warning("Service credential not found for name=%s", name)
         return None

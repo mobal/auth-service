@@ -57,7 +57,7 @@ class HTTPBearer(FastAPIHTTPBearer):
             else:
                 return None
         if scheme.lower() != "bearer":
-            logger.warning(f"Invalid {scheme=}")
+            logger.warning("Invalid scheme=%s", scheme)
 
             if self._auto_error:
                 raise HTTPException(
@@ -119,19 +119,20 @@ class JWTBearer:
             )
             if self._token_service.get_by_id(decoded_token.jti):
                 logger.debug(
-                    f"Token accepted for jti={decoded_token.jti}",
+                    "Token accepted for jti=%s",
+                    decoded_token.jti,
                     extra={"sub": decoded_token.sub},
                 )
 
                 self.decoded_token = decoded_token
 
                 return True
-            logger.debug(f"Token rejected (blacklisted) jti={decoded_token.jti}")
+            logger.debug("Token rejected (blacklisted) jti=%s", decoded_token.jti)
         except DecodeError as err:
-            logger.exception(f"Error occurred during token decoding {err=}")
+            logger.exception("Error occurred during token decoding: %s", err)
         except ExpiredSignatureError as err:
-            logger.exception(f"Expired signature {err=}")
+            logger.exception("Expired signature: %s", err)
         except ValidationError as err:
-            logger.exception(f"Invalid JWT payload structure {err=}")
+            logger.exception("Invalid JWT payload structure: %s", err)
 
         return False

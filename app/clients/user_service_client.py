@@ -19,7 +19,7 @@ class UserServiceClient:
             response.raise_for_status()
         except httpx.HTTPStatusError as err:
             if err.response.status_code == status.HTTP_404_NOT_FOUND:
-                logger.warning(f"User with email {email} not found in user-service")
+                logger.warning("User with email %s not found in user-service", email)
                 return None
             raise
 
@@ -33,7 +33,7 @@ class UserServiceClient:
     def validate_user_password(
         self, user_id: str, password: str, jwt_token: str
     ) -> bool:
-        logger.info(f"Validating user password user_id={user_id}")
+        logger.info("Validating user password user_id=%s", user_id)
 
         response = httpx.post(
             f"{settings.user_service_base_url}/api/v1/users/{user_id}/validate",
@@ -45,17 +45,18 @@ class UserServiceClient:
         except httpx.HTTPStatusError as err:
             if 400 <= err.response.status_code < 500:
                 logger.warning(
-                    f"Password validation failed user_id={user_id}",
+                    "Password validation failed user_id=%s",
+                    user_id,
                     extra={"status_code": err.response.status_code},
                 )
                 return False
             raise
 
-        logger.info(f"Password validated for user_id={user_id}")
+        logger.info("Password validated for user_id=%s", user_id)
         return True
 
     def get_user_by_id(self, user_id: str, jwt_token: str) -> dict | None:
-        logger.info(f"Fetching user from user-service user_id={user_id}")
+        logger.info("Fetching user from user-service user_id=%s", user_id)
 
         try:
             response = httpx.get(
@@ -65,11 +66,11 @@ class UserServiceClient:
             response.raise_for_status()
         except httpx.HTTPStatusError as err:
             if err.response.status_code == status.HTTP_404_NOT_FOUND:
-                logger.warning(f"User with ID {user_id} not found in user-service")
+                logger.warning("User with ID %s not found in user-service", user_id)
                 return None
 
-            logger.error(f"Error fetching user by ID: {err}")
+            logger.error("Error fetching user by ID: %s", err)
             raise
 
-        logger.info(f"User fetched from user-service user_id={user_id}")
+        logger.info("User fetched from user-service user_id=%s", user_id)
         return response.json()

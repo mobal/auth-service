@@ -53,7 +53,7 @@ def _parse_authorization_header(authorization: str | None) -> tuple[str, str]:
             headers={"WWW-Authenticate": "Basic"},
         )
 
-    logger.debug(f"Parsed client credentials for client_id={client_id}")
+    logger.debug("Parsed client credentials for client_id=%s", client_id)
 
     return client_id, client_secret
 
@@ -166,7 +166,7 @@ def token(
 def revoke(
     jwt_token: Annotated[JWTToken, Depends(jwt_bearer)],
 ):
-    logger.info(f"OAuth token revoke endpoint called for jti={jwt_token.jti}")
+    logger.info("OAuth token revoke endpoint called for jti=%s", jwt_token.jti)
     auth_service.logout(jwt_token)
 
 

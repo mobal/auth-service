@@ -16,7 +16,7 @@ def load_env_files():
     for env in env_files:
         f = root_dir / env
         if f.exists():
-            logger.debug(f"Loading env file {env}")
+            logger.debug("Loading env file %s", env)
             load_dotenv(dotenv_path=f, override=False)
 
 

@@ -48,13 +48,13 @@ class AuthorizationCodeRepository:
         )
 
         self._logger.info(
-            f"Created authorization code for client={client_id}, user={user_id}"
+            "Created authorization code for client=%s, user=%s", client_id, user_id
         )
         return code
 
     def delete_by_id(self, authorization_code_id: str) -> None:
         self._table.delete_item(Key={"id": authorization_code_id})
-        self._logger.info(f"Deleted authorization code {authorization_code_id}")
+        self._logger.info("Deleted authorization code %s", authorization_code_id)
 
     def consume_by_id(self, authorization_code_id: str) -> bool:
         try:
@@ -65,12 +65,12 @@ class AuthorizationCodeRepository:
                 ExpressionAttributeNames={"#c": "consumed"},
                 ExpressionAttributeValues={":val": True},
             )
-            self._logger.info(f"Consumed authorization code {authorization_code_id}")
+            self._logger.info("Consumed authorization code %s", authorization_code_id)
             return True
         except ClientError as e:
             if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
                 self._logger.warning(
-                    f"Authorization code already consumed {authorization_code_id}"
+                    "Authorization code already consumed %s", authorization_code_id
                 )
                 return False
             raise
@@ -88,7 +88,8 @@ class AuthorizationCodeRepository:
 
         item = response["Items"][0]
         self._logger.info(
-            f"Authorization code found id={item['id']}",
+            "Authorization code found id=%s",
+            item["id"],
             extra={"client_id": item["client_id"], "user_id": item["user_id"]},
         )
         return AuthorizationCode(

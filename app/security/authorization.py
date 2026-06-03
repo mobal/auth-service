@@ -13,7 +13,7 @@ def require_scope(required_scopes: list[str], token_param: str = "jwt_token"):
     )
 
     def decorator_wrapper(func):
-        logger.debug(f"Applying scope decorator to function={func.__name__}")
+        logger.debug("Applying scope decorator to function=%s", func.__name__)
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
