@@ -27,7 +27,7 @@ class AuthorizationCodeRepository:
         code_challenge_method: str | None = None,
     ) -> str:
         code = secrets.token_urlsafe(32)
-        now = pendulum.now()
+        now = pendulum.now("UTC")
         expire_at = now.add(minutes=10)
         ttl = expire_at.int_timestamp
 
