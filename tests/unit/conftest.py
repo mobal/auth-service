@@ -1,7 +1,7 @@
 from typing import Any
 
 import pendulum
-import pytest as pytest
+import pytest
 
 from app.jwt_bearer import JWTBearer
 from app.models.jwt import JWTToken, RefreshToken

@@ -1,6 +1,7 @@
 import secrets
 import uuid
 
+import boto3
 import pendulum
 from aws_lambda_powertools import Logger
 from boto3.dynamodb.conditions import Attr, Key
@@ -13,7 +14,7 @@ from app.models.authorization_code import AuthorizationCode
 class AuthorizationCodeRepository:
     def __init__(self):
         self._logger = Logger()
-        self._dynamodb = __import__("boto3").resource("dynamodb")
+        self._dynamodb = boto3.resource("dynamodb")
         self._table = self._dynamodb.Table(f"{settings.stage}-authorization_codes")
 
     def create(
