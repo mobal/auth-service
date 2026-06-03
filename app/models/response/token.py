@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class OAuthTokenResponse(BaseModel):
@@ -11,9 +13,9 @@ class OAuthTokenResponse(BaseModel):
 
     access_token: str
     """The issued access token (a JWT string)."""
-    token_type: str = "Bearer"
+    token_type: Literal["Bearer"] = "Bearer"
     """Token type — always ``\"Bearer\"`` (RFC 6750 Section 2.1)."""
-    expires_in: int
+    expires_in: int = Field(gt=0)
     """Lifetime of the access token in seconds (RFC 6749 Section 5.1)."""
     refresh_token: str | None = None
     """Token used to obtain a new access token without re-authentication."""

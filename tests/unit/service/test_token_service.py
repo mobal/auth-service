@@ -81,7 +81,7 @@ class TestTokenService:
         with pytest.raises(TokenNotFoundException) as excinfo:
             token_service.delete_by_id(jwt_token.jti)
 
-        assert TokenNotFoundException.__name__ == excinfo.typename
+        assert excinfo.type == TokenNotFoundException
         assert "The requested token was not found" == excinfo.value.detail
 
         token_repository.delete_by_id.assert_called_once_with(jwt_token.jti)

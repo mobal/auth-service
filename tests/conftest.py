@@ -204,6 +204,48 @@ def jwt_token() -> JWTToken:
 
 
 @pytest.fixture
+def expired_jwt_token() -> JWTToken:
+    iat = pendulum.now().subtract(days=2)
+    exp = iat.add(hours=1)
+    return JWTToken(
+        exp=exp.int_timestamp,
+        iat=iat.int_timestamp,
+        iss=None,
+        jti=str(uuid.uuid4()),
+        sub=str(uuid.uuid4()),
+        scope="tokens:revoke users:read",
+    )
+
+
+@pytest.fixture
+def jwt_token_no_scope() -> JWTToken:
+    iat = pendulum.now()
+    exp = iat.add(hours=1)
+    return JWTToken(
+        exp=exp.int_timestamp,
+        iat=iat.int_timestamp,
+        iss=None,
+        jti=str(uuid.uuid4()),
+        sub=str(uuid.uuid4()),
+        scope=None,
+    )
+
+
+@pytest.fixture
+def jwt_token_empty_sub() -> JWTToken:
+    iat = pendulum.now()
+    exp = iat.add(hours=1)
+    return JWTToken(
+        exp=exp.int_timestamp,
+        iat=iat.int_timestamp,
+        iss=None,
+        jti=str(uuid.uuid4()),
+        sub="",
+        scope="tokens:revoke",
+    )
+
+
+@pytest.fixture
 def password() -> str:
     return "not_so_secure_password"
 

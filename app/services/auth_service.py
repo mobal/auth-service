@@ -346,7 +346,7 @@ class AuthService:
 
         jwt_token = self._generate_token(
             sub=client_name,
-            exp=settings.service_token_lifetime,
+            exp=settings.service_token_lifetime_seconds,
             scope=granted_scope,
         )
         self._token_service.create(
@@ -371,7 +371,7 @@ class AuthService:
         jwt_token = self._generate_client_credentials(client_name, client_secret, scope)
         return (
             jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
-            settings.service_token_lifetime,
+            settings.service_token_lifetime_seconds,
             jwt_token.scope,
         )
 

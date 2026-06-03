@@ -198,7 +198,7 @@ class TestAuthService:
         with pytest.raises(TokenNotFoundException) as excinfo:
             auth_service.refresh(refresh_token)
 
-        assert TokenNotFoundException.__name__ == excinfo.typename
+        assert excinfo.type == TokenNotFoundException
         assert "The requested token was not found" == excinfo.value.detail
 
         token_service.get_by_refresh_token.assert_called_once_with(refresh_token)
@@ -249,7 +249,7 @@ class TestAuthService:
         with pytest.raises(TokenExpiredException) as excinfo:
             auth_service.refresh(refresh_token)
 
-        assert TokenExpiredException.__name__ == excinfo.typename
+        assert excinfo.type == TokenExpiredException
         assert status.HTTP_401_UNAUTHORIZED == excinfo.value.status_code
         assert "The requested token has expired" == excinfo.value.detail
 
@@ -317,7 +317,7 @@ class TestAuthService:
 
         assert decoded.sub == service_credential.name
         assert decoded.scope == scope
-        assert expires_in == settings.service_token_lifetime
+        assert expires_in == settings.service_token_lifetime_seconds
         assert scope == "users:read users:write"
         auth_service._token_service.create.assert_called_once()
 

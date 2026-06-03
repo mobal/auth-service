@@ -22,10 +22,6 @@ class TestJWTAuth:
         return request
 
     @pytest.fixture
-    def jwt_auth(self) -> JWTBearer:
-        return JWTBearer()
-
-    @pytest.fixture
     def valid_request(
         self, empty_request: Mock, jwt_token: JWTToken, settings: Settings
     ) -> Mock:
@@ -142,7 +138,7 @@ class TestJWTAuth:
         with pytest.raises(HTTPException) as excinfo:
             jwt_bearer(empty_request)
 
-        assert excinfo.typename == HTTPException.__name__
+        assert excinfo.type == HTTPException
         assert excinfo.value.status_code == status.HTTP_403_FORBIDDEN
         assert excinfo.value.detail == "Invalid authentication credentials"
 

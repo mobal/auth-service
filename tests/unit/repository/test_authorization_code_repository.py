@@ -2,6 +2,7 @@ import uuid
 
 import pendulum
 import pytest
+from botocore.exceptions import ClientError
 
 from app.models.authorization_code import AuthorizationCode
 from app.repositories.authorization_code_repository import (
@@ -276,3 +277,66 @@ class TestAuthorizationCodeRepository:
         assert code1 != code2
         assert repository.get_by_code(code1) is not None
         assert repository.get_by_code(code2) is not None
+
+    def test_create_raises_client_error_on_throttling(
+        self, mocker, repository: AuthorizationCodeRepository
+    ):
+        error_response = {
+            "Error": {
+                "Code": "ProvisionedThroughputExceededException",
+                "Message": "Rate exceeded",
+            }
+        }
+        mocker.patch.object(
+            repository._table,
+            "put_item",
+            side_effect=ClientError(error_response, "PutItem"),
+        )
+        with pytest.raises(ClientError):
+            repository.create(
+                client_id=str(uuid.uuid4()),
+                user_id=str(uuid.uuid4()),
+                redirect_uri="https://example.com/callback",
+            )
+
+    def test_get_by_code_raises_client_error(
+        self, mocker, repository: AuthorizationCodeRepository
+    ):
+        error_response = {
+            "Error": {
+                "Code": "InternalServerError",
+                "Message": "Internal error",
+            }
+        }
+        mocker.patch.object(
+            repository._table,
+            "query",
+            side_effect=ClientError(error_response, "Query"),
+        )
+        with pytest.raises(ClientError):
+            repository.get_by_code("some-code")
+
+    def test_consume_by_id_raises_unexpected_client_error(
+        self, mocker, repository: AuthorizationCodeRepository
+    ):
+        code = repository.create(
+            client_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            redirect_uri="https://example.com/callback",
+        )
+        auth_code = repository.get_by_code(code)
+        assert auth_code is not None
+
+        error_response = {
+            "Error": {
+                "Code": "InternalServerError",
+                "Message": "Internal error",
+            }
+        }
+        mocker.patch.object(
+            repository._table,
+            "update_item",
+            side_effect=ClientError(error_response, "UpdateItem"),
+        )
+        with pytest.raises(ClientError):
+            repository.consume_by_id(auth_code.id)

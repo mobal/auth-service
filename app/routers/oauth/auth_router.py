@@ -44,8 +44,8 @@ def _parse_authorization_header(authorization: str | None) -> tuple[str, str]:
             headers={"WWW-Authenticate": "Basic"},
         )
 
-    client_id, _, client_secret = decoded.partition(":")
-    if not client_id or not client_secret:
+    client_name, _, client_secret = decoded.partition(":")
+    if not client_name or not client_secret:
         logger.warning("Basic Authorization header missing client id or secret")
         raise OAuthException(
             ERROR_MESSAGE_INVALID_CLIENT,
@@ -53,9 +53,9 @@ def _parse_authorization_header(authorization: str | None) -> tuple[str, str]:
             headers={"WWW-Authenticate": "Basic"},
         )
 
-    logger.debug("Parsed client credentials for client_id=%s", client_id)
+    logger.debug("Parsed client credentials for client_name=%s", client_name)
 
-    return client_id, client_secret
+    return client_name, client_secret
 
 
 def _handle_password_grant(body: OAuthTokenRequest) -> OAuthTokenResponse:

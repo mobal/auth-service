@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 100
     rate_limit_duration_in_seconds: int = 60
     refresh_token_lifetime: int = 2592000  # 30 days
-    service_token_lifetime: int = 30
+    service_token_lifetime_seconds: int = 30
     stage: str
 
     @computed_field
