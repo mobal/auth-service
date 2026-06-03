@@ -28,7 +28,7 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
         correlation_id.set(
             request.headers.get(X_CORRELATION_ID)
             or (
-                request.scope.get("aws.context", {}).aws_request_id
+                request.scope["aws.context"].aws_request_id
                 if request.scope.get("aws.context")
                 else None
             )
