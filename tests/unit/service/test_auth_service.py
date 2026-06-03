@@ -171,9 +171,9 @@ class TestAuthService:
             TokenService, "consume_by_id", return_value=True
         )
 
-        new_jwt_token, _, _, _ = auth_service.refresh(refresh_token)
+        new_jwt_token, _, _, _ = auth_service.refresh(refresh_token.token)
 
-        token_service.get_by_refresh_token.assert_called_once_with(refresh_token)
+        token_service.get_by_refresh_token.assert_called_once_with(refresh_token.token)
         token_service.create.assert_called_once_with(
             JWTToken(
                 **jwt.decode(
@@ -190,18 +190,18 @@ class TestAuthService:
         self,
         mocker,
         auth_service: AuthService,
-        refresh_token: str,
+        refresh_token: RefreshToken,
         token_service: TokenService,
     ):
         mocker.patch.object(TokenService, "get_by_refresh_token", return_value=None)
 
         with pytest.raises(TokenNotFoundException) as excinfo:
-            auth_service.refresh(refresh_token)
+            auth_service.refresh(refresh_token.token)
 
         assert excinfo.type == TokenNotFoundException
         assert "The requested token was not found" == excinfo.value.detail
 
-        token_service.get_by_refresh_token.assert_called_once_with(refresh_token)
+        token_service.get_by_refresh_token.assert_called_once_with(refresh_token.token)
 
     def test_successfully_refresh_revokes_stored_jti(
         self,
@@ -232,7 +232,7 @@ class TestAuthService:
         self,
         mocker,
         auth_service: AuthService,
-        refresh_token: str,
+        refresh_token: RefreshToken,
         token_service: TokenService,
     ):
         from app.exceptions import TokenExpiredException
@@ -243,23 +243,23 @@ class TestAuthService:
         mocker.patch.object(
             TokenService,
             "get_by_refresh_token",
-            return_value=(jwt_token_obj, refresh_token, expired_time),
+            return_value=(jwt_token_obj, refresh_token.token, expired_time),
         )
 
         with pytest.raises(TokenExpiredException) as excinfo:
-            auth_service.refresh(refresh_token)
+            auth_service.refresh(refresh_token.token)
 
         assert excinfo.type == TokenExpiredException
         assert status.HTTP_401_UNAUTHORIZED == excinfo.value.status_code
         assert "The requested token has expired" == excinfo.value.detail
 
-        token_service.get_by_refresh_token.assert_called_once_with(refresh_token)
+        token_service.get_by_refresh_token.assert_called_once_with(refresh_token.token)
 
     def test_fail_to_refresh_due_to_token_already_consumed(
         self,
         mocker,
         auth_service: AuthService,
-        refresh_token: str,
+        refresh_token: RefreshToken,
         token_service: TokenService,
     ):
         now = pendulum.now().int_timestamp
@@ -267,12 +267,12 @@ class TestAuthService:
         mocker.patch.object(
             TokenService,
             "get_by_refresh_token",
-            return_value=(jwt_token_obj, refresh_token, now + 3600),
+            return_value=(jwt_token_obj, refresh_token.token, now + 3600),
         )
         mocker.patch.object(TokenService, "consume_by_id", return_value=False)
 
         with pytest.raises(TokenNotFoundException) as excinfo:
-            auth_service.refresh(refresh_token)
+            auth_service.refresh(refresh_token.token)
 
         assert "not found" in str(excinfo.value.detail).lower()
 

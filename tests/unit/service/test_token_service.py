@@ -132,8 +132,14 @@ class TestTokenService:
     ):
         mocker.patch.object(TokenRepository, "get_by_id", return_value=token)
 
-        token_service.get_by_id(jwt_token.jti)
+        result = token_service.get_by_id(jwt_token.jti)
 
+        assert result is not None
+        assert result[0].jti == jwt_token.jti
+        assert result[0].sub == jwt_token.sub
+        assert result[0].scope == jwt_token.scope
+        assert result[1] == token.get("refresh_token", "")
+        assert result[2] == token["ttl"]
         token_repository.get_by_id.assert_called_once_with(jwt_token.jti)
 
     def test_successfully_get_token_by_refresh_token(
@@ -150,8 +156,13 @@ class TestTokenService:
             return_value=token,
         )
 
-        token_service.get_by_refresh_token(refresh_token.token)
+        result = token_service.get_by_refresh_token(refresh_token.token)
 
+        assert result is not None
+        assert result[0].jti == token["jti"]
+        assert result[0].sub == token["jwt_token"]["sub"]
+        assert result[1] == token.get("refresh_token", "")
+        assert result[2] == token["ttl"]
         token_repository.get_by_refresh_token.assert_called_once_with(
             refresh_token.token
         )

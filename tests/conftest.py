@@ -84,13 +84,12 @@ def settings() -> Settings:
 
 @pytest.fixture
 def dynamodb_resource(settings):
-    with mock_aws():
-        yield boto3.Session().resource(
-            "dynamodb",
-            region_name=os.getenv("AWS_REGION_NAME"),
-            aws_access_key_id=settings.aws_access_key_id,
-            aws_secret_access_key=settings.aws_secret_access_key,
-        )
+    yield boto3.Session().resource(
+        "dynamodb",
+        region_name=os.getenv("AWS_REGION_NAME"),
+        aws_access_key_id=settings.aws_access_key_id,
+        aws_secret_access_key=settings.aws_secret_access_key,
+    )
 
 
 @pytest.fixture

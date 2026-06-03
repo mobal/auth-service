@@ -38,20 +38,16 @@ class TestUserServiceClient:
 
     def test_get_user_by_email_returns_none_when_not_found(
         self,
+        httpx_mock: HTTPXMock,
         client: UserServiceClient,
         user_data: dict,
         jwt_token: str,
-        monkeypatch,
     ):
-        import httpx
-
-        def raise_404(*args, **kwargs):
-            response = httpx.Response(status_code=404)
-            raise httpx.HTTPStatusError(
-                "404", request=httpx.Request("GET", ""), response=response
-            )
-
-        monkeypatch.setattr("httpx.get", raise_404)
+        httpx_mock.add_response(
+            method="GET",
+            url=f"http://user-service/api/v1/users?email={user_data['email']}",
+            status_code=404,
+        )
 
         result = client.get_user_by_email(user_data["email"], jwt_token)
 
@@ -95,20 +91,16 @@ class TestUserServiceClient:
 
     def test_get_user_by_id_returns_none_when_not_found(
         self,
+        httpx_mock: HTTPXMock,
         client: UserServiceClient,
         user_id: str,
         jwt_token: str,
-        monkeypatch,
     ):
-        import httpx
-
-        def raise_404(*args, **kwargs):
-            response = httpx.Response(status_code=404)
-            raise httpx.HTTPStatusError(
-                "404", request=httpx.Request("GET", ""), response=response
-            )
-
-        monkeypatch.setattr("httpx.get", raise_404)
+        httpx_mock.add_response(
+            method="GET",
+            url=f"http://user-service/api/v1/users/{user_id}",
+            status_code=404,
+        )
 
         result = client.get_user_by_id(user_id, jwt_token)
 
