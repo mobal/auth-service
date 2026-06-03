@@ -17,7 +17,7 @@ class JWTToken(BaseModel):
     """Issued-at time (Unix timestamp, RFC 7519 Section 4.1.6)."""
     iss: str | None = None
     """Issuer identifier (RFC 7519 Section 4.1.1)."""
-    aud: str | None = None
+    aud: str | list[str] | None = None
     """Audience — single string or array of strings (RFC 7519 Section 4.1.3)."""
     jti: str
     """Unique token identifier for replay detection (RFC 7519 Section 4.1.7)."""
