@@ -1,6 +1,5 @@
 import uuid
 from contextvars import ContextVar
-from typing import Any
 
 from aws_lambda_powertools import Logger
 from fastapi.requests import Request
@@ -10,7 +9,6 @@ from starlette.types import ASGIApp
 
 X_CORRELATION_ID = "X-Correlation-ID"
 
-clients: dict[str, Any] = {}
 correlation_id: ContextVar[str] = ContextVar(X_CORRELATION_ID)
 logger = Logger(utc=True)
 
