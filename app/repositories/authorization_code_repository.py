@@ -51,24 +51,26 @@ class AuthorizationCodeRepository:
         )
         return code
 
-    def delete_by_id(self, code_id: str) -> None:
-        self._table.delete_item(Key={"id": code_id})
-        self._logger.info(f"Deleted authorization code {code_id}")
+    def delete_by_id(self, authorization_code_id: str) -> None:
+        self._table.delete_item(Key={"id": authorization_code_id})
+        self._logger.info(f"Deleted authorization code {authorization_code_id}")
 
-    def consume_by_id(self, code_id: str) -> bool:
+    def consume_by_id(self, authorization_code_id: str) -> bool:
         try:
             self._table.update_item(
-                Key={"id": code_id},
+                Key={"id": authorization_code_id},
                 UpdateExpression="SET #c = :val",
                 ConditionExpression=Attr("id").exists() & Attr("consumed").not_exists(),
                 ExpressionAttributeNames={"#c": "consumed"},
                 ExpressionAttributeValues={":val": True},
             )
-            self._logger.info(f"Consumed authorization code {code_id}")
+            self._logger.info(f"Consumed authorization code {authorization_code_id}")
             return True
         except ClientError as e:
             if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
-                self._logger.warning(f"Authorization code already consumed {code_id}")
+                self._logger.warning(
+                    f"Authorization code already consumed {authorization_code_id}"
+                )
                 return False
             raise
 

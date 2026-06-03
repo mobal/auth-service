@@ -1,4 +1,3 @@
-
 import pendulum
 from aws_lambda_powertools import Logger
 from starlette import status
