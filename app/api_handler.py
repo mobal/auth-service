@@ -1,4 +1,3 @@
-import uvicorn
 from aws_lambda_powertools import Logger
 from botocore.exceptions import BotoCoreError
 from fastapi import FastAPI, HTTPException, Request, status
@@ -131,4 +130,6 @@ async def health_check() -> dict[str, str]:
 
 
 if __name__ == "__main__":
+    import uvicorn
+
     uvicorn.run("app.api_handler:app", host="localhost", port=8080, reload=True)
