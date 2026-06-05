@@ -299,6 +299,23 @@ class TestAuthorizationCodeRepository:
                 redirect_uri="https://example.com/callback",
             )
 
+    def test_delete_by_id_raises_client_error_on_throttling(
+        self, mocker, repository: AuthorizationCodeRepository
+    ):
+        error_response = {
+            "Error": {
+                "Code": "ProvisionedThroughputExceededException",
+                "Message": "Rate exceeded",
+            }
+        }
+        mocker.patch.object(
+            repository._table,
+            "delete_item",
+            side_effect=ClientError(error_response, "DeleteItem"),
+        )
+        with pytest.raises(ClientError):
+            repository.delete_by_id("nonexistent-id")
+
     def test_get_by_code_raises_client_error(
         self, mocker, repository: AuthorizationCodeRepository
     ):

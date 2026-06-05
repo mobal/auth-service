@@ -30,7 +30,10 @@ class OAuthException(HTTPException):
         status_code: int = status.HTTP_400_BAD_REQUEST,
         headers: dict | None = None,
     ):
-        super().__init__(status_code=status_code, detail=error, headers=headers)
+        detail_dict: dict[str, str] = {"error": error}
+        if error_description:
+            detail_dict["error_description"] = error_description
+        super().__init__(status_code=status_code, detail=detail_dict, headers=headers)
         self.oauth_error = error
         self.oauth_error_description = error_description
 

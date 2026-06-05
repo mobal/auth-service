@@ -348,7 +348,7 @@ class AuthService:
                 headers={"WWW-Authenticate": "Basic"},
             )
 
-        allowed = set(service.scopes)
+        allowed = set(service.scopes) if service.scopes else set()
         if requested_scope:
             requested = set(requested_scope.split())
             if not requested.issubset(allowed):

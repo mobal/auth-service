@@ -5,6 +5,7 @@ from unittest.mock import ANY
 import jwt
 import pendulum
 import pytest as pytest
+from argon2 import PasswordHasher
 from fastapi import HTTPException, status
 
 from app.clients.user_service_client import UserServiceClient
@@ -25,7 +26,6 @@ ALGORITHMS = ["HS256"]
 class TestAuthService:
     @pytest.fixture(autouse=True)
     def _patch_auth_service_dependencies(self, mocker, monkeypatch, settings: Settings):
-        # AuthService now expects this setting when requesting a user-service token.
         patched_settings = SimpleNamespace(
             service_token_secret="test-service-token-secret"
         )
@@ -294,6 +294,29 @@ class TestAuthService:
 
         assert excinfo.value.oauth_error == "invalid_scope"
 
+    def test_oauth_exception_detail_contains_full_error_dict(self):
+        error = "invalid_request"
+        error_description = "Missing required parameter"
+
+        exc = OAuthException(error, error_description)
+
+        assert isinstance(exc.detail, dict)
+        assert exc.detail["error"] == error
+        assert exc.detail["error_description"] == error_description
+        assert exc.oauth_error == error
+        assert exc.oauth_error_description == error_description
+
+    def test_oauth_exception_detail_omits_error_description_when_empty(self):
+        error = "invalid_grant"
+
+        exc = OAuthException(error)
+
+        assert isinstance(exc.detail, dict)
+        assert exc.detail["error"] == error
+        assert "error_description" not in exc.detail
+        assert exc.oauth_error == error
+        assert exc.oauth_error_description is None
+
     def test_successfully_client_credentials_without_requested_scope(
         self,
         mocker,
@@ -393,6 +416,65 @@ class TestAuthService:
             )
 
         assert excinfo.value.oauth_error == "invalid_scope"
+
+    def test_successfully_client_credentials_without_scopes(
+        self,
+        mocker,
+        auth_service: AuthService,
+        password: str,
+        settings: Settings,
+        fast_password_hasher: PasswordHasher,
+    ):
+        service_without_scopes = ServiceCredential(
+            id=str(uuid.uuid4()),
+            name="no-scope-service",
+            secret=fast_password_hasher.hash(password),
+            scopes=[],
+            created_at=pendulum.now().to_iso8601_string(),
+        )
+        mocker.patch(
+            "app.services.auth_service.ServiceRepository.get_by_name",
+            return_value=service_without_scopes,
+        )
+        mocker.patch.object(TokenService, "create")
+
+        token, expires_in, scope = auth_service.client_credentials(
+            service_without_scopes.name, password, None
+        )
+        decoded = JWTToken(
+            **jwt.decode(token, settings.jwt_secret, algorithms=ALGORITHMS)
+        )
+
+        assert decoded.sub == service_without_scopes.name
+        assert scope is None
+        assert expires_in == settings.service_token_lifetime_seconds
+        auth_service._token_service.create.assert_called_once()
+
+    def test_client_credentials_handles_none_scopes_from_db(
+        self,
+        mocker,
+        auth_service: AuthService,
+        password: str,
+        settings: Settings,
+        fast_password_hasher: PasswordHasher,
+    ):
+        service = ServiceCredential(
+            id=str(uuid.uuid4()),
+            name="legacy-service",
+            secret=fast_password_hasher.hash(password),
+            scopes=[],
+            created_at=pendulum.now().to_iso8601_string(),
+        )
+        object.__setattr__(service, "scopes", None)
+        mocker.patch(
+            "app.services.auth_service.ServiceRepository.get_by_name",
+            return_value=service,
+        )
+        mocker.patch.object(TokenService, "create")
+
+        auth_service.client_credentials(service.name, password, None)
+
+        assert auth_service._token_service.create.called
 
     def test_successfully_authorize_with_user(
         self,

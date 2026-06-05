@@ -31,21 +31,29 @@ class AuthorizationCodeRepository:
         expire_at = now.add(minutes=10)
         ttl = expire_at.int_timestamp
 
-        self._table.put_item(
-            Item={
-                "id": str(uuid.uuid4()),
-                "code": code,
-                "client_id": client_id,
-                "user_id": user_id,
-                "redirect_uri": redirect_uri,
-                "scope": scope,
-                "code_challenge": code_challenge,
-                "code_challenge_method": code_challenge_method,
-                "created_at": now.to_iso8601_string(),
-                "expire_at": expire_at.to_iso8601_string(),
-                "ttl": ttl,
-            }
-        )
+        try:
+            self._table.put_item(
+                Item={
+                    "id": str(uuid.uuid4()),
+                    "code": code,
+                    "client_id": client_id,
+                    "user_id": user_id,
+                    "redirect_uri": redirect_uri,
+                    "scope": scope,
+                    "code_challenge": code_challenge,
+                    "code_challenge_method": code_challenge_method,
+                    "created_at": now.to_iso8601_string(),
+                    "expire_at": expire_at.to_iso8601_string(),
+                    "ttl": ttl,
+                }
+            )
+        except ClientError:
+            self._logger.exception(
+                "Failed to create authorization code for client=%s, user=%s",
+                client_id,
+                user_id,
+            )
+            raise
 
         self._logger.info(
             "Created authorization code for client=%s, user=%s", client_id, user_id
@@ -53,7 +61,13 @@ class AuthorizationCodeRepository:
         return code
 
     def delete_by_id(self, authorization_code_id: str) -> None:
-        self._table.delete_item(Key={"id": authorization_code_id})
+        try:
+            self._table.delete_item(Key={"id": authorization_code_id})
+        except ClientError:
+            self._logger.exception(
+                "Failed to delete authorization code %s", authorization_code_id
+            )
+            raise
         self._logger.info("Deleted authorization code %s", authorization_code_id)
 
     def consume_by_id(self, authorization_code_id: str) -> bool:
