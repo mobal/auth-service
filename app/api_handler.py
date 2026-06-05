@@ -26,7 +26,10 @@ app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(GZipMiddleware)
 app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins or ["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 app.include_router(auth_router, tags=["auth"])
 

@@ -11,6 +11,7 @@ logger = Logger()
 
 class Settings(BaseSettings):
     app_name: str
+    allowed_origins: list[str] = []
     default_timezone: str
     aws_access_key_id: str
     aws_secret_access_key: str
