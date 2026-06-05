@@ -22,9 +22,19 @@ def require_scope(
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             token = kwargs.get(token_param)
+            if token is None:
+                logger.warning(
+                    "Token not found in kwargs, param=%s",
+                    token_param,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Not authenticated",
+                )
+
             token_scopes = set(token.scope.split()) if token.scope else set()
 
-            if not any(scope in token_scopes for scope in required_scopes):
+            if not all(scope in token_scopes for scope in required_scopes):
                 logger.warning(
                     "Token does not have required scopes: %s", required_scopes
                 )
