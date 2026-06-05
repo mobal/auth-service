@@ -1,3 +1,4 @@
+import httpx2
 import pytest
 from pytest_httpx2 import HTTPXMock
 
@@ -144,3 +145,105 @@ class TestUserServiceClient:
         result = client.validate_user_password(user_id, "wrong_password", jwt_token)
 
         assert result is False
+
+    def test_get_user_by_email_raises_on_server_error(
+        self,
+        httpx_mock: HTTPXMock,
+        client: UserServiceClient,
+        user_data: dict,
+        jwt_token: str,
+    ):
+        """Cover HTTPStatusError non-404 branch in get_user_by_email (lines 27-28)."""
+        httpx_mock.add_response(
+            method="GET",
+            url=f"http://user-service/api/v1/users?email={user_data['email']}",
+            status_code=500,
+        )
+
+        with pytest.raises(httpx2.HTTPStatusError):
+            client.get_user_by_email(user_data["email"], jwt_token)
+
+    def test_get_user_by_email_raises_on_connection_error(
+        self,
+        httpx_mock: HTTPXMock,
+        client: UserServiceClient,
+        user_data: dict,
+        jwt_token: str,
+    ):
+        """Cover RequestError branch in get_user_by_email (lines 29-31)."""
+        httpx_mock.add_exception(
+            httpx2.RequestError("Connection refused"),
+            url=f"http://user-service/api/v1/users?email={user_data['email']}",
+            method="GET",
+        )
+
+        with pytest.raises(httpx2.RequestError):
+            client.get_user_by_email(user_data["email"], jwt_token)
+
+    def test_validate_user_password_raises_on_server_error(
+        self,
+        httpx_mock: HTTPXMock,
+        client: UserServiceClient,
+        user_id: str,
+        jwt_token: str,
+    ):
+        """Cover HTTPStatusError non-400/422 branch in validate_user_password (lines 63-68)."""
+        httpx_mock.add_response(
+            method="POST",
+            url=f"http://user-service/api/v1/users/{user_id}/validate",
+            status_code=500,
+        )
+
+        with pytest.raises(httpx2.HTTPStatusError):
+            client.validate_user_password(user_id, "password", jwt_token)
+
+    def test_validate_user_password_raises_on_connection_error(
+        self,
+        httpx_mock: HTTPXMock,
+        client: UserServiceClient,
+        user_id: str,
+        jwt_token: str,
+    ):
+        """Cover RequestError branch in validate_user_password (lines 69-71)."""
+        httpx_mock.add_exception(
+            httpx2.RequestError("Connection refused"),
+            url=f"http://user-service/api/v1/users/{user_id}/validate",
+            method="POST",
+        )
+
+        with pytest.raises(httpx2.RequestError):
+            client.validate_user_password(user_id, "password", jwt_token)
+
+    def test_get_user_by_id_raises_on_server_error(
+        self,
+        httpx_mock: HTTPXMock,
+        client: UserServiceClient,
+        user_id: str,
+        jwt_token: str,
+    ):
+        """Cover HTTPStatusError non-404 branch in get_user_by_id (lines 90-91)."""
+        httpx_mock.add_response(
+            method="GET",
+            url=f"http://user-service/api/v1/users/{user_id}",
+            status_code=500,
+        )
+
+        with pytest.raises(httpx2.HTTPStatusError):
+            client.get_user_by_id(user_id, jwt_token)
+
+    def test_get_user_by_id_raises_on_connection_error(
+        self,
+        httpx_mock: HTTPXMock,
+        client: UserServiceClient,
+        user_id: str,
+        jwt_token: str,
+    ):
+        """Cover RequestError branch in get_user_by_id (lines 92-94)."""
+        httpx_mock.add_exception(
+            httpx2.RequestError("Connection refused"),
+            url=f"http://user-service/api/v1/users/{user_id}",
+            method="GET",
+        )
+
+        with pytest.raises(httpx2.RequestError):
+            client.get_user_by_id(user_id, jwt_token)
