@@ -430,7 +430,7 @@ class AuthService:
                 self._logger.warning(
                     "Authorization failed, redirect_uri not registered for client_id=%s",
                     client_id,
-                )
+                )  # noqa
                 raise OAuthException(
                     "invalid_request",
                     "Redirect URI is not registered for this client",
@@ -454,7 +454,7 @@ class AuthService:
                 "client_id": client_id,
                 "requested_scope": requested_scope,
             },
-        )
+        )  # noqa
         service_token = self._issue_service_token(
             settings.app_name, settings.client_secret
         )
@@ -565,7 +565,7 @@ class AuthService:
                 "user_id": auth_code.user_id,
                 "has_scope": auth_code.scope is not None,
             },
-        )
+        )  # noqa
 
         return (
             jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
