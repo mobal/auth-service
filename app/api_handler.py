@@ -34,7 +34,7 @@ app.add_middleware(
 app.include_router(auth_router, tags=["auth"])
 
 handler = Mangum(app)
-handler = logger.inject_lambda_context(handler, clear_state=True, log_event=True)
+handler = logger.inject_lambda_context(handler, clear_state=True, log_event=False)
 
 
 @app.exception_handler(OAuthException)
