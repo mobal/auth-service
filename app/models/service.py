@@ -18,5 +18,7 @@ class ServiceCredential(CamelModel):
     """Client secret used to authenticate at the token endpoint."""
     scopes: list[str] = []
     """List of OAuth 2.0 scopes this credential is authorized for."""
+    redirect_uris: list[str] = []
+    """List of allowed redirect URIs for the authorization code grant (RFC 6749 Section 3.1.2)."""
     created_at: str
     """ISO 8601 timestamp of when this credential was created."""

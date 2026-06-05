@@ -397,6 +397,28 @@ class AuthService:
             jwt_token.scope,
         )
 
+    def _validate_redirect_uri(self, client_id: str, redirect_uri: str) -> None:
+        try:
+            client = self._service_repository.get_by_id(client_id)
+        except Exception:
+            return
+
+        if client and client.redirect_uris:
+            normalized_redirect = self._normalize_uri(redirect_uri)
+            if not any(
+                self._normalize_uri(allowed) == normalized_redirect
+                for allowed in client.redirect_uris
+            ):
+                self._logger.warning(
+                    "Authorization failed, redirect_uri not registered for client_id=%s",
+                    client_id,
+                )
+                raise OAuthException(
+                    "invalid_request",
+                    "Redirect URI is not registered for this client",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
     def authorize(
         self,
         user_id: str,
@@ -424,6 +446,8 @@ class AuthService:
                 f"Authorization failed, user not found user_id={user_id}"
             )
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
+
+        self._validate_redirect_uri(client_id, redirect_uri)
 
         scope = self._derive_scope(user.get("roles", []), requested_scope)
 
