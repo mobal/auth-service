@@ -6,6 +6,7 @@ dependency graph explicit and allows tests to swap real implementations for
 mocks by passing them directly to the constructor.
 """
 
+from argon2 import PasswordHasher
 from fastapi import Depends
 
 from app.clients.user_service_client import UserServiceClient
@@ -37,11 +38,16 @@ def get_authorization_code_repository() -> AuthorizationCodeRepository:
     return AuthorizationCodeRepository()
 
 
+def get_password_hasher() -> PasswordHasher:
+    return PasswordHasher()
+
+
 def get_user_service_client() -> UserServiceClient:
     return UserServiceClient()
 
 
 def get_auth_service(
+    password_hasher: PasswordHasher = Depends(get_password_hasher),
     token_service: TokenService = Depends(get_token_service),
     service_repository: ServiceRepository = Depends(get_service_repository),
     authorization_code_repository: AuthorizationCodeRepository = Depends(
@@ -50,6 +56,7 @@ def get_auth_service(
     user_service_client: UserServiceClient = Depends(get_user_service_client),
 ) -> AuthService:
     return AuthService(
+        password_hasher=password_hasher,
         token_service=token_service,
         service_repository=service_repository,
         authorization_code_repository=authorization_code_repository,
