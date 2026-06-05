@@ -97,7 +97,8 @@ class JWTBearer:
         logger.debug("Validating bearer token from request")
         credentials = self._http_bearer.__call__(request)
         if credentials:
-            if not self._validate_token(credentials.credentials):
+            decoded_token = self._validate_token(credentials.credentials)
+            if decoded_token is None:
                 if self._auto_error:
                     logger.warning("Invalid authentication token")
 
@@ -105,14 +106,14 @@ class JWTBearer:
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail=ERROR_MESSAGE_NOT_AUTHENTICATED,
                     )
-                else:
-                    return None
 
-            return self.decoded_token
-        else:
-            return None
+                return None
 
-    def _validate_token(self, token: str) -> bool:
+            return decoded_token
+
+        return None
+
+    def _validate_token(self, token: str) -> JWTToken | None:
         try:
             decoded_token = JWTToken(
                 **jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
@@ -124,9 +125,7 @@ class JWTBearer:
                     extra={"sub": decoded_token.sub},
                 )
 
-                self.decoded_token = decoded_token
-
-                return True
+                return decoded_token
             logger.debug("Token rejected (blacklisted) jti=%s", decoded_token.jti)
         except DecodeError as err:
             logger.exception("Error occurred during token decoding: %s", err)
@@ -135,4 +134,4 @@ class JWTBearer:
         except ValidationError as err:
             logger.exception("Invalid JWT payload structure: %s", err)
 
-        return False
+        return None
