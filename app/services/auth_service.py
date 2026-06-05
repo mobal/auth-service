@@ -162,8 +162,9 @@ class AuthService:
         scope: str | None = None,
     ) -> JWTToken:
         self._logger.debug(
-            f"Generating JWT payload for sub={sub}",
-            extra={"has_scope": scope is not None},
+            "Generating JWT payload for sub=%s",
+            sub,
+            extra={"sub": sub, "has_scope": scope is not None},
         )
         iat = pendulum.now()
         exp = (
@@ -194,8 +195,9 @@ class AuthService:
         scope: str | None = None,
     ) -> tuple[JWTToken, RefreshToken]:
         self._logger.info(
-            f"Generating new tokens for sub={sub}",
-            extra={"has_scope": scope is not None},
+            "Generating new tokens for sub=%s",
+            sub,
+            extra={"sub": sub, "has_scope": scope is not None},
         )
 
         jwt_token = self._generate_token(sub, settings.jwt_token_lifetime, scope=scope)
@@ -270,8 +272,9 @@ class AuthService:
         scope = self._derive_scope(user.get("roles", []), requested_scope)
         service_token, refresh_token = self._generate_tokens(user["id"], scope=scope)
         self._logger.info(
-            f"Login succeeded for sub={user['id']}",
-            extra={"has_scope": scope is not None},
+            "Login succeeded for sub=%s",
+            user["id"],
+            extra={"sub": user["id"], "has_scope": scope is not None},
         )
 
         return (
@@ -315,8 +318,9 @@ class AuthService:
         sub = jwt_token.sub
         jwt_token, refresh_token = self._generate_tokens(sub, scope=scope)
         self._logger.info(
-            f"Token refresh succeeded for sub={sub}",
-            extra={"has_scope": scope is not None},
+            "Token refresh succeeded for sub=%s",
+            sub,
+            extra={"sub": sub, "has_scope": scope is not None},
         )
 
         return (
@@ -330,13 +334,16 @@ class AuthService:
         self, client_name: str, client_secret: str, requested_scope: str | None
     ) -> JWTToken:
         self._logger.info(
-            f"Generating client credentials token for client_name={client_name}",
-            extra={"requested_scope": requested_scope},
+            "Generating client credentials token for client_name=%s",
+            client_name,
+            extra={"client_name": client_name, "requested_scope": requested_scope},
         )
         service = self._service_repository.get_by_name(client_name)
         if service is None:
             self._logger.warning(
-                f"Client credentials failed, service not found for client_name={client_name}"
+                "Client credentials failed, service not found for client_name=%s",
+                client_name,
+                extra={"client_name": client_name},
             )
             raise OAuthException(
                 "invalid_client",
@@ -347,7 +354,9 @@ class AuthService:
             self._password_hasher.verify(service.secret, client_secret)
         except (InvalidHash, VerifyMismatchError):
             self._logger.warning(
-                f"Client credentials failed, invalid secret for client_name={client_name}"
+                "Client credentials failed, invalid secret for client_name=%s",
+                client_name,
+                extra={"client_name": client_name},
             )
             raise OAuthException(
                 "invalid_client",
@@ -384,8 +393,9 @@ class AuthService:
         )
 
         self._logger.info(
-            f"Client credentials token created for client_name={client_name}",
-            extra={"has_scope": granted_scope is not None},
+            "Client credentials token created for client_name=%s",
+            client_name,
+            extra={"client_name": client_name, "has_scope": granted_scope is not None},
         )
 
         return jwt_token
@@ -394,8 +404,9 @@ class AuthService:
         self, client_name: str, client_secret: str, scope: str | None = None
     ) -> tuple[str, int, str | None]:
         self._logger.info(
-            f"Client credentials flow requested for client_name={client_name}",
-            extra={"requested_scope": scope},
+            "Client credentials flow requested for client_name=%s",
+            client_name,
+            extra={"client_name": client_name, "requested_scope": scope},
         )
         jwt_token = self._generate_client_credentials(client_name, client_secret, scope)
         return (
@@ -436,8 +447,9 @@ class AuthService:
         code_challenge_method: str | None = None,
     ) -> str:
         self._logger.info(
-            f"Authorization code requested for user_id={user_id}",
-            extra={"client_id": client_id, "requested_scope": requested_scope},
+            "Authorization code requested for user_id=%s",
+            user_id,
+            extra={"user_id": user_id, "client_id": client_id, "requested_scope": requested_scope},
         )
         service_token = self._issue_service_token(
             settings.app_name, settings.client_secret
@@ -450,7 +462,9 @@ class AuthService:
         )
         if user is None:
             self._logger.warning(
-                f"Authorization failed, user not found user_id={user_id}"
+                "Authorization failed, user not found user_id=%s",
+                user_id,
+                extra={"user_id": user_id},
             )
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
 
@@ -468,8 +482,9 @@ class AuthService:
         )
 
         self._logger.info(
-            f"Authorization code created for user_id={user_id}",
-            extra={"client_id": client_id, "has_scope": scope is not None},
+            "Authorization code created for user_id=%s",
+            user_id,
+            extra={"user_id": user_id, "client_id": client_id, "has_scope": scope is not None},
         )
 
         return code
@@ -525,7 +540,9 @@ class AuthService:
         )
         if user is None:
             self._logger.warning(
-                f"Authorization code exchange failed, user not found user_id={auth_code.user_id}"
+                "Authorization code exchange failed, user not found user_id=%s",
+                auth_code.user_id,
+                extra={"user_id": auth_code.user_id},
             )
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
 
@@ -534,8 +551,9 @@ class AuthService:
         )
 
         self._logger.info(
-            f"Authorization code exchange succeeded for user_id={auth_code.user_id}",
-            extra={"has_scope": auth_code.scope is not None},
+            "Authorization code exchange succeeded for user_id=%s",
+            auth_code.user_id,
+            extra={"user_id": auth_code.user_id, "has_scope": auth_code.scope is not None},
         )
 
         return (

@@ -191,8 +191,9 @@ def authorize(
     code_challenge_method: str | None = None,
 ) -> Response:
     logger.info(
-        f"OAuth authorize endpoint called for user_id={jwt_token.sub}",
-        extra={"client_id": client_id, "has_scope": scope is not None},
+        "OAuth authorize endpoint called for user_id=%s",
+        jwt_token.sub,
+        extra={"client_id": client_id, "user_id": jwt_token.sub, "has_scope": scope is not None},
     )
     if response_type != "code":
         logger.warning(
@@ -215,8 +216,9 @@ def authorize(
         query_params["state"] = state
 
     logger.info(
-        f"OAuth authorize completed for user_id={jwt_token.sub}",
-        extra={"client_id": client_id},
+        "OAuth authorize completed for user_id=%s",
+        jwt_token.sub,
+        extra={"client_id": client_id, "user_id": jwt_token.sub},
     )
 
     return Response(
