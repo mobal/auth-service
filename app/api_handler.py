@@ -99,6 +99,7 @@ def http_exception_handler(request: Request, error: HTTPException) -> JSONRespon
             by_alias=True
         ),
         status_code=error.status_code,
+        headers=dict(error.headers) if error.headers else None,
     )
 
 
