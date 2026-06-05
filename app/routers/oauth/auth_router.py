@@ -193,7 +193,11 @@ def authorize(
     logger.info(
         "OAuth authorize endpoint called for user_id=%s",
         jwt_token.sub,
-        extra={"client_id": client_id, "user_id": jwt_token.sub, "has_scope": scope is not None},
+        extra={
+            "client_id": client_id,
+            "user_id": jwt_token.sub,
+            "has_scope": scope is not None,
+        },  # noqa
     )
     if response_type != "code":
         logger.warning(
@@ -218,7 +222,7 @@ def authorize(
     logger.info(
         "OAuth authorize completed for user_id=%s",
         jwt_token.sub,
-        extra={"client_id": client_id, "user_id": jwt_token.sub},
+        extra={"client_id": client_id, "user_id": jwt_token.sub},  # noqa
     )
 
     return Response(

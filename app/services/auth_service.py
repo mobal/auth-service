@@ -449,7 +449,11 @@ class AuthService:
         self._logger.info(
             "Authorization code requested for user_id=%s",
             user_id,
-            extra={"user_id": user_id, "client_id": client_id, "requested_scope": requested_scope},
+            extra={
+                "user_id": user_id,
+                "client_id": client_id,
+                "requested_scope": requested_scope,
+            },
         )
         service_token = self._issue_service_token(
             settings.app_name, settings.client_secret
@@ -484,7 +488,11 @@ class AuthService:
         self._logger.info(
             "Authorization code created for user_id=%s",
             user_id,
-            extra={"user_id": user_id, "client_id": client_id, "has_scope": scope is not None},
+            extra={
+                "user_id": user_id,
+                "client_id": client_id,
+                "has_scope": scope is not None,
+            },
         )
 
         return code
@@ -553,7 +561,10 @@ class AuthService:
         self._logger.info(
             "Authorization code exchange succeeded for user_id=%s",
             auth_code.user_id,
-            extra={"user_id": auth_code.user_id, "has_scope": auth_code.scope is not None},
+            extra={
+                "user_id": auth_code.user_id,
+                "has_scope": auth_code.scope is not None,
+            },
         )
 
         return (
