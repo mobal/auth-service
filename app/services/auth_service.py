@@ -37,13 +37,20 @@ ROLE_SCOPE_MAP: dict[str, list[str]] = {
 
 
 class AuthService:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        password_hasher: PasswordHasher,
+        authorization_code_repository: AuthorizationCodeRepository,
+        service_repository: ServiceRepository,
+        token_service: TokenService,
+        user_service_client: UserServiceClient,
+    ) -> None:
         self._logger = Logger()
-        self._password_hasher = PasswordHasher()
-        self._authorization_code_repository = AuthorizationCodeRepository()
-        self._service_repository = ServiceRepository()
-        self._token_service = TokenService()
-        self._user_service_client = UserServiceClient()
+        self._password_hasher = password_hasher
+        self._authorization_code_repository = authorization_code_repository
+        self._service_repository = service_repository
+        self._token_service = token_service
+        self._user_service_client = user_service_client
 
         self._user_service_token = None
 

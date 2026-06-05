@@ -4,13 +4,44 @@ from base64 import b64encode
 import jwt
 import pendulum
 import pytest
-from fastapi import status
+from argon2 import PasswordHasher
+from fastapi import Request, status
 from fastapi.testclient import TestClient
 
+from app.jwt_bearer import JWTBearer
 from app.models.jwt import JWTToken, RefreshToken
+from app.repositories.authorization_code_repository import (
+    AuthorizationCodeRepository,
+)
+from app.repositories.service_repository import ServiceRepository
+from app.repositories.token_repository import TokenRepository
+from app.services.auth_service import AuthService
+from app.services.token_service import TokenService
 
 
 class TestAuthApi:
+    @pytest.fixture(autouse=True)
+    def override_dependencies(self):
+        from app.api_handler import app
+        from app.clients.user_service_client import UserServiceClient
+        from app.dependencies import get_auth_service, get_jwt_bearer
+
+        hasher = PasswordHasher(time_cost=1, memory_cost=64, parallelism=1)  # noqa
+        token_svc = TokenService(token_repository=TokenRepository())
+
+        app.dependency_overrides[get_auth_service] = lambda: AuthService(
+            password_hasher=hasher,
+            authorization_code_repository=AuthorizationCodeRepository(),
+            service_repository=ServiceRepository(),
+            token_service=token_svc,
+            user_service_client=UserServiceClient(),
+        )
+
+        def _resolve_jwt(request: Request) -> JWTToken | None:
+            return JWTBearer(token_service=token_svc)(request)
+
+        app.dependency_overrides[get_jwt_bearer] = _resolve_jwt
+
     @pytest.fixture
     def test_client(
         self,

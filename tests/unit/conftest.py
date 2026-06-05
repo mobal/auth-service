@@ -11,8 +11,8 @@ from app.services.token_service import TokenService
 
 
 @pytest.fixture
-def jwt_bearer() -> JWTBearer:
-    return JWTBearer()
+def jwt_bearer(token_service: TokenService) -> JWTBearer:
+    return JWTBearer(token_service=token_service)
 
 
 @pytest.fixture
@@ -38,5 +38,5 @@ def token_repository() -> TokenRepository:
 
 
 @pytest.fixture
-def token_service() -> TokenService:
-    return TokenService()
+def token_service(token_repository: TokenRepository) -> TokenService:
+    return TokenService(token_repository=token_repository)

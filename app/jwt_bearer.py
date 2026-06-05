@@ -87,10 +87,12 @@ class HTTPBearer(FastAPIHTTPBearer):
 
 
 class JWTBearer:
-    def __init__(self, auto_error: bool = True):
+    def __init__(
+        self, auto_error: bool = True, token_service: TokenService | None = None
+    ):
         self._auto_error = auto_error
         self._http_bearer = HTTPBearer(auto_error=auto_error)
-        self._token_service = TokenService()
+        self._token_service = token_service
         logger.debug("JWTBearer initialized")
 
     def __call__(self, request: Request) -> JWTToken | None:

@@ -10,9 +10,9 @@ ERROR_MESSAGE_TOKEN_NOT_FOUND = "The requested token was not found"
 
 
 class TokenService:
-    def __init__(self):
+    def __init__(self, token_repository: TokenRepository):
         self._logger = Logger()
-        self._token_repository = TokenRepository()
+        self._token_repository = token_repository
 
     def create(self, jwt_token: JWTToken, refresh_token: RefreshToken | None) -> None:
         self._logger.info(

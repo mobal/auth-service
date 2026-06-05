@@ -6,8 +6,8 @@ from aws_lambda_powertools import Logger
 from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.responses import JSONResponse
 
+from app.dependencies import get_auth_service, get_jwt_bearer
 from app.exceptions import OAuthException
-from app.jwt_bearer import JWTBearer
 from app.models.grant_type import GrantType
 from app.models.jwt import JWTToken
 from app.models.request.oauth_token import OAuthTokenRequest
@@ -16,8 +16,6 @@ from app.services.auth_service import AuthService
 
 logger = Logger()
 
-auth_service = AuthService()
-jwt_bearer = JWTBearer()
 router = APIRouter()
 
 ERROR_MESSAGE_INVALID_CLIENT = "Invalid client: missing or invalid Authorization header"
@@ -58,7 +56,9 @@ def _parse_authorization_header(authorization: str | None) -> tuple[str, str]:
     return client_name, client_secret
 
 
-def _handle_password_grant(body: OAuthTokenRequest) -> OAuthTokenResponse:
+def _handle_password_grant(
+    body: OAuthTokenRequest, auth_service: AuthService
+) -> OAuthTokenResponse:
     logger.info("Handling password grant")
     if not body.username or not body.password:
         logger.warning("Password grant is missing username or password")
@@ -76,7 +76,9 @@ def _handle_password_grant(body: OAuthTokenRequest) -> OAuthTokenResponse:
     )
 
 
-def _handle_refresh_token_grant(body: OAuthTokenRequest) -> OAuthTokenResponse:
+def _handle_refresh_token_grant(
+    body: OAuthTokenRequest, auth_service: AuthService
+) -> OAuthTokenResponse:
     logger.info("Handling refresh_token grant")
     if not body.refresh_token:
         logger.warning("Refresh token grant is missing refresh_token")
@@ -94,7 +96,9 @@ def _handle_refresh_token_grant(body: OAuthTokenRequest) -> OAuthTokenResponse:
     )
 
 
-def _handle_authorization_code_grant(body: OAuthTokenRequest) -> OAuthTokenResponse:
+def _handle_authorization_code_grant(
+    body: OAuthTokenRequest, auth_service: AuthService
+) -> OAuthTokenResponse:
     logger.info("Handling authorization_code grant")
     if not body.code or not body.redirect_uri:
         logger.warning("Authorization code grant is missing code or redirect_uri")
@@ -113,7 +117,7 @@ def _handle_authorization_code_grant(body: OAuthTokenRequest) -> OAuthTokenRespo
 
 
 def _handle_client_credentials_grant(
-    request: Request, body: OAuthTokenRequest
+    request: Request, body: OAuthTokenRequest, auth_service: AuthService
 ) -> OAuthTokenResponse:
     logger.info("Handling client_credentials grant")
     authorization = request.headers.get("Authorization")
@@ -137,6 +141,7 @@ def _handle_client_credentials_grant(
 def token(
     request: Request,
     body: Annotated[OAuthTokenRequest, Depends(OAuthTokenRequest.as_form)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ):
     logger.info(
         "OAuth token endpoint called",
@@ -144,13 +149,15 @@ def token(
     )
     match body.grant_type:
         case GrantType.PASSWORD:
-            token_response = _handle_password_grant(body)
+            token_response = _handle_password_grant(body, auth_service)
         case GrantType.REFRESH_TOKEN:
-            token_response = _handle_refresh_token_grant(body)
+            token_response = _handle_refresh_token_grant(body, auth_service)
         case GrantType.AUTHORIZATION_CODE:
-            token_response = _handle_authorization_code_grant(body)
+            token_response = _handle_authorization_code_grant(body, auth_service)
         case GrantType.CLIENT_CREDENTIALS:
-            token_response = _handle_client_credentials_grant(request, body)
+            token_response = _handle_client_credentials_grant(
+                request, body, auth_service
+            )
         case _:
             logger.warning("Unsupported grant type received")
             raise OAuthException(ERROR_MESSAGE_UNSUPPORTED_GRANT_TYPE)
@@ -164,7 +171,8 @@ def token(
 
 @router.post("/oauth/revoke", status_code=status.HTTP_200_OK)
 def revoke(
-    jwt_token: Annotated[JWTToken, Depends(jwt_bearer)],
+    jwt_token: Annotated[JWTToken, Depends(get_jwt_bearer)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ):
     logger.info("OAuth token revoke endpoint called for jti=%s", jwt_token.jti)
     auth_service.logout(jwt_token)
@@ -172,10 +180,11 @@ def revoke(
 
 @router.get("/oauth/authorize")
 def authorize(
-    jwt_token: Annotated[JWTToken, Depends(jwt_bearer)],
-    response_type: str,
-    client_id: str,
-    redirect_uri: str,
+    jwt_token: Annotated[JWTToken, Depends(get_jwt_bearer)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    response_type: str = ...,
+    client_id: str = ...,
+    redirect_uri: str = ...,
     scope: str | None = None,
     state: str | None = None,
     code_challenge: str | None = None,

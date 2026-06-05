@@ -16,6 +16,10 @@ from app.exceptions import (
 )
 from app.models.jwt import JWTToken, RefreshToken
 from app.models.service import ServiceCredential
+from app.repositories.authorization_code_repository import (
+    AuthorizationCodeRepository,
+)
+from app.repositories.service_repository import ServiceRepository
 from app.services.auth_service import AuthService
 from app.services.token_service import TokenService
 from app.settings import Settings
@@ -48,8 +52,19 @@ class TestAuthService:
         )
 
     @pytest.fixture
-    def auth_service(self) -> AuthService:
-        return AuthService()
+    def auth_service(
+        self,
+        token_service: TokenService,
+        service_repository: ServiceRepository,
+        fast_password_hasher: PasswordHasher,
+    ) -> AuthService:
+        return AuthService(
+            password_hasher=fast_password_hasher,
+            authorization_code_repository=AuthorizationCodeRepository(),
+            service_repository=service_repository,
+            token_service=token_service,
+            user_service_client=UserServiceClient(),
+        )
 
     def test_successfully_login(
         self,
