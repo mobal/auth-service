@@ -34,7 +34,7 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
             )
             or str(uuid.uuid4())
         )
-        logger.set_correlation_id(correlation_id.get())
+        logger.append_keys(correlation_id=correlation_id.get())
         response = await call_next(request)
         response.headers[X_CORRELATION_ID] = correlation_id.get()
         logger.debug(
