@@ -17,7 +17,11 @@ from app.routers.oauth.auth_router import router as auth_router
 
 logger = Logger()
 
-app = FastAPI(debug=settings.debug, title="AuthApp", version="1.0.0")
+app = FastAPI(
+    debug=settings.debug if settings.stage != "prod" else False,
+    title="AuthApp",
+    version="1.0.0",
+)
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(GZipMiddleware)
 app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
