@@ -5,6 +5,7 @@ from unittest.mock import ANY
 import jwt
 import pendulum
 import pytest as pytest
+from argon2 import PasswordHasher
 from fastapi import HTTPException, status
 
 from app.clients.user_service_client import UserServiceClient
@@ -15,6 +16,10 @@ from app.exceptions import (
 )
 from app.models.jwt import JWTToken, RefreshToken
 from app.models.service import ServiceCredential
+from app.repositories.authorization_code_repository import (
+    AuthorizationCodeRepository,
+)
+from app.repositories.service_repository import ServiceRepository
 from app.services.auth_service import AuthService
 from app.services.token_service import TokenService
 from app.settings import Settings
@@ -25,7 +30,6 @@ ALGORITHMS = ["HS256"]
 class TestAuthService:
     @pytest.fixture(autouse=True)
     def _patch_auth_service_dependencies(self, mocker, monkeypatch, settings: Settings):
-        # AuthService now expects this setting when requesting a user-service token.
         patched_settings = SimpleNamespace(
             service_token_secret="test-service-token-secret"
         )
@@ -48,25 +52,19 @@ class TestAuthService:
         )
 
     @pytest.fixture
-    def auth_service(self) -> AuthService:
-        return AuthService()
-
-    @pytest.fixture
-    def user_id(self) -> str:
-        return str(uuid.uuid4())
-
-    @pytest.fixture
-    def user_data(self, user_id: str) -> dict:
-        from argon2 import PasswordHasher
-
-        return {
-            "id": user_id,
-            "email": "root@squarelabs.hu",
-            "username": "root",
-            "display_name": "root",
-            "roles": ["root"],
-            "password": PasswordHasher().hash("password"),
-        }
+    def auth_service(
+        self,
+        token_service: TokenService,
+        service_repository: ServiceRepository,
+        fast_password_hasher: PasswordHasher,
+    ) -> AuthService:
+        return AuthService(
+            password_hasher=fast_password_hasher,
+            authorization_code_repository=AuthorizationCodeRepository(),
+            service_repository=service_repository,
+            token_service=token_service,
+            user_service_client=UserServiceClient(),
+        )
 
     def test_successfully_login(
         self,
@@ -78,6 +76,9 @@ class TestAuthService:
     ):
         mocker.patch.object(
             UserServiceClient, "get_user_by_email", return_value=user_data
+        )
+        mocker.patch.object(
+            UserServiceClient, "validate_user_password", return_value=True
         )
         mocker.patch.object(TokenService, "create")
 
@@ -91,6 +92,9 @@ class TestAuthService:
         auth_service._user_service_client.get_user_by_email.assert_called_once_with(
             user_data["email"], ANY
         )
+        auth_service._user_service_client.validate_user_password.assert_called_once_with(
+            user_data["id"], "password", ANY
+        )
         token_service.create.assert_called_once_with(decoded, ANY)
 
     def test_fail_to_login_due_to_invalid_credentials(
@@ -99,12 +103,16 @@ class TestAuthService:
         auth_service: AuthService,
     ):
         mocker.patch.object(UserServiceClient, "get_user_by_email", return_value=None)
+        mocker.patch.object(
+            UserServiceClient, "validate_user_password", return_value=True
+        )
 
         with pytest.raises(HTTPException) as excinfo:
             auth_service.login("user@example.com", "wrong_password")
 
         assert excinfo.value.status_code == status.HTTP_401_UNAUTHORIZED
         assert excinfo.value.detail == "Unauthorized"
+        auth_service._user_service_client.validate_user_password.assert_not_called()
 
     def test_fail_to_login_due_to_wrong_password(
         self,
@@ -114,6 +122,9 @@ class TestAuthService:
     ):
         mocker.patch.object(
             UserServiceClient, "get_user_by_email", return_value=user_data
+        )
+        mocker.patch.object(
+            UserServiceClient, "validate_user_password", return_value=False
         )
 
         with pytest.raises(HTTPException) as excinfo:
@@ -165,21 +176,19 @@ class TestAuthService:
         refresh_token: RefreshToken,
         token_service: TokenService,
     ):
-        item = {
-            "jti": jwt_token.jti,
-            "jwt_token": jwt_token.model_dump(),
-            "refresh_token": refresh_token.token,
-            "created_at": pendulum.now().to_iso8601_string(),
-            "expire_at": pendulum.from_timestamp(refresh_token.ttl).to_iso8601_string(),
-            "ttl": jwt_token.exp,
-        }
-        mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
+        mocker.patch.object(
+            TokenService,
+            "get_by_refresh_token",
+            return_value=(jwt_token, refresh_token.token, jwt_token.exp),
+        )
         mocker.patch.object(TokenService, "create")
-        mocker.patch.object(TokenService, "delete_by_id")
+        consume_mock = mocker.patch.object(
+            TokenService, "consume_by_id", return_value=True
+        )
 
-        new_jwt_token, _, _, _ = auth_service.refresh(refresh_token)
+        new_jwt_token, _, _, _ = auth_service.refresh(refresh_token.token)
 
-        token_service.get_by_refresh_token.assert_called_once_with(refresh_token)
+        token_service.get_by_refresh_token.assert_called_once_with(refresh_token.token)
         token_service.create.assert_called_once_with(
             JWTToken(
                 **jwt.decode(
@@ -190,24 +199,24 @@ class TestAuthService:
             ),
             ANY,
         )
-        token_service.delete_by_id.assert_called_once_with(jwt_token.jti)
+        consume_mock.assert_called_once_with(jwt_token.jti)
 
     def test_fail_to_refresh_due_to_missing_token(
         self,
         mocker,
         auth_service: AuthService,
-        refresh_token: str,
+        refresh_token: RefreshToken,
         token_service: TokenService,
     ):
         mocker.patch.object(TokenService, "get_by_refresh_token", return_value=None)
 
         with pytest.raises(TokenNotFoundException) as excinfo:
-            auth_service.refresh(refresh_token)
+            auth_service.refresh(refresh_token.token)
 
-        assert TokenNotFoundException.__name__ == excinfo.typename
+        assert excinfo.type == TokenNotFoundException
         assert "The requested token was not found" == excinfo.value.detail
 
-        token_service.get_by_refresh_token.assert_called_once_with(refresh_token)
+        token_service.get_by_refresh_token.assert_called_once_with(refresh_token.token)
 
     def test_successfully_refresh_revokes_stored_jti(
         self,
@@ -218,62 +227,69 @@ class TestAuthService:
     ):
         stored_jti = str(uuid.uuid4())
         now = pendulum.now().int_timestamp
-        item = {
-            "jti": stored_jti,
-            "jwt_token": {
-                "exp": now,
-                "iat": now,
-                "iss": None,
-                "jti": stored_jti,
-                "sub": "user-1",
-            },
-            "refresh_token": refresh_token.token,
-            "created_at": pendulum.now().to_iso8601_string(),
-            "ttl": now + 3600,
-        }
-        mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
+        jwt_token_obj = JWTToken(exp=now, iat=now, jti=stored_jti, sub="user-1")
+        mocker.patch.object(
+            TokenService,
+            "get_by_refresh_token",
+            return_value=(jwt_token_obj, refresh_token.token, now + 3600),
+        )
         mocker.patch.object(TokenService, "create")
-        mocker.patch.object(TokenService, "delete_by_id")
+        consume_mock = mocker.patch.object(
+            TokenService, "consume_by_id", return_value=True
+        )
 
         auth_service.refresh(refresh_token.token)
 
-        token_service.delete_by_id.assert_called_once_with(stored_jti)
+        consume_mock.assert_called_once_with(stored_jti)
         token_service.get_by_refresh_token.assert_called_once_with(refresh_token.token)
 
     def test_fail_to_refresh_due_to_expired_token(
         self,
         mocker,
         auth_service: AuthService,
-        refresh_token: str,
+        refresh_token: RefreshToken,
         token_service: TokenService,
     ):
         from app.exceptions import TokenExpiredException
 
         expired_time = pendulum.now().subtract(days=1).int_timestamp
         now = pendulum.now().int_timestamp
-        item = {
-            "jti": str(uuid.uuid4()),
-            "jwt_token": {
-                "exp": now,
-                "iat": now,
-                "iss": None,
-                "jti": str(uuid.uuid4()),
-                "sub": "user-1",
-            },
-            "refresh_token": refresh_token,
-            "created_at": pendulum.now().to_iso8601_string(),
-            "ttl": expired_time,
-        }
-        mocker.patch.object(TokenService, "get_by_refresh_token", return_value=item)
+        jwt_token_obj = JWTToken(exp=now, iat=now, jti=str(uuid.uuid4()), sub="user-1")
+        mocker.patch.object(
+            TokenService,
+            "get_by_refresh_token",
+            return_value=(jwt_token_obj, refresh_token.token, expired_time),
+        )
 
         with pytest.raises(TokenExpiredException) as excinfo:
-            auth_service.refresh(refresh_token)
+            auth_service.refresh(refresh_token.token)
 
-        assert TokenExpiredException.__name__ == excinfo.typename
+        assert excinfo.type == TokenExpiredException
         assert status.HTTP_401_UNAUTHORIZED == excinfo.value.status_code
         assert "The requested token has expired" == excinfo.value.detail
 
-        token_service.get_by_refresh_token.assert_called_once_with(refresh_token)
+        token_service.get_by_refresh_token.assert_called_once_with(refresh_token.token)
+
+    def test_fail_to_refresh_due_to_token_already_consumed(
+        self,
+        mocker,
+        auth_service: AuthService,
+        refresh_token: RefreshToken,
+        token_service: TokenService,
+    ):
+        now = pendulum.now().int_timestamp
+        jwt_token_obj = JWTToken(exp=now, iat=now, jti=str(uuid.uuid4()), sub="user-1")
+        mocker.patch.object(
+            TokenService,
+            "get_by_refresh_token",
+            return_value=(jwt_token_obj, refresh_token.token, now + 3600),
+        )
+        mocker.patch.object(TokenService, "consume_by_id", return_value=False)
+
+        with pytest.raises(TokenNotFoundException) as excinfo:
+            auth_service.refresh(refresh_token.token)
+
+        assert "not found" in str(excinfo.value.detail).lower()
 
     def test_successfully_derive_scope_without_request(self, auth_service: AuthService):
         scope = auth_service._derive_scope(["root"], None)
@@ -292,6 +308,29 @@ class TestAuthService:
             auth_service._derive_scope(["root"], "admin:all")
 
         assert excinfo.value.oauth_error == "invalid_scope"
+
+    def test_oauth_exception_detail_contains_full_error_dict(self):
+        error = "invalid_request"
+        error_description = "Missing required parameter"
+
+        exc = OAuthException(error, error_description)
+
+        assert isinstance(exc.detail, dict)
+        assert exc.detail["error"] == error
+        assert exc.detail["error_description"] == error_description
+        assert exc.oauth_error == error
+        assert exc.oauth_error_description == error_description
+
+    def test_oauth_exception_detail_omits_error_description_when_empty(self):
+        error = "invalid_grant"
+
+        exc = OAuthException(error)
+
+        assert isinstance(exc.detail, dict)
+        assert exc.detail["error"] == error
+        assert "error_description" not in exc.detail
+        assert exc.oauth_error == error
+        assert exc.oauth_error_description is None
 
     def test_successfully_client_credentials_without_requested_scope(
         self,
@@ -316,7 +355,7 @@ class TestAuthService:
 
         assert decoded.sub == service_credential.name
         assert decoded.scope == scope
-        assert expires_in == settings.service_token_lifetime
+        assert expires_in == settings.service_token_lifetime_seconds
         assert scope == "users:read users:write"
         auth_service._token_service.create.assert_called_once()
 
@@ -392,6 +431,65 @@ class TestAuthService:
             )
 
         assert excinfo.value.oauth_error == "invalid_scope"
+
+    def test_successfully_client_credentials_without_scopes(
+        self,
+        mocker,
+        auth_service: AuthService,
+        password: str,
+        settings: Settings,
+        fast_password_hasher: PasswordHasher,
+    ):
+        service_without_scopes = ServiceCredential(
+            id=str(uuid.uuid4()),
+            name="no-scope-service",
+            secret=fast_password_hasher.hash(password),
+            scopes=[],
+            created_at=pendulum.now().to_iso8601_string(),
+        )
+        mocker.patch(
+            "app.services.auth_service.ServiceRepository.get_by_name",
+            return_value=service_without_scopes,
+        )
+        mocker.patch.object(TokenService, "create")
+
+        token, expires_in, scope = auth_service.client_credentials(
+            service_without_scopes.name, password, None
+        )
+        decoded = JWTToken(
+            **jwt.decode(token, settings.jwt_secret, algorithms=ALGORITHMS)
+        )
+
+        assert decoded.sub == service_without_scopes.name
+        assert scope is None
+        assert expires_in == settings.service_token_lifetime_seconds
+        auth_service._token_service.create.assert_called_once()
+
+    def test_client_credentials_handles_none_scopes_from_db(
+        self,
+        mocker,
+        auth_service: AuthService,
+        password: str,
+        settings: Settings,
+        fast_password_hasher: PasswordHasher,
+    ):
+        service = ServiceCredential(
+            id=str(uuid.uuid4()),
+            name="legacy-service",
+            secret=fast_password_hasher.hash(password),
+            scopes=[],
+            created_at=pendulum.now().to_iso8601_string(),
+        )
+        object.__setattr__(service, "scopes", None)
+        mocker.patch(
+            "app.services.auth_service.ServiceRepository.get_by_name",
+            return_value=service,
+        )
+        mocker.patch.object(TokenService, "create")
+
+        auth_service.client_credentials(service.name, password, None)
+
+        assert auth_service._token_service.create.called
 
     def test_successfully_authorize_with_user(
         self,
@@ -513,8 +611,9 @@ class TestAuthService:
         )
         mocker.patch.object(UserServiceClient, "get_user_by_id", return_value=user_data)
         mocker.patch("app.services.auth_service.TokenService.create")
-        delete_mock = mocker.patch(
-            "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
+        consume_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
         )
 
         jwt_str, refresh_token, exp, scope = auth_service.exchange_code(
@@ -526,7 +625,7 @@ class TestAuthService:
         assert refresh_token is not None
         assert exp == 3600
         assert scope == "users:read"
-        delete_mock.assert_called_once_with("auth-code-id-123")
+        consume_mock.assert_called_once_with("auth-code-id-123")
 
     def test_fail_to_exchange_code_due_to_invalid_code(
         self,
@@ -562,8 +661,9 @@ class TestAuthService:
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
             return_value=auth_code,
         )
-        delete_mock = mocker.patch(
-            "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
+        consume_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
         )
 
         with pytest.raises(OAuthException) as excinfo:
@@ -573,7 +673,7 @@ class TestAuthService:
             )
 
         assert excinfo.value.oauth_error == "invalid_grant"
-        delete_mock.assert_called_once_with("expired-code-id")
+        consume_mock.assert_called_once_with("expired-code-id")
 
     def test_fail_to_exchange_code_due_to_redirect_uri_mismatch(
         self,
@@ -590,6 +690,10 @@ class TestAuthService:
         mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
             return_value=auth_code,
+        )
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
         )
 
         with pytest.raises(OAuthException) as excinfo:
@@ -614,6 +718,10 @@ class TestAuthService:
         mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
             return_value=auth_code,
+        )
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
         )
 
         with pytest.raises(OAuthException) as excinfo:
@@ -640,6 +748,10 @@ class TestAuthService:
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
             return_value=auth_code,
         )
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
+        )
 
         with pytest.raises(OAuthException) as excinfo:
             auth_service.exchange_code(
@@ -664,6 +776,10 @@ class TestAuthService:
         mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
             return_value=auth_code,
+        )
+        mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
         )
 
         with pytest.raises(OAuthException) as excinfo:
@@ -707,8 +823,9 @@ class TestAuthService:
         )
         mocker.patch.object(UserServiceClient, "get_user_by_id", return_value=user_data)
         mocker.patch("app.services.auth_service.TokenService.create")
-        delete_mock = mocker.patch(
-            "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
+        consume_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
         )
 
         jwt_str, refresh_token, exp, scope = auth_service.exchange_code(
@@ -721,7 +838,7 @@ class TestAuthService:
         assert refresh_token is not None
         assert exp == 3600
         assert scope == "users:read"
-        delete_mock.assert_called_once_with("auth-code-id-s256")
+        consume_mock.assert_called_once_with("auth-code-id-s256")
 
     def test_successfully_exchange_code_with_pkce_plain(
         self,
@@ -745,8 +862,9 @@ class TestAuthService:
         )
         mocker.patch.object(UserServiceClient, "get_user_by_id", return_value=user_data)
         mocker.patch("app.services.auth_service.TokenService.create")
-        delete_mock = mocker.patch(
-            "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
+        consume_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
         )
 
         jwt_str, refresh_token, exp, scope = auth_service.exchange_code(
@@ -759,7 +877,7 @@ class TestAuthService:
         assert refresh_token is not None
         assert exp == 3600
         assert scope == "users:read"
-        delete_mock.assert_called_once_with("auth-code-id-plain")
+        consume_mock.assert_called_once_with("auth-code-id-plain")
 
     def test_fail_to_exchange_code_due_to_user_not_found(
         self,
@@ -779,8 +897,9 @@ class TestAuthService:
             return_value=auth_code,
         )
         mocker.patch.object(UserServiceClient, "get_user_by_id", return_value=None)
-        delete_mock = mocker.patch(
-            "app.services.auth_service.AuthorizationCodeRepository.delete_by_id"
+        consume_mock = mocker.patch(
+            "app.services.auth_service.AuthorizationCodeRepository.consume_by_id",
+            return_value=True,
         )
 
         with pytest.raises(UserNotFoundException) as excinfo:
@@ -790,4 +909,4 @@ class TestAuthService:
             )
 
         assert "not found" in str(excinfo.value.detail).lower()
-        delete_mock.assert_called_once_with("auth-code-id-user-not-found")
+        consume_mock.assert_called_once_with("auth-code-id-user-not-found")

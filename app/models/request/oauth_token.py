@@ -1,43 +1,41 @@
-from aws_lambda_powertools import Logger
-from fastapi import Form
-from pydantic import BaseModel
-
-logger = Logger()
+from pydantic import BaseModel, Field
 
 
-class OAuthTokenRequest(BaseModel):
-    grant_type: str
-    username: str | None = None
-    password: str | None = None
-    refresh_token: str | None = None
-    code: str | None = None
-    code_verifier: str | None = None
-    redirect_uri: str | None = None
+class BaseGrantRequest(BaseModel):
+    """Fields common to all OAuth 2.0 token grant types.
+
+    Accepted as an ``application/x-www-form-urlencoded`` POST body.
+    """
+
     scope: str | None = None
+    """Space-separated list of requested permission scopes."""
 
-    @classmethod
-    def as_form(
-        cls,
-        grant_type: str = Form(...),
-        username: str | None = Form(None),
-        password: str | None = Form(None),
-        refresh_token: str | None = Form(None),
-        code: str | None = Form(None),
-        code_verifier: str | None = Form(None),
-        redirect_uri: str | None = Form(None),
-        scope: str | None = Form(None),
-    ) -> "OAuthTokenRequest":
-        logger.debug(
-            "Building OAuthTokenRequest from form data",
-            extra={"grant_type": grant_type},
-        )
-        return cls(
-            grant_type=grant_type,
-            username=username,
-            password=password,
-            refresh_token=refresh_token,
-            code=code,
-            code_verifier=code_verifier,
-            redirect_uri=redirect_uri,
-            scope=scope,
-        )
+
+class PasswordGrantRequest(BaseGrantRequest):
+    """Resource owner password credentials grant (RFC 6749 Section 4.3)."""
+
+    grant_type: str
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=1)
+
+
+class RefreshTokenGrantRequest(BaseGrantRequest):
+    """Refresh token grant (RFC 6749 Section 6)."""
+
+    grant_type: str
+    refresh_token: str = Field(min_length=1)
+
+
+class AuthorizationCodeGrantRequest(BaseGrantRequest):
+    """Authorization code grant (RFC 6749 Section 4.1)."""
+
+    grant_type: str
+    code: str = Field(min_length=1)
+    redirect_uri: str = Field(min_length=1)
+    code_verifier: str | None = None
+
+
+class ClientCredentialsGrantRequest(BaseGrantRequest):
+    """Client credentials grant (RFC 6749 Section 4.4)."""
+
+    grant_type: str

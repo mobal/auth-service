@@ -37,6 +37,6 @@ docker run --rm \
       --no-deps
 
     cd /out
-    zip -r requirements.zip python
+    zip -r -9 requirements.zip python
     rm -rf /out/python
   '

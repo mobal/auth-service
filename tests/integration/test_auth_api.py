@@ -4,13 +4,44 @@ from base64 import b64encode
 import jwt
 import pendulum
 import pytest
-from fastapi import status
+from argon2 import PasswordHasher
+from fastapi import Request, status
 from fastapi.testclient import TestClient
 
+from app.jwt_bearer import JWTBearer
 from app.models.jwt import JWTToken, RefreshToken
+from app.repositories.authorization_code_repository import (
+    AuthorizationCodeRepository,
+)
+from app.repositories.service_repository import ServiceRepository
+from app.repositories.token_repository import TokenRepository
+from app.services.auth_service import AuthService
+from app.services.token_service import TokenService
 
 
 class TestAuthApi:
+    @pytest.fixture(autouse=True)
+    def override_dependencies(self):
+        from app.api_handler import app
+        from app.clients.user_service_client import UserServiceClient
+        from app.dependencies import get_auth_service, get_jwt_bearer
+
+        hasher = PasswordHasher(time_cost=1, memory_cost=64, parallelism=1)  # noqa
+        token_svc = TokenService(token_repository=TokenRepository())
+
+        app.dependency_overrides[get_auth_service] = lambda: AuthService(
+            password_hasher=hasher,
+            authorization_code_repository=AuthorizationCodeRepository(),
+            service_repository=ServiceRepository(),
+            token_service=token_svc,
+            user_service_client=UserServiceClient(),
+        )
+
+        def _resolve_jwt(request: Request) -> JWTToken | None:
+            return JWTBearer(token_service=token_svc)(request)
+
+        app.dependency_overrides[get_jwt_bearer] = _resolve_jwt
+
     @pytest.fixture
     def test_client(
         self,
@@ -46,14 +77,20 @@ class TestAuthApi:
         httpx_mock,
         token_url: str,
         test_client: TestClient,
+        user_data: dict,
     ):
         import os
 
         httpx_mock.add_response(
             method="GET",
             url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users?email=root%40squarelabs.hu",
-            json=[],
+            json={"items": [user_data]},
             status_code=status.HTTP_200_OK,
+        )
+        httpx_mock.add_response(
+            method="POST",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{user_data['id']}/validate",
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
         response = test_client.post(
@@ -73,26 +110,20 @@ class TestAuthApi:
         httpx_mock,
         token_url: str,
         test_client: TestClient,
+        user_data: dict,
     ):
         import os
-        import uuid
 
-        from argon2 import PasswordHasher
-
-        user_id = str(uuid.uuid4())
         httpx_mock.add_response(
             method="GET",
             url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users?email=root%40squarelabs.hu",
-            json={
-                "items": [
-                    {
-                        "id": user_id,
-                        "email": "root@squarelabs.hu",
-                        "roles": ["root"],
-                        "password": PasswordHasher().hash("password"),
-                    }
-                ]
-            },
+            json={"items": [user_data]},
+            status_code=status.HTTP_200_OK,
+        )
+        httpx_mock.add_response(
+            method="POST",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{user_data['id']}/validate",
+            json=user_data,
             status_code=status.HTTP_200_OK,
         )
 
@@ -204,6 +235,11 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert "access_token" in body
+        assert "refresh_token" in body
+        assert body["token_type"] == "Bearer"
+        assert "expires_in" in body
         self._assert_cache_headers(response)
 
     def test_successfully_client_credentials(

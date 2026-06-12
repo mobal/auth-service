@@ -18,34 +18,53 @@ from app.settings import Settings
 def setup(monkeypatch):
     with mock_aws():
         monkeypatch.setenv(
-            "CLIENT_SECRET_SSM_PARAM_NAME", os.getenv("CLIENT_SECRET_SSM_PARAM_NAME")
+            "CLIENT_SECRET_SSM_PARAM_NAME",
+            os.getenv(
+                "CLIENT_SECRET_SSM_PARAM_NAME", "/test/auth-service/client-secret"
+            ),
         )
         monkeypatch.setenv(
-            "JWT_SECRET_SSM_PARAM_NAME", os.getenv("JWT_SECRET_SSM_PARAM_NAME")
+            "JWT_SECRET_SSM_PARAM_NAME",
+            os.getenv("JWT_SECRET_SSM_PARAM_NAME", "/test/secrets/jwt-secret"),
         )
         monkeypatch.setenv(
             "USER_SERVICE_BASE_URL_SSM_PARAM_NAME",
-            os.getenv("USER_SERVICE_BASE_URL_SSM_PARAM_NAME"),
+            os.getenv(
+                "USER_SERVICE_BASE_URL_SSM_PARAM_NAME",
+                "/test/user-service/base-url",
+            ),
         )
         ssm_client = boto3.client(
             "ssm",
-            region_name=os.getenv("AWS_REGION_NAME"),
-            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+            region_name=os.getenv("AWS_REGION_NAME", "eu-central-1"),
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID", "testing"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY", "testing"),
         )
         ssm_client.put_parameter(
-            Name=os.getenv("CLIENT_SECRET_SSM_PARAM_NAME"),
-            Value=os.getenv("CLIENT_SECRET_SSM_PARAM_VALUE"),
+            Name=os.getenv(
+                "CLIENT_SECRET_SSM_PARAM_NAME",
+                "/test/auth-service/client-secret",
+            ),
+            Value=os.getenv("CLIENT_SECRET_SSM_PARAM_VALUE", "test-client-secret"),
             Type="SecureString",
         )
         ssm_client.put_parameter(
-            Name=os.getenv("JWT_SECRET_SSM_PARAM_NAME"),
-            Value=os.getenv("JWT_SECRET_SSM_PARAM_VALUE"),
+            Name=os.getenv(
+                "JWT_SECRET_SSM_PARAM_NAME",
+                "/test/secrets/jwt-secret",
+            ),
+            Value=os.getenv("JWT_SECRET_SSM_PARAM_VALUE", "test-jwt-secret"),
             Type="SecureString",
         )
         ssm_client.put_parameter(
-            Name=os.getenv("USER_SERVICE_BASE_URL_SSM_PARAM_NAME"),
-            Value=os.getenv("USER_SERVICE_BASE_URL_SSM_PARAM_VALUE"),
+            Name=os.getenv(
+                "USER_SERVICE_BASE_URL_SSM_PARAM_NAME",
+                "/test/user-service/base-url",
+            ),
+            Value=os.getenv(
+                "USER_SERVICE_BASE_URL_SSM_PARAM_VALUE",
+                "https://test.user-service.local",
+            ),
             Type="String",
         )
 
@@ -65,13 +84,12 @@ def settings() -> Settings:
 
 @pytest.fixture
 def dynamodb_resource(settings):
-    with mock_aws():
-        yield boto3.Session().resource(
-            "dynamodb",
-            region_name=os.getenv("AWS_REGION_NAME"),
-            aws_access_key_id=settings.aws_access_key_id,
-            aws_secret_access_key=settings.aws_secret_access_key,
-        )
+    yield boto3.Session().resource(
+        "dynamodb",
+        region_name=os.getenv("AWS_REGION_NAME"),
+        aws_access_key_id=settings.aws_access_key_id,
+        aws_secret_access_key=settings.aws_secret_access_key,
+    )
 
 
 @pytest.fixture
@@ -98,7 +116,10 @@ def initialize_authorization_codes_table(
 
 @pytest.fixture
 def initialize_services_table(
-    dynamodb_resource, service_credential: ServiceCredential, services_table_name: str
+    dynamodb_resource,
+    service_credential: ServiceCredential,
+    services_table_name: str,
+    fast_password_hasher: PasswordHasher,
 ):
     services_table = dynamodb_resource.create_table(
         AttributeDefinitions=[
@@ -129,7 +150,7 @@ def initialize_services_table(
         Item={
             "id": str(uuid.uuid4()),
             "name": "user-service",
-            "secret": PasswordHasher().hash(
+            "secret": fast_password_hasher.hash(
                 os.getenv("SERVICE_TOKEN_SECRET", "test-service-token-secret")
             ),
             "scopes": ["users:read"],
@@ -174,6 +195,22 @@ def initialize_tokens_table(
 
 
 @pytest.fixture
+def user_id() -> str:
+    return str(uuid.uuid4())
+
+
+@pytest.fixture
+def user_data(user_id: str) -> dict:
+    return {
+        "id": user_id,
+        "email": "root@squarelabs.hu",
+        "username": "root",
+        "display_name": "root",
+        "roles": ["root"],
+    }
+
+
+@pytest.fixture
 def jwt_token() -> JWTToken:
     iat = pendulum.now()
     exp = iat.add(hours=1)
@@ -185,6 +222,54 @@ def jwt_token() -> JWTToken:
         sub=str(uuid.uuid4()),
         scope="tokens:revoke users:read users:write",
     )
+
+
+@pytest.fixture
+def expired_jwt_token() -> JWTToken:
+    iat = pendulum.now().subtract(days=2)
+    exp = iat.add(hours=1)
+    return JWTToken(
+        exp=exp.int_timestamp,
+        iat=iat.int_timestamp,
+        iss=None,
+        jti=str(uuid.uuid4()),
+        sub=str(uuid.uuid4()),
+        scope="tokens:revoke users:read",
+    )
+
+
+@pytest.fixture
+def jwt_token_no_scope() -> JWTToken:
+    iat = pendulum.now()
+    exp = iat.add(hours=1)
+    return JWTToken(
+        exp=exp.int_timestamp,
+        iat=iat.int_timestamp,
+        iss=None,
+        jti=str(uuid.uuid4()),
+        sub=str(uuid.uuid4()),
+        scope=None,
+    )
+
+
+@pytest.fixture
+def jwt_token_empty_sub() -> JWTToken:
+    iat = pendulum.now()
+    exp = iat.add(hours=1)
+    return JWTToken(
+        exp=exp.int_timestamp,
+        iat=iat.int_timestamp,
+        iss=None,
+        jti=str(uuid.uuid4()),
+        sub="",
+        scope="tokens:revoke",
+    )
+
+
+@pytest.fixture
+def fast_password_hasher() -> PasswordHasher:
+    """Argon2 hasher with minimal parameters for fast test execution."""
+    return PasswordHasher(time_cost=1, memory_cost=64, parallelism=1)  # noqa
 
 
 @pytest.fixture
@@ -201,10 +286,12 @@ def refresh_token() -> RefreshToken:
 
 
 @pytest.fixture
-def service_credential_dict(password: str) -> dict[str, Any]:
+def service_credential_dict(
+    password: str, fast_password_hasher: PasswordHasher
+) -> dict[str, Any]:
     return {
         "name": "test-service",
-        "secret": PasswordHasher().hash(password),
+        "secret": fast_password_hasher.hash(password),
         "scopes": ["users:read", "users:write"],
         "created_at": pendulum.now().to_iso8601_string(),
     }
@@ -223,12 +310,12 @@ def service_credential(service_credential_dict: dict[str, Any]) -> ServiceCreden
 
 @pytest.fixture
 def services_table_name() -> str:
-    return f"{os.getenv('STAGE')}-services"
+    return f"{os.getenv('STAGE', 'test')}-services"
 
 
 @pytest.fixture
 def tokens_table_name() -> str:
-    return f"{os.getenv('STAGE')}-tokens"
+    return f"{os.getenv('STAGE', 'test')}-tokens"
 
 
 @pytest.fixture
@@ -238,7 +325,7 @@ def tokens_table(dynamodb_resource, initialize_tokens_table, tokens_table_name: 
 
 @pytest.fixture
 def authorization_codes_table_name() -> str:
-    return f"{os.getenv('STAGE')}-authorization_codes"
+    return f"{os.getenv('STAGE', 'test')}-authorization_codes"
 
 
 @pytest.fixture

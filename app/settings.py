@@ -1,4 +1,5 @@
 import os
+from functools import cached_property
 
 from aws_lambda_powertools import Logger
 from aws_lambda_powertools.utilities import parameters
@@ -10,6 +11,7 @@ logger = Logger()
 
 class Settings(BaseSettings):
     app_name: str
+    allowed_origins: list[str] = []
     default_timezone: str
     aws_access_key_id: str
     aws_secret_access_key: str
@@ -20,11 +22,11 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 100
     rate_limit_duration_in_seconds: int = 60
     refresh_token_lifetime: int = 2592000  # 30 days
-    service_token_lifetime: int = 30
+    service_token_lifetime_seconds: int = 30
     stage: str
 
     @computed_field
-    @property
+    @cached_property
     def client_secret(self) -> str:
         logger.debug("Resolving client_secret from parameter store")
         return parameters.get_parameter(
@@ -32,7 +34,7 @@ class Settings(BaseSettings):
         )
 
     @computed_field
-    @property
+    @cached_property
     def jwt_secret(self) -> str:
         logger.debug("Resolving jwt_secret from parameter store")
         return parameters.get_parameter(
@@ -40,7 +42,7 @@ class Settings(BaseSettings):
         )
 
     @computed_field
-    @property
+    @cached_property
     def user_service_base_url(self) -> str:
         logger.debug("Resolving user_service_base_url from parameter store")
         return parameters.get_parameter(

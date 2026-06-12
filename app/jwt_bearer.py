@@ -7,6 +7,7 @@ from fastapi.security.http import (
 )
 from fastapi.security.utils import get_authorization_scheme_param
 from jwt import DecodeError, ExpiredSignatureError
+from pydantic import ValidationError
 
 from app import settings
 from app.models.jwt import JWTToken
@@ -56,7 +57,7 @@ class HTTPBearer(FastAPIHTTPBearer):
             else:
                 return None
         if scheme.lower() != "bearer":
-            logger.warning(f"Invalid {scheme=}")
+            logger.warning("Invalid scheme=%s", scheme)
 
             if self._auto_error:
                 raise HTTPException(
@@ -86,17 +87,20 @@ class HTTPBearer(FastAPIHTTPBearer):
 
 
 class JWTBearer:
-    def __init__(self, auto_error: bool = True):
+    def __init__(
+        self, auto_error: bool = True, token_service: TokenService | None = None
+    ):
         self._auto_error = auto_error
         self._http_bearer = HTTPBearer(auto_error=auto_error)
-        self._token_service = TokenService()
+        self._token_service = token_service
         logger.debug("JWTBearer initialized")
 
     def __call__(self, request: Request) -> JWTToken | None:
         logger.debug("Validating bearer token from request")
         credentials = self._http_bearer.__call__(request)
         if credentials:
-            if not self._validate_token(credentials.credentials):
+            decoded_token = self._validate_token(credentials.credentials)
+            if decoded_token is None:
                 if self._auto_error:
                     logger.warning("Invalid authentication token")
 
@@ -104,31 +108,32 @@ class JWTBearer:
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail=ERROR_MESSAGE_NOT_AUTHENTICATED,
                     )
-                else:
-                    return None
 
-            return self.decoded_token
-        else:
-            return None
+                return None
 
-    def _validate_token(self, token: str) -> bool:
+            return decoded_token
+
+        return None
+
+    def _validate_token(self, token: str) -> JWTToken | None:
         try:
             decoded_token = JWTToken(
                 **jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
             )
             if self._token_service.get_by_id(decoded_token.jti):
                 logger.debug(
-                    f"Token accepted for jti={decoded_token.jti}",
+                    "Token accepted for jti=%s",
+                    decoded_token.jti,
                     extra={"sub": decoded_token.sub},
                 )
 
-                self.decoded_token = decoded_token
-
-                return True
-            logger.debug(f"Token rejected (blacklisted) jti={decoded_token.jti}")
+                return decoded_token
+            logger.debug("Token rejected (blacklisted) jti=%s", decoded_token.jti)
         except DecodeError as err:
-            logger.exception(f"Error occurred during token decoding {err=}")
+            logger.exception("Error occurred during token decoding: %s", err)
         except ExpiredSignatureError as err:
-            logger.exception(f"Expired signature {err=}")
+            logger.exception("Expired signature: %s", err)
+        except ValidationError as err:
+            logger.exception("Invalid JWT payload structure: %s", err)
 
-        return False
+        return None

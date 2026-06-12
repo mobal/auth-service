@@ -1,4 +1,3 @@
-import uvicorn
 from aws_lambda_powertools import Logger
 from botocore.exceptions import BotoCoreError
 from fastapi import FastAPI, HTTPException, Request, status
@@ -18,17 +17,24 @@ from app.routers.oauth.auth_router import router as auth_router
 
 logger = Logger()
 
-app = FastAPI(debug=settings.debug, title="AuthApp", version="1.0.0")
+app = FastAPI(
+    debug=settings.debug if settings.stage != "prod" else False,
+    title="AuthApp",
+    version="1.0.0",
+)
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(GZipMiddleware)
 app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins or ["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 app.include_router(auth_router, tags=["auth"])
 
 handler = Mangum(app)
-handler = logger.inject_lambda_context(handler, clear_state=True, log_event=True)
+handler = logger.inject_lambda_context(handler, clear_state=True, log_event=False)
 
 
 @app.exception_handler(OAuthException)
@@ -100,6 +106,7 @@ def http_exception_handler(request: Request, error: HTTPException) -> JSONRespon
             by_alias=True
         ),
         status_code=error.status_code,
+        headers=dict(error.headers) if error.headers else None,
     )
 
 
@@ -125,10 +132,12 @@ def request_validation_error_handler(
 
 
 @app.get("/health")
-async def health_check():
+async def health_check() -> dict[str, str]:
     logger.debug("Health check endpoint called")
     return {"status": "healthy"}
 
 
 if __name__ == "__main__":
+    import uvicorn
+
     uvicorn.run("app.api_handler:app", host="localhost", port=8080, reload=True)

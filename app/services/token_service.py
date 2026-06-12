@@ -1,5 +1,3 @@
-from typing import Any
-
 import pendulum
 from aws_lambda_powertools import Logger
 from starlette import status
@@ -12,13 +10,14 @@ ERROR_MESSAGE_TOKEN_NOT_FOUND = "The requested token was not found"
 
 
 class TokenService:
-    def __init__(self):
+    def __init__(self, token_repository: TokenRepository):
         self._logger = Logger()
-        self._token_repository = TokenRepository()
+        self._token_repository = token_repository
 
-    def create(self, jwt_token: JWTToken, refresh_token: RefreshToken | None):
+    def create(self, jwt_token: JWTToken, refresh_token: RefreshToken | None) -> None:
         self._logger.info(
-            f"Creating token record for jti={jwt_token.jti}",
+            "Creating token record for jti=%s",
+            jwt_token.jti,
             extra={"has_refresh_token": refresh_token is not None},
         )
         token_data = {
@@ -36,17 +35,29 @@ class TokenService:
 
         self._token_repository.create_token(token_data)
 
-    def delete_by_id(self, jti: str):
-        self._logger.info(f"Deleting token record for jti={jti}")
+    def delete_by_id(self, jti: str) -> None:
+        self._logger.info("Deleting token record for jti=%s", jti)
         response = self._token_repository.delete_by_id(jti)
         if response["ResponseMetadata"]["HTTPStatusCode"] != status.HTTP_200_OK:
-            self._logger.warning(f"Token delete failed for jti={jti}")
+            self._logger.warning("Token delete failed for jti=%s", jti)
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
 
-    def get_by_id(self, jti: str) -> tuple[JWTToken, str] | None:
-        self._logger.debug(f"Fetching token record by jti={jti}")
-        return self._token_repository.get_by_id(jti)
+    def consume_by_id(self, jti: str) -> bool:
+        self._logger.info("Consuming token record for jti=%s", jti)
+        return self._token_repository.consume_by_id(jti)
 
-    def get_by_refresh_token(self, refresh_token: str) -> dict[str, Any] | None:
+    def get_by_id(self, jti: str) -> tuple[JWTToken, str, int] | None:
+        self._logger.debug("Fetching token record by jti=%s", jti)
+        item = self._token_repository.get_by_id(jti)
+        if item is None:
+            return None
+        return JWTToken(**item["jwt_token"]), item.get("refresh_token", ""), item["ttl"]
+
+    def get_by_refresh_token(
+        self, refresh_token: str
+    ) -> tuple[JWTToken, str, int] | None:
         self._logger.debug("Fetching token record by refresh token")
-        return self._token_repository.get_by_refresh_token(refresh_token)
+        item = self._token_repository.get_by_refresh_token(refresh_token)
+        if item is None:
+            return None
+        return JWTToken(**item["jwt_token"]), item.get("refresh_token", ""), item["ttl"]

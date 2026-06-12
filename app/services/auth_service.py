@@ -2,6 +2,7 @@ import base64
 import hashlib
 import secrets
 import uuid
+from urllib.parse import urlparse, urlunparse
 
 import jwt
 import pendulum
@@ -36,13 +37,20 @@ ROLE_SCOPE_MAP: dict[str, list[str]] = {
 
 
 class AuthService:
-    def __init__(self):
+    def __init__(
+        self,
+        password_hasher: PasswordHasher,
+        authorization_code_repository: AuthorizationCodeRepository,
+        service_repository: ServiceRepository,
+        token_service: TokenService,
+        user_service_client: UserServiceClient,
+    ) -> None:
         self._logger = Logger()
-        self._password_hasher = PasswordHasher()
-        self._authorization_code_repository = AuthorizationCodeRepository()
-        self._service_repository = ServiceRepository()
-        self._token_service = TokenService()
-        self._user_service_client = UserServiceClient()
+        self._password_hasher = password_hasher
+        self._authorization_code_repository = authorization_code_repository
+        self._service_repository = service_repository
+        self._token_service = token_service
+        self._user_service_client = user_service_client
 
         self._user_service_token = None
 
@@ -78,7 +86,9 @@ class AuthService:
         code_verifier: str,
         code_challenge_method: str | None,
     ) -> str:
-        if code_challenge_method == "S256":
+        method = code_challenge_method or "plain"
+
+        if method == "S256":
             logger.debug("Computing PKCE challenge using S256")
             return (
                 base64.urlsafe_b64encode(
@@ -88,19 +98,34 @@ class AuthService:
                 .rstrip("=")
             )
 
-        if code_challenge_method == "plain":
+        if method == "plain":
             logger.debug("Computing PKCE challenge using plain method")
             return code_verifier
 
         logger.warning(
             "Unsupported PKCE code challenge method",
-            extra={"code_challenge_method": code_challenge_method},
+            extra={"code_challenge_method": method},
         )
 
         raise OAuthException(
             "invalid_request",
             "Unsupported code_challenge_method",
             status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    @staticmethod
+    def _normalize_uri(uri: str) -> str:
+        parsed = urlparse(uri)
+        scheme = parsed.scheme.lower()
+        host = parsed.hostname.lower() if parsed.hostname else ""
+        port = parsed.port
+        default_port = {"https": 443, "http": 80}.get(scheme)
+        if port == default_port:
+            port = None
+        path = parsed.path.rstrip("/") or "/"
+        netloc = f"{host}:{port}" if port else host
+        return urlunparse(
+            (scheme, netloc, path, parsed.params, parsed.query, parsed.fragment)
         )
 
     def _validate_pkce(
@@ -137,8 +162,9 @@ class AuthService:
         scope: str | None = None,
     ) -> JWTToken:
         self._logger.debug(
-            f"Generating JWT payload for sub={sub}",
-            extra={"has_scope": scope is not None},
+            "Generating JWT payload for sub=%s",
+            sub,
+            extra={"sub": sub, "has_scope": scope is not None},
         )
         iat = pendulum.now()
         exp = (
@@ -169,8 +195,9 @@ class AuthService:
         scope: str | None = None,
     ) -> tuple[JWTToken, RefreshToken]:
         self._logger.info(
-            f"Generating new tokens for sub={sub}",
-            extra={"has_scope": scope is not None},
+            "Generating new tokens for sub=%s",
+            sub,
+            extra={"sub": sub, "has_scope": scope is not None},
         )
 
         jwt_token = self._generate_token(sub, settings.jwt_token_lifetime, scope=scope)
@@ -184,26 +211,32 @@ class AuthService:
 
     def _revoke_token(self, jwt_token: JWTToken):
         self._logger.info(
-            f"Revoking token with jti={jwt_token.jti}", extra={"jwt_token": jwt_token}
+            "Revoking token with jti=%s",
+            jwt_token.jti,
+            extra={"token_sub": jwt_token.sub, "token_scope": jwt_token.scope},
         )
         self._token_service.delete_by_id(jwt_token.jti)
 
     def _issue_service_token(
         self, client_name: str, client_secret: str, scope: str | None = None
     ) -> JWTToken:
-        if (
-            self._user_service_token
-            and self._user_service_token.exp > pendulum.now().int_timestamp
-        ):
-            self._logger.debug("Reusing cached user service token")
-            return self._user_service_token
+        if self._user_service_token is not None:
+            remaining = self._user_service_token.exp - pendulum.now().int_timestamp
+            # Cache with a safety buffer: refresh when less than 20% of lifetime remains
+            # or at most 60s before expiry, to reduce the window for serving revoked tokens
+            safety_buffer = max(settings.service_token_lifetime_seconds // 5, 60)
+            if remaining > safety_buffer:
+                self._logger.debug("Reusing cached user service token")
+                return self._user_service_token
 
         self._logger.info("Issuing new user service token")
 
-        jwt_token = self._generate_client_credentials(client_name, client_secret, scope)
-        self._user_service_token = jwt_token
+        service_token = self._generate_client_credentials(
+            client_name, client_secret, scope
+        )
+        self._user_service_token = service_token
 
-        return jwt_token
+        return service_token
 
     def login(
         self, email: str, password: str, requested_scope: str | None = None
@@ -212,38 +245,49 @@ class AuthService:
             "Login requested",
             extra={"requested_scope": requested_scope},
         )
-        jwt_token = self._issue_service_token(settings.app_name, settings.client_secret)
+        service_token = self._issue_service_token(
+            settings.app_name, settings.client_secret
+        )
         user = self._user_service_client.get_user_by_email(
             email,
-            jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
+            jwt.encode(
+                service_token.model_dump(exclude_none=True), settings.jwt_secret
+            ),
         )
 
         if user is None:
             self._logger.warning("Login failed, user not found")
             raise InvalidCredentialsException(ERROR_MESSAGE_UNAUTHORIZED)
 
-        try:
-            self._password_hasher.verify(user["password"], password)
-        except (InvalidHash, VerifyMismatchError):
+        if not self._user_service_client.validate_user_password(
+            user["id"],
+            password,
+            jwt.encode(
+                service_token.model_dump(exclude_none=True), settings.jwt_secret
+            ),
+        ):
             self._logger.warning("Login failed, invalid credentials")
             raise InvalidCredentialsException(ERROR_MESSAGE_UNAUTHORIZED)
 
         scope = self._derive_scope(user.get("roles", []), requested_scope)
-        jwt_token, refresh_token = self._generate_tokens(user["id"], scope=scope)
+        service_token, refresh_token = self._generate_tokens(user["id"], scope=scope)
         self._logger.info(
-            f"Login succeeded for sub={user['id']}",
-            extra={"has_scope": scope is not None},
+            "Login succeeded for sub=%s",
+            user["id"],
+            extra={"sub": user["id"], "has_scope": scope is not None},
         )
 
         return (
-            jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
+            jwt.encode(
+                service_token.model_dump(exclude_none=True), settings.jwt_secret
+            ),
             refresh_token.token,
             settings.jwt_token_lifetime,
             scope,
         )
 
     def logout(self, jwt_token: JWTToken):
-        self._logger.info(f"Logout requested for jti={jwt_token.jti}")
+        self._logger.info("Logout requested for jti=%s", jwt_token.jti)
         self._revoke_token(jwt_token)
 
     def refresh(self, refresh_token: str) -> tuple[str, str, int, str | None]:
@@ -254,21 +298,29 @@ class AuthService:
             self._logger.warning("The requested token was not found!")
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
 
-        if item["ttl"] < pendulum.now().int_timestamp:
+        jwt_token, _, ttl = item
+
+        if ttl < pendulum.now().int_timestamp:
             self._logger.warning(
                 "Refresh token expired",
-                extra={"jti": item["jwt_token"]["jti"]},
+                extra={"jti": jwt_token.jti},
             )
             raise TokenExpiredException("The requested token has expired")
 
-        self._token_service.delete_by_id(item["jwt_token"]["jti"])
+        if not self._token_service.consume_by_id(jwt_token.jti):
+            self._logger.warning(
+                "Token refresh failed, token already consumed",
+                extra={"jti": jwt_token.jti},
+            )
+            raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
 
-        scope = item["jwt_token"].get("scope")
-        sub = item["jwt_token"]["sub"]
+        scope = jwt_token.scope
+        sub = jwt_token.sub
         jwt_token, refresh_token = self._generate_tokens(sub, scope=scope)
         self._logger.info(
-            f"Token refresh succeeded for sub={sub}",
-            extra={"has_scope": scope is not None},
+            "Token refresh succeeded for sub=%s",
+            sub,
+            extra={"sub": sub, "has_scope": scope is not None},
         )
 
         return (
@@ -282,13 +334,16 @@ class AuthService:
         self, client_name: str, client_secret: str, requested_scope: str | None
     ) -> JWTToken:
         self._logger.info(
-            f"Generating client credentials token for client_name={client_name}",
-            extra={"requested_scope": requested_scope},
+            "Generating client credentials token for client_name=%s",
+            client_name,
+            extra={"client_name": client_name, "requested_scope": requested_scope},
         )
         service = self._service_repository.get_by_name(client_name)
         if service is None:
             self._logger.warning(
-                f"Client credentials failed, service not found for client_name={client_name}"
+                "Client credentials failed, service not found for client_name=%s",
+                client_name,
+                extra={"client_name": client_name},
             )
             raise OAuthException(
                 "invalid_client",
@@ -299,7 +354,9 @@ class AuthService:
             self._password_hasher.verify(service.secret, client_secret)
         except (InvalidHash, VerifyMismatchError):
             self._logger.warning(
-                f"Client credentials failed, invalid secret for client_name={client_name}"
+                "Client credentials failed, invalid secret for client_name=%s",
+                client_name,
+                extra={"client_name": client_name},
             )
             raise OAuthException(
                 "invalid_client",
@@ -307,7 +364,7 @@ class AuthService:
                 headers={"WWW-Authenticate": "Basic"},
             )
 
-        allowed = set(service.scopes)
+        allowed = set(service.scopes) if service.scopes else set()
         if requested_scope:
             requested = set(requested_scope.split())
             if not requested.issubset(allowed):
@@ -327,7 +384,7 @@ class AuthService:
 
         jwt_token = self._generate_token(
             sub=client_name,
-            exp=settings.service_token_lifetime,
+            exp=settings.service_token_lifetime_seconds,
             scope=granted_scope,
         )
         self._token_service.create(
@@ -336,8 +393,9 @@ class AuthService:
         )
 
         self._logger.info(
-            f"Client credentials token created for client_name={client_name}",
-            extra={"has_scope": granted_scope is not None},
+            "Client credentials token created for client_name=%s",
+            client_name,
+            extra={"client_name": client_name, "has_scope": granted_scope is not None},
         )
 
         return jwt_token
@@ -346,15 +404,38 @@ class AuthService:
         self, client_name: str, client_secret: str, scope: str | None = None
     ) -> tuple[str, int, str | None]:
         self._logger.info(
-            f"Client credentials flow requested for client_name={client_name}",
-            extra={"requested_scope": scope},
+            "Client credentials flow requested for client_name=%s",
+            client_name,
+            extra={"client_name": client_name, "requested_scope": scope},
         )
         jwt_token = self._generate_client_credentials(client_name, client_secret, scope)
         return (
             jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
-            settings.service_token_lifetime,
+            settings.service_token_lifetime_seconds,
             jwt_token.scope,
         )
+
+    def _validate_redirect_uri(self, client_id: str, redirect_uri: str) -> None:
+        try:
+            client = self._service_repository.get_by_id(client_id)
+        except Exception:
+            return
+
+        if client and client.redirect_uris:
+            normalized_redirect = self._normalize_uri(redirect_uri)
+            if not any(
+                self._normalize_uri(allowed) == normalized_redirect
+                for allowed in client.redirect_uris
+            ):
+                self._logger.warning(
+                    "Authorization failed, redirect_uri not registered for client_id=%s",
+                    client_id,
+                )  # noqa
+                raise OAuthException(
+                    "invalid_request",
+                    "Redirect URI is not registered for this client",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
 
     def authorize(
         self,
@@ -366,19 +447,32 @@ class AuthService:
         code_challenge_method: str | None = None,
     ) -> str:
         self._logger.info(
-            f"Authorization code requested for user_id={user_id}",
-            extra={"client_id": client_id, "requested_scope": requested_scope},
+            "Authorization code requested for user_id=%s",
+            user_id,
+            extra={
+                "user_id": user_id,
+                "client_id": client_id,
+                "requested_scope": requested_scope,
+            },
+        )  # noqa
+        service_token = self._issue_service_token(
+            settings.app_name, settings.client_secret
         )
-        jwt_token = self._issue_service_token(settings.app_name, settings.client_secret)
         user = self._user_service_client.get_user_by_id(
             user_id,
-            jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
+            jwt.encode(
+                service_token.model_dump(exclude_none=True), settings.jwt_secret
+            ),
         )
         if user is None:
             self._logger.warning(
-                f"Authorization failed, user not found user_id={user_id}"
+                "Authorization failed, user not found user_id=%s",
+                user_id,
+                extra={"user_id": user_id},
             )
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
+
+        self._validate_redirect_uri(client_id, redirect_uri)
 
         scope = self._derive_scope(user.get("roles", []), requested_scope)
 
@@ -392,8 +486,13 @@ class AuthService:
         )
 
         self._logger.info(
-            f"Authorization code created for user_id={user_id}",
-            extra={"client_id": client_id, "has_scope": scope is not None},
+            "Authorization code created for user_id=%s",
+            user_id,
+            extra={
+                "user_id": user_id,
+                "client_id": client_id,
+                "has_scope": scope is not None,
+            },
         )
 
         return code
@@ -411,17 +510,27 @@ class AuthService:
                 "invalid_grant", status_code=status.HTTP_400_BAD_REQUEST
             )
 
+        if not self._authorization_code_repository.consume_by_id(auth_code.id):
+            self._logger.warning(
+                "Authorization code exchange failed, code already consumed",
+                extra={"authorization_code_id": auth_code.id},
+            )
+            raise OAuthException(
+                "invalid_grant", status_code=status.HTTP_400_BAD_REQUEST
+            )
+
         if auth_code.ttl < now:
             self._logger.warning(
                 "Authorization code exchange failed, code expired",
                 extra={"authorization_code_id": auth_code.id},
             )
-            self._authorization_code_repository.delete_by_id(auth_code.id)
             raise OAuthException(
                 "invalid_grant", status_code=status.HTTP_400_BAD_REQUEST
             )
 
-        if auth_code.redirect_uri != redirect_uri:
+        if self._normalize_uri(auth_code.redirect_uri) != self._normalize_uri(
+            redirect_uri
+        ):
             self._logger.warning(
                 "Authorization code exchange failed, redirect_uri mismatch",
                 extra={"authorization_code_id": auth_code.id},
@@ -432,8 +541,6 @@ class AuthService:
 
         self._validate_pkce(auth_code, code_verifier)
 
-        self._authorization_code_repository.delete_by_id(auth_code.id)
-
         jwt_token = self._issue_service_token(settings.app_name, settings.client_secret)
         user = self._user_service_client.get_user_by_id(
             auth_code.user_id,
@@ -441,7 +548,9 @@ class AuthService:
         )
         if user is None:
             self._logger.warning(
-                f"Authorization code exchange failed, user not found user_id={auth_code.user_id}"
+                "Authorization code exchange failed, user not found user_id=%s",
+                auth_code.user_id,
+                extra={"user_id": auth_code.user_id},
             )
             raise UserNotFoundException(ERROR_MESSAGE_USER_NOT_FOUND)
 
@@ -450,9 +559,13 @@ class AuthService:
         )
 
         self._logger.info(
-            f"Authorization code exchange succeeded for user_id={auth_code.user_id}",
-            extra={"has_scope": auth_code.scope is not None},
-        )
+            "Authorization code exchange succeeded for user_id=%s",
+            auth_code.user_id,
+            extra={
+                "user_id": auth_code.user_id,
+                "has_scope": auth_code.scope is not None,
+            },
+        )  # noqa
 
         return (
             jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),

@@ -1,9 +1,11 @@
 import secrets
 import uuid
 
+import boto3
 import pendulum
 from aws_lambda_powertools import Logger
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
+from botocore.exceptions import ClientError
 
 from app import settings
 from app.models.authorization_code import AuthorizationCode
@@ -12,7 +14,7 @@ from app.models.authorization_code import AuthorizationCode
 class AuthorizationCodeRepository:
     def __init__(self):
         self._logger = Logger()
-        self._dynamodb = __import__("boto3").resource("dynamodb")
+        self._dynamodb = boto3.resource("dynamodb")
         self._table = self._dynamodb.Table(f"{settings.stage}-authorization_codes")
 
     def create(
@@ -25,33 +27,67 @@ class AuthorizationCodeRepository:
         code_challenge_method: str | None = None,
     ) -> str:
         code = secrets.token_urlsafe(32)
-        now = pendulum.now()
-        ttl = (now.add(minutes=10)).int_timestamp
+        now = pendulum.now("UTC")
+        expire_at = now.add(minutes=10)
+        ttl = expire_at.int_timestamp
 
-        self._table.put_item(
-            Item={
-                "id": str(uuid.uuid4()),
-                "code": code,
-                "client_id": client_id,
-                "user_id": user_id,
-                "redirect_uri": redirect_uri,
-                "scope": scope,
-                "code_challenge": code_challenge,
-                "code_challenge_method": code_challenge_method,
-                "created_at": now.to_iso8601_string(),
-                "expire_at": pendulum.from_timestamp(ttl).to_iso8601_string(),
-                "ttl": ttl,
-            }
-        )
+        try:
+            self._table.put_item(
+                Item={
+                    "id": str(uuid.uuid4()),
+                    "code": code,
+                    "client_id": client_id,
+                    "user_id": user_id,
+                    "redirect_uri": redirect_uri,
+                    "scope": scope,
+                    "code_challenge": code_challenge,
+                    "code_challenge_method": code_challenge_method,
+                    "created_at": now.to_iso8601_string(),
+                    "expire_at": expire_at.to_iso8601_string(),
+                    "ttl": ttl,
+                }
+            )
+        except ClientError:
+            self._logger.exception(
+                "Failed to create authorization code for client=%s, user=%s",
+                client_id,
+                user_id,
+            )
+            raise
 
         self._logger.info(
-            f"Created authorization code for client={client_id}, user={user_id}"
+            "Created authorization code for client=%s, user=%s", client_id, user_id
         )
         return code
 
-    def delete_by_id(self, code_id: str) -> None:
-        self._table.delete_item(Key={"id": code_id})
-        self._logger.info(f"Deleted authorization code {code_id}")
+    def delete_by_id(self, authorization_code_id: str) -> None:
+        try:
+            self._table.delete_item(Key={"id": authorization_code_id})
+        except ClientError:
+            self._logger.exception(
+                "Failed to delete authorization code %s", authorization_code_id
+            )
+            raise
+        self._logger.info("Deleted authorization code %s", authorization_code_id)
+
+    def consume_by_id(self, authorization_code_id: str) -> bool:
+        try:
+            self._table.update_item(
+                Key={"id": authorization_code_id},
+                UpdateExpression="SET #c = :val",
+                ConditionExpression=Attr("id").exists() & Attr("consumed").not_exists(),
+                ExpressionAttributeNames={"#c": "consumed"},
+                ExpressionAttributeValues={":val": True},
+            )
+            self._logger.info("Consumed authorization code %s", authorization_code_id)
+            return True
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+                self._logger.warning(
+                    "Authorization code already consumed %s", authorization_code_id
+                )
+                return False
+            raise
 
     def get_by_code(self, code: str) -> AuthorizationCode | None:
         self._logger.debug("Querying authorization code by code value")
@@ -66,7 +102,8 @@ class AuthorizationCodeRepository:
 
         item = response["Items"][0]
         self._logger.info(
-            f"Authorization code found id={item['id']}",
+            "Authorization code found id=%s",
+            item["id"],
             extra={"client_id": item["client_id"], "user_id": item["user_id"]},
         )
         return AuthorizationCode(
