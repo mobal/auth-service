@@ -12,7 +12,7 @@ from app.models.authorization_code import AuthorizationCode
 
 
 class AuthorizationCodeRepository:
-    def __init__(self):
+    def __init__(self) -> None:
         self._logger = Logger()
         self._dynamodb = boto3.resource("dynamodb")
         self._table = self._dynamodb.Table(f"{settings.stage}-authorization_codes")

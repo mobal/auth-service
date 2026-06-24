@@ -7,7 +7,7 @@ from app.models.service import ServiceCredential
 
 
 class ServiceRepository:
-    def __init__(self):
+    def __init__(self) -> None:
         self._logger = Logger()
         self._table = (
             boto3.Session().resource("dynamodb").Table(f"{settings.stage}-services")

@@ -182,7 +182,7 @@ class AuthService:
             scope=scope,
         )
 
-    def _generate_refresh_token(self, length: int = 32):
+    def _generate_refresh_token(self, length: int = 32) -> str:
         self._logger.debug(
             "Generating refresh token",
             extra={"token_length_bytes": length},
@@ -209,7 +209,7 @@ class AuthService:
 
         return jwt_token, refresh_token
 
-    def _revoke_token(self, jwt_token: JWTToken):
+    def _revoke_token(self, jwt_token: JWTToken) -> None:
         self._logger.info(
             "Revoking token with jti=%s",
             jwt_token.jti,
@@ -286,7 +286,7 @@ class AuthService:
             scope,
         )
 
-    def logout(self, jwt_token: JWTToken):
+    def logout(self, jwt_token: JWTToken) -> None:
         self._logger.info("Logout requested for jti=%s", jwt_token.jti)
         self._revoke_token(jwt_token)
 
