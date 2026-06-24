@@ -27,6 +27,7 @@ router = APIRouter()
 
 ERROR_MESSAGE_INVALID_CLIENT = "Invalid client: missing or invalid Authorization header"
 ERROR_MESSAGE_UNSUPPORTED_GRANT_TYPE = "Unsupported grant type"
+ERROR_MESSAGE_UNSUPPORTED_RESPONSE_TYPE = "Unsupported response type"
 
 
 def _parse_authorization_header(authorization: str | None) -> tuple[str, str]:
@@ -245,7 +246,7 @@ def authorize(
             "Unsupported authorize response type",
             extra={"response_type": response_type},
         )
-        raise OAuthException(ERROR_MESSAGE_UNSUPPORTED_GRANT_TYPE)
+        raise OAuthException(ERROR_MESSAGE_UNSUPPORTED_RESPONSE_TYPE)
 
     code = auth_service.authorize(
         user_id=jwt_token.sub,
