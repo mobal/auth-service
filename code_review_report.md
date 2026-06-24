@@ -56,17 +56,17 @@
 | 2.42 | No AWS Lambda context test | 🟡 Medium | 🟡 Medium | ⏳ **Fix Later** — niche path |
 | | **Low / Info** | | | |
 | 3.1 | Inconsistent return types | 🟢 Low | 🟡 Medium | ⏳ **Fix Later** — refactor both to same type |
-| 3.2 | Misleading param name `code_id` | 🟢 Low | 🟢 Easy | ✅ **Fix** — rename |
-| 3.3 | Unnecessary round-trip conversion | 🟢 Low | 🟢 Easy | ✅ **Fix** — simplify |
-| 3.4 | Timezone inconsistency | 🟢 Low | 🟢 Easy | ✅ **Fix** — use `pendulum.now('UTC')` |
-| 3.5 | F-strings in logger calls | 🟢 Low | 🟢 Easy | ✅ **Fix** — use `%s` formatting |
-| 3.6 | Missing return type annotations | 🟢 Low | 🟢 Easy | ✅ **Fix** — add type hints |
-| 3.7 | Unused module-level dict | 🟢 Low | 🟢 Easy | ✅ **Fix** — remove dead code |
-| 3.8 | Dead default in `request.scope.get()` | 🟢 Low | 🟢 Easy | ✅ **Fix** — simplify |
+| ~~3.2~~ | ~~Misleading param name `code_id`~~ | 🟢 Low | 🟢 Easy | ✅ **Fixed** |
+| ~~3.3~~ | ~~Unnecessary round-trip conversion~~ | 🟢 Low | 🟢 Easy | ✅ **Fixed** |
+| ~~3.4~~ | ~~Timezone inconsistency~~ | 🟢 Low | 🟢 Easy | ✅ **Fixed** |
+| ~~3.5~~ | ~~F-strings in logger calls~~ | 🟢 Low | 🟢 Easy | ✅ **Fixed** |
+| ~~3.6~~ | ~~Missing return type annotations~~ | 🟢 Low | 🟢 Easy | ✅ **Fixed** |
+| ~~3.7~~ | ~~Unused module-level dict~~ | 🟢 Low | 🟢 Easy | ✅ **Fixed** |
+| ~~3.8~~ | ~~Dead default in `request.scope.get()`~~ | 🟢 Low | 🟢 Easy | ✅ **Fixed** |
 | 3.9 | No docstrings on models | 🟢 Low | 🔴 Hard | ⚠️ **Consider** — time-consuming |
-| 3.14 | Unused fixture `jwt_auth` | 🟢 Low | 🟢 Easy | ✅ **Fix** — remove |
-| 3.15 | Redundant `import pytest as pytest` | 🟢 Low | 🟢 Easy | ✅ **Fix** — simplify |
-| 3.17 | Exception type assertion uses `__name__` | 🟢 Low | 🟢 Easy | ✅ **Fix** — use direct type comparison |
+| ~~3.14~~ | ~~Unused fixture `jwt_auth`~~ | 🟢 Low | 🟢 Easy | ✅ **Fixed** |
+| ~~3.15~~ | ~~Redundant `import pytest as pytest`~~ | 🟢 Low | 🟢 Easy | ✅ **Fixed** |
+| ~~3.17~~ | ~~Exception type assertion uses `__name__`~~ | 🟢 Low | 🟢 Easy | ✅ **Fixed** |
 | 3.18 | No DynamoDB error tests | 🟢 Low | 🔴 Hard | ⚠️ **Consider** — time-consuming |
 | 3.19 | No edge-case JWT token fixtures | 🟢 Low | 🟡 Medium | ⏳ **Fix Later** — add fixtures |
 
@@ -856,77 +856,77 @@ The middleware's AWS request ID fallback path (path 2 of 3) is entirely untested
 
 ---
 
-### 3.2 Misleading parameter name `code_id` in delete_by_id
+### ~~3.2 Misleading parameter name `code_id` in delete_by_id~~ ✅ Fixed
 
-**File:** `/Users/mobal/src/p4493/auth-service/app/repositories/authorization_code_repository.py` | **Line:** 52
+~~**File:** `/Users/mobal/src/p4493/auth-service/app/repositories/authorization_code_repository.py` | **Line:** 52~~
 
-Parameter name suggests the authorization code value, but it expects the internal UUID primary key.
+~~Parameter name suggests the authorization code value, but it expects the internal UUID primary key.~~
 
-**Fix:** Rename to `item_id` or `record_id` with a clarifying docstring.
-
----
-
-### 3.3 Unnecessary round-trip conversion for expire_at
-
-**File:** `/Users/mobal/src/p4493/auth-service/app/repositories/authorization_code_repository.py` | **Lines:** 29, 42
-
-`pendulum.from_timestamp(ttl).to_iso8601_string()` where `ttl` is already computed from `now`. Converts to Unix timestamp (losing precision) then reconstructs.
-
-**Fix:** Replace with `now.add(minutes=10).to_iso8601_string()`.
+~~**Fix:** Rename to `item_id` or `record_id` with a clarifying docstring.~~
 
 ---
 
-### 3.4 Timezone inconsistency in authorization code repository
+### ~~3.3 Unnecessary round-trip conversion for expire_at~~ ✅ Fixed
 
-**File:** `/Users/mobal/src/p4493/auth-service/app/repositories/authorization_code_repository.py` | **Lines:** 28, 41-42
+~~**File:** `/Users/mobal/src/p4493/auth-service/app/repositories/authorization_code_repository.py` | **Lines:** 29, 42~~
 
-`created_at` uses `pendulum.now()` (local timezone); `expire_at` computed from `pendulum.from_timestamp(ttl)` (UTC). Mixed timezones.
+~~`pendulum.from_timestamp(ttl).to_iso8601_string()` where `ttl` is already computed from `now`. Converts to Unix timestamp (losing precision) then reconstructs.~~
 
-**Fix:** Use `pendulum.now('UTC')` consistently.
-
----
-
-### 3.5 F-strings in logger calls cause eager evaluation
-
-**Files:** Various
-
-Multiple logger calls use f-string formatting instead of lazy `%s` formatting (e.g., `app/__init__.py:19`, `app/repositories/authorization_code_repository.py:47-48`, `app/security/authorization.py:16`).
-
-**Fix:** Replace `logger.debug(f"...")` with `logger.debug("...%s", var)`.
+~~**Fix:** Replace with `now.add(minutes=10).to_iso8601_string()`.~~
 
 ---
 
-### 3.6 Missing return type annotations
+### ~~3.4 Timezone inconsistency in authorization code repository~~ ✅ Fixed
 
-**Files:** Various
+~~**File:** `/Users/mobal/src/p4493/auth-service/app/repositories/authorization_code_repository.py` | **Lines:** 28, 41-42~~
 
-- `app/__init__.py:14` - `load_env_files` missing `-> None`
-- `app/api_handler.py:127-130` - `health_check` missing return type
-- `app/services/auth_service.py:39` - `__init__` missing `-> None`
-- `app/services/token_service.py:19,39` - `create` and `delete_by_id` missing type annotations
-- `app/security/authorization.py:9-41` - Inner functions missing type annotations
+~~`created_at` uses `pendulum.now()` (local timezone); `expire_at` computed from `pendulum.from_timestamp(ttl)` (UTC). Mixed timezones.~~
 
-**Fix:** Add appropriate return type annotations.
+~~**Fix:** Use `pendulum.now('UTC')` consistently.~~
 
 ---
 
-### 3.7 Unused module-level global dict in middlewares.py
+### ~~3.5 F-strings in logger calls cause eager evaluation~~ ✅ Fixed
 
-**File:** `/Users/mobal/src/p4493/auth-service/app/middlewares.py` | **Line:** 13
+~~**Files:** Various~~
 
-`clients: dict[str, Any] = {}` is defined but never read, written, or referenced anywhere.
+~~Multiple logger calls use f-string formatting instead of lazy `%s` formatting (e.g., `app/__init__.py:19`, `app/repositories/authorization_code_repository.py:47-48`, `app/security/authorization.py:16`).~~
 
-**Fix:** Remove the dead code.
+~~**Fix:** Replace `logger.debug(f"...")` with `logger.debug("...%s", var)`.~~
 
 ---
 
-### 3.8 Dead default in request.scope.get()
+### ~~3.6 Missing return type annotations~~ ✅ Fixed
 
-**File:** `/Users/mobal/src/p4493/auth-service/app/middlewares.py` | **Line:** 33
+~~**Files:** Various~~
 
-`request.scope.get("aws.context", {})` passes an empty dict default that is never used because the guard ensures the key exists.
+~~- `app/__init__.py:14` - `load_env_files` missing `-> None`~~
+~~- `app/api_handler.py:127-130` - `health_check` missing return type~~
+~~- `app/services/auth_service.py:39` - `__init__` missing `-> None`~~
+~~- `app/services/token_service.py:19,39` - `create` and `delete_by_id` missing type annotations~~
+~~- `app/security/authorization.py:9-41` - Inner functions missing type annotations~~
 
-**Fix:** Simplify to `request.scope["aws.context"]`.
+~~**Fix:** Add appropriate return type annotations.~~
+
+---
+
+### ~~3.7 Unused module-level global dict in middlewares.py~~ ✅ Fixed
+
+~~**File:** `/Users/mobal/src/p4493/auth-service/app/middlewares.py` | **Line:** 13~~
+
+~~`clients: dict[str, Any] = {}` is defined but never read, written, or referenced anywhere.~~
+
+~~**Fix:** Remove the dead code.~~
+
+---
+
+### ~~3.8 Dead default in request.scope.get()~~ ✅ Fixed
+
+~~**File:** `/Users/mobal/src/p4493/auth-service/app/middlewares.py` | **Line:** 33~~
+
+~~`request.scope.get("aws.context", {})` passes an empty dict default that is never used because the guard ensures the key exists.~~
+
+~~**Fix:** Simplify to `request.scope["aws.context"]`.~~
 
 ---
 
@@ -940,33 +940,33 @@ Models for `GrantType`, `AuthorizationCode`, `OAuthTokenRequest`, and others lac
 
 ---
 
-### 3.14 Unused fixture `jwt_auth` in test_auth.py
+### ~~3.14 Unused fixture `jwt_auth` in test_auth.py~~ ✅ Fixed
 
-**File:** `/Users/mobal/src/p4493/auth-service/tests/unit/test_auth.py` | **Lines:** 25-26
+~~**File:** `/Users/mobal/src/p4493/auth-service/tests/unit/test_auth.py` | **Lines:** 25-26~~
 
-Class-level fixture defined but never referenced by any test method.
+~~Class-level fixture defined but never referenced by any test method.~~
 
-**Fix:** Remove the dead fixture.
-
----
-
-### 3.15 Redundant `import pytest as pytest`
-
-**File:** `/Users/mobal/src/p4493/auth-service/tests/unit/conftest.py` | **Line:** 4
-
-No-op alias that may confuse readers or trigger linters.
-
-**Fix:** Simplify to `import pytest`.
+~~**Fix:** Remove the dead fixture.~~
 
 ---
 
-### 3.17 Exception type assertion uses `__name__` comparison instead of isinstance or type comparison
+### ~~3.15 Redundant `import pytest as pytest`~~ ✅ Fixed
 
-**Files:** Multiple test files
+~~**File:** `/Users/mobal/src/p4493/auth-service/tests/unit/conftest.py` | **Line:** 4~~
 
-`excinfo.typename == ExceptionClass.__name__` converts to string for comparison. More idiomatic is `excinfo.type == ExceptionClass`.
+~~No-op alias that may confuse readers or trigger linters.~~
 
-**Fix:** Replace with direct type comparison.
+~~**Fix:** Simplify to `import pytest`.~~
+
+---
+
+### ~~3.17 Exception type assertion uses `__name__` comparison instead of isinstance or type comparison~~ ✅ Fixed
+
+~~**Files:** Multiple test files~~
+
+~~`excinfo.typename == ExceptionClass.__name__` converts to string for comparison. More idiomatic is `excinfo.type == ExceptionClass`.~~
+
+~~**Fix:** Replace with direct type comparison.~~
 
 ---
 
@@ -1079,6 +1079,16 @@ Based on current codebase validation:
 6. ~~**Incomplete PyJWT exception coverage**~~ (`app/jwt_bearer.py:129-133`) — ✅ **Fixed**. Added `PyJWTError` catch-all fallback.
 7. ~~**Test false positives: no return assertions**~~ (`tests/unit/service/test_token_service.py`) — ✅ **Already fixed**. Tests capture and assert return values.
 8. ~~**Test false positive: no body assertions**~~ (`tests/integration/test_auth_api.py:195-207`) — ✅ **Already fixed**. Test asserts `access_token` / `refresh_token`.
+9. ~~**Misleading param name `code_id`**~~ (`app/repositories/authorization_code_repository.py:63,73`) — ✅ **Fixed**. Renamed `authorization_code_id` → `item_id`.
+10. ~~**Timezone inconsistency**~~ (`app/services/auth_service.py`) — ✅ **Fixed**. Changed `pendulum.now()` → `pendulum.now('UTC')`.
+11. ~~**Missing return type annotations**~~ (`app/repositories/`, `app/services/auth_service.py`) — ✅ **Fixed**. Added `-> None` / `-> str` return types.
+12. ~~**Redundant `import pytest as pytest`**~~ (`tests/unit/service/test_auth_service.py:7`) — ✅ **Fixed**. Simplified to `import pytest`.
+13. ~~**Unnecessary round-trip conversion**~~ (`app/repositories/authorization_code_repository.py`) — ✅ **Fixed** (already resolved in current codebase, uses `now.to_iso8601_string()` directly).
+14. ~~**F-strings in logger calls**~~ (Various files) — ✅ **Fixed** (already resolved in current codebase, no f-strings found in logger calls).
+15. ~~**Unused module-level dict**~~ (`app/middlewares.py`) — ✅ **Fixed** (already removed from codebase).
+16. ~~**Dead default in scope.get()**~~ (`app/middlewares.py:33`) — ✅ **Fixed** (already uses `scope.get()` without `{}` default).
+17. ~~**Unused fixture jwt_auth**~~ (`tests/unit/test_auth.py`) — ✅ **Fixed** (already removed from codebase).
+18. ~~**Exception type assertion uses `__name__`**~~ (Multiple test files) — ✅ **Fixed** (already uses `excinfo.type == ExceptionClass`).
 
 #### ⏳ Still Needs Fixing
 

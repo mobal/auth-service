@@ -29,22 +29,25 @@ class Settings(BaseSettings):
     @cached_property
     def client_secret(self) -> str:
         logger.debug("Resolving client_secret from parameter store")
-        return parameters.get_parameter(
-            os.environ.get("CLIENT_SECRET_SSM_PARAM_NAME"), decrypt=True
-        )
+        param_name = os.environ.get("CLIENT_SECRET_SSM_PARAM_NAME")
+        if param_name is None:
+            raise ValueError("CLIENT_SECRET_SSM_PARAM_NAME is not set")
+        return parameters.get_parameter(param_name, decrypt=True)
 
     @computed_field
     @cached_property
     def jwt_secret(self) -> str:
         logger.debug("Resolving jwt_secret from parameter store")
-        return parameters.get_parameter(
-            os.environ.get("JWT_SECRET_SSM_PARAM_NAME"), decrypt=True
-        )
+        param_name = os.environ.get("JWT_SECRET_SSM_PARAM_NAME")
+        if param_name is None:
+            raise ValueError("JWT_SECRET_SSM_PARAM_NAME is not set")
+        return parameters.get_parameter(param_name, decrypt=True)
 
     @computed_field
     @cached_property
     def user_service_base_url(self) -> str:
         logger.debug("Resolving user_service_base_url from parameter store")
-        return parameters.get_parameter(
-            os.environ.get("USER_SERVICE_BASE_URL_SSM_PARAM_NAME")
-        )
+        param_name = os.environ.get("USER_SERVICE_BASE_URL_SSM_PARAM_NAME")
+        if param_name is None:
+            raise ValueError("USER_SERVICE_BASE_URL_SSM_PARAM_NAME is not set")
+        return parameters.get_parameter(param_name)
