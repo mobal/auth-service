@@ -27,7 +27,7 @@ app.add_middleware(GZipMiddleware)
 app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins or ["*"],
+    allow_origins=settings.allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
