@@ -64,9 +64,7 @@ class AuthorizationCodeRepository:
         try:
             self._table.delete_item(Key={"id": item_id})
         except ClientError:
-            self._logger.exception(
-                "Failed to delete authorization code %s", item_id
-            )
+            self._logger.exception("Failed to delete authorization code %s", item_id)
             raise
         self._logger.info("Deleted authorization code %s", item_id)
 
@@ -83,9 +81,7 @@ class AuthorizationCodeRepository:
             return True
         except ClientError as e:
             if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
-                self._logger.warning(
-                    "Authorization code already consumed %s", item_id
-                )
+                self._logger.warning("Authorization code already consumed %s", item_id)
                 return False
             raise
 
