@@ -459,4 +459,4 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.json()["error"] == "Unsupported grant type"
+        assert response.json()["error"] == "Unsupported response type"

@@ -1,6 +1,8 @@
 import time
 from collections.abc import Sequence
 
+from pydantic import Field
+
 from app.models.models import CamelModel
 
 
@@ -16,7 +18,7 @@ class ErrorResponse(CamelModel):
     """HTTP status code of the error response."""
     error: str
     """OAuth 2.0 error code (e.g. ``\"invalid_request\"``, ``\"invalid_grant\"``)."""
-    timestamp: int = int(time.time())
+    timestamp: int = Field(default_factory=lambda: int(time.time()))
     """Unix timestamp when the error occurred."""
 
 

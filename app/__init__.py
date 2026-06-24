@@ -11,22 +11,20 @@ except ImportError:
 from app.settings import Settings
 
 env_files = [".env", ".env.dev", ".env.local", ".env.prod"]
-logger = Logger()
 
 
 def load_env_files() -> None:
-    logger.debug("Loading environment files")
     root_dir = Path(__file__).parent.parent
     for env in env_files:
         f = root_dir / env
         if f.exists():
-            logger.debug("Loading env file %s", env)
             if load_dotenv is not None:
-                load_dotenv(dotenv_path=f, override=False)
+                load_dotenv(dotenv_path=f, override=True)
 
 
 load_env_files()
 
+logger = Logger()
 settings = Settings()
 
 pendulum.set_local_timezone(pendulum.timezone(settings.default_timezone))
