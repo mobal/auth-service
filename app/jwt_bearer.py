@@ -6,7 +6,7 @@ from fastapi.security.http import (
     HTTPBearer as FastAPIHTTPBearer,
 )
 from fastapi.security.utils import get_authorization_scheme_param
-from jwt import DecodeError, ExpiredSignatureError
+from jwt import DecodeError, ExpiredSignatureError, PyJWTError
 from pydantic import ValidationError
 
 from app import settings
@@ -135,5 +135,7 @@ class JWTBearer:
             logger.exception("Expired signature: %s", err)
         except ValidationError as err:
             logger.exception("Invalid JWT payload structure: %s", err)
+        except PyJWTError as err:
+            logger.exception("Unexpected JWT error: %s", err)
 
         return None
