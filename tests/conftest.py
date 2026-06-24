@@ -78,7 +78,7 @@ def settings() -> Settings:
         default_timezone=os.getenv("DEFAULT_TIMEZONE"),
         aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
         aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-        stage=os.getenv("STAGE"),
+        stage=os.getenv("STAGE", "test"),
         jwt_token_lifetime=3600,
     )
 
