@@ -4,7 +4,7 @@ from unittest.mock import ANY
 
 import jwt
 import pendulum
-import pytest as pytest
+import pytest
 from argon2 import PasswordHasher
 from fastapi import HTTPException, status
 
