@@ -42,7 +42,7 @@ def _parse_authorization_header(authorization: str | None) -> tuple[str, str]:
         )
     try:
         decoded = base64.b64decode(authorization[6:], validate=True).decode()
-    except Exception:
+    except ValueError:
         logger.warning("Failed to decode Basic Authorization header")
         raise OAuthException(
             ERROR_MESSAGE_INVALID_CLIENT,
