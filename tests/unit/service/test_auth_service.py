@@ -83,7 +83,14 @@ class TestAuthService:
         mocker.patch.object(TokenService, "create")
 
         jwt_str, _, _, _ = auth_service.login(user_data["email"], "password")
-        decoded = JWTToken(**jwt.decode(jwt_str, settings.jwt_secret, ALGORITHMS))
+        decoded = JWTToken(
+            **jwt.decode(
+                jwt_str,
+                settings.jwt_secret,
+                algorithms=ALGORITHMS,
+                options={"verify_aud": False},
+            )
+        )
 
         assert decoded.sub == user_data["id"]
         assert (
@@ -195,6 +202,7 @@ class TestAuthService:
                     new_jwt_token,
                     jwt_secret_ssm_param_value,
                     algorithms=["HS256"],
+                    options={"verify_aud": False},
                 )
             ),
             ANY,
@@ -350,7 +358,12 @@ class TestAuthService:
             service_credential.name, password, None
         )
         decoded = JWTToken(
-            **jwt.decode(token, settings.jwt_secret, algorithms=ALGORITHMS)
+            **jwt.decode(
+                token,
+                settings.jwt_secret,
+                algorithms=ALGORITHMS,
+                options={"verify_aud": False},
+            )
         )
 
         assert decoded.sub == service_credential.name
@@ -457,7 +470,12 @@ class TestAuthService:
             service_without_scopes.name, password, None
         )
         decoded = JWTToken(
-            **jwt.decode(token, settings.jwt_secret, algorithms=ALGORITHMS)
+            **jwt.decode(
+                token,
+                settings.jwt_secret,
+                algorithms=ALGORITHMS,
+                options={"verify_aud": False},
+            )
         )
 
         assert decoded.sub == service_without_scopes.name

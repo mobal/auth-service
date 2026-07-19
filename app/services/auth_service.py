@@ -176,7 +176,8 @@ class AuthService:
         return JWTToken(
             exp=exp.int_timestamp,
             iat=iat.int_timestamp,
-            iss=settings.jwt_issuer if settings.jwt_issuer else None,
+            iss=settings.jwt_issuer if settings.jwt_issuer else settings.app_name,
+            aud=settings.jwt_audience if settings.jwt_audience else settings.app_name,
             jti=str(uuid.uuid4()),
             sub=sub,
             scope=scope,
@@ -241,9 +242,19 @@ class AuthService:
     def login(
         self, email: str, password: str, requested_scope: str | None = None
     ) -> tuple[str, str, int, str | None]:
-        self._logger.info(
-            "Login requested",
-            extra={"requested_scope": requested_scope},
+        # ⚠️  SECURITY NOTICE — Password Grant (RFC 6749 Section 4.3)
+        #
+        # This flow exposes the resource owner's credentials to the client,
+        # which violates OAuth 2.1 best practices.  It SHOULD only be used
+        # when the client is the resource owner (e.g. a first-party app)
+        # and no other grant type is feasible.
+        #
+        # Deprecation plan:  Remove this flow once all clients have migrated
+        # to the authorization code grant with PKCE.
+        self._logger.warning(
+            "Password grant login invoked — this flow is deprecated per OAuth 2.1 (BCP). "
+            "Migrate to authorization code grant with PKCE.",
+            extra={"email": email, "requested_scope": requested_scope},
         )
         service_token = self._issue_service_token(
             settings.app_name, settings.client_secret

@@ -28,6 +28,7 @@ router = APIRouter()
 ERROR_MESSAGE_INVALID_CLIENT = "Invalid client: missing or invalid Authorization header"
 ERROR_MESSAGE_UNSUPPORTED_GRANT_TYPE = "Unsupported grant type"
 ERROR_MESSAGE_UNSUPPORTED_RESPONSE_TYPE = "Unsupported response type"
+WARNING_PASSWORD_GRANT_DEPRECATED = '299 auth-service "The password grant type is deprecated per OAuth 2.1 (RFC 6749 Section 4.3). Migrate to the authorization code grant with PKCE."'
 
 
 def _parse_authorization_header(authorization: str | None) -> tuple[str, str]:
@@ -113,7 +114,11 @@ async def parse_oauth_token_request(request: Request) -> BaseGrantRequest:
 def _handle_password_grant(
     body: PasswordGrantRequest, auth_service: AuthService
 ) -> OAuthTokenResponse:
-    logger.info("Handling password grant")
+    logger.warning(
+        "Password grant used — this flow is deprecated per OAuth 2.1 (BCP). "
+        "Migrate clients to authorization code grant with PKCE.",
+        extra={"username": body.username},
+    )
 
     access_token, refresh_token, expires_in, scope = auth_service.login(
         body.username, body.password, body.scope
@@ -204,10 +209,17 @@ def token(
                 request, body, auth_service
             )
 
+    headers: dict[str, str] = {
+        "Cache-Control": "no-store",
+        "Pragma": "no-cache",
+    }
+    if isinstance(body, PasswordGrantRequest):
+        headers["Warning"] = WARNING_PASSWORD_GRANT_DEPRECATED
+
     return JSONResponse(
         content=token_response.model_dump(exclude_none=True),
         status_code=status.HTTP_200_OK,
-        headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+        headers=headers,
     )
 
 
