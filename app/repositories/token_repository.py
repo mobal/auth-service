@@ -18,16 +18,8 @@ class TokenRepository:
         self._logger.debug("Persisting token record jti=%s", data.get("jti"))
         return self._table.put_item(Item=data)
 
-    def delete_by_id(self, jti: str) -> dict[str, Any]:
+    def delete_by_id(self, jti: str) -> bool:
         self._logger.debug("Deleting token record jti=%s", jti)
-        response = self._table.delete_item(
-            Key={"jti": jti},
-            ReturnValues="ALL_OLD",
-        )
-        return response
-
-    def consume_by_id(self, jti: str) -> bool:
-        self._logger.debug("Consuming token record jti=%s", jti)
         response = self._table.delete_item(
             Key={"jti": jti},
             ReturnValues="ALL_OLD",

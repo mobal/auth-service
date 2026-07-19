@@ -39,33 +39,33 @@ class TestTokenRepository:
     ):
         response = token_repository.delete_by_id(jwt_token.jti)
 
-        assert response["ResponseMetadata"]["HTTPStatusCode"] == 200
+        assert response is True
 
     def test_delete_by_id_returns_none_if_id_not_found(
         self, token_repository: TokenRepository, tokens_table
     ):
         response = token_repository.delete_by_id(str(uuid.uuid4()))
 
-        assert response["ResponseMetadata"]["HTTPStatusCode"] == 200
+        assert response is False
 
-    def test_successfully_consume_by_id(
+    def test_successfully_delete_by_id_removes_token(
         self, jwt_token: JWTToken, token_repository: TokenRepository, tokens_table
     ):
-        assert token_repository.consume_by_id(jwt_token.jti) is True
+        assert token_repository.delete_by_id(jwt_token.jti) is True
 
         item = token_repository.get_by_id(jwt_token.jti)
         assert item is None
 
-    def test_consume_by_id_returns_false_if_already_consumed(
+    def test_delete_by_id_returns_false_if_already_deleted(
         self, jwt_token: JWTToken, token_repository: TokenRepository, tokens_table
     ):
-        assert token_repository.consume_by_id(jwt_token.jti) is True
-        assert token_repository.consume_by_id(jwt_token.jti) is False
+        assert token_repository.delete_by_id(jwt_token.jti) is True
+        assert token_repository.delete_by_id(jwt_token.jti) is False
 
-    def test_consume_by_id_returns_false_if_not_found(
+    def test_delete_by_id_returns_false_if_not_found(
         self, token_repository: TokenRepository, tokens_table
     ):
-        assert token_repository.consume_by_id(str(uuid.uuid4())) is False
+        assert token_repository.delete_by_id(str(uuid.uuid4())) is False
 
     def test_successfully_get_by_id(
         self,
