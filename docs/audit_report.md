@@ -3,6 +3,8 @@
 ## 📑 Overview
 This report details a deep architectural review of the `auth-service`. The audit covers security, scalability, reliability, and maintainability across the service's logic layer, infrastructure configuration, and data access patterns.
 
+> **Actualized:** 2026-07-19 — findings verified against current codebase. See status updates inline.
+
 ---
 
 ## 🚨 Critical Findings (Immediate Action Required)
@@ -14,10 +16,10 @@ This report details a deep architectural review of the `auth-service`. The audit
 *   **Recommendation:** The `user_service_client` should return a uniform "invalid credentials" or result structure even if the user is not found, ensuring the external time signature remains constant regardless of whether the username was valid.
 
 ### 2. Atomic Transaction Failures in Token Management
-*   **Location:** `app/repositories/token_repository.py` -> `consume_by_id()`
-*   **Issue:** The consumption of one-time use credentials (e.g., Authorization Codes or Refresh Tokens) is performed using a standard `delete_item` call without **Condition Expressions**. 
-*   **Risk:** High - In high-concurrency environments, two separate Lambda executions could technically "successfully" consume the same JTI if they occur within the same millisecond window before the first deletion propagates.
-*   **Recommendation:** Implement DynamoDB Condition Expressions to ensure `attribute_not_exists(jti)` during consumption to enforce strict one-time-use logic.
+*   **Location:** `app/repositories/authorization_code_repository.py` -> `consume_by_id()` (✅ **Fixed**) and `app/repositories/token_repository.py` -> `delete_by_id()` (⚠️ **Still Open**)
+*   **Issue:** ~~The consumption of one-time use credentials (e.g., Authorization Codes or Refresh Tokens) is performed using a standard `delete_item` call without **Condition Expressions**.~~ The authorization code repository is now hardened with `ConditionExpression=Attr("id").exists() & Attr("consumed").not_exists()`. However, the token repository's `delete_by_id()` still uses a plain `delete_item` without conditions — in high-concurrency refresh scenarios, two executions could both delete and regenerate tokens from the same JTI.
+*   **Risk:** High (token repo) — two concurrent refresh requests could both succeed from the same refresh token.
+*   **Recommendation:** Implement DynamoDB Condition Expressions in `token_repository.py:delete_by_id()` similar to the auth code repository, e.g., add a `consumed` flag or use `ConditionExpression="attribute_exists(jti)"`.
 
 ### 3. IAM Privilege Escalation Risk
 *   **Location:** `infrastructure/iam.tf`
@@ -39,9 +41,9 @@ This report details a deep architectural review of the `auth-service`. The audit
 *   **Issue:** The `/oauth/token` and `/oauth/authorize` endpoints are the most sensitive attack vectors. While defined in settings, no global or circuit-breaker logic is implemented in the application layer to throttle repeated failed attempts from a single IP or user agent.
 *   **Recommendation:** Implement an Nginx or API Gateway level rate limit; add a custom "Slow down" middleware for consecutive 401/403 errors.
 
-### 3. Overly Broad Redirect Validation
+### 3. ~~Overly Broad Redirect Validation~~ ✅ Fixed
 *   **Location:** `app/services/auth_service.py` -> `_validate_redirect_uri()`
-*   **Issue:** The validation happens only after the token has been partly processed in some flows. It should be performed at the very beginning of the request lifecycle to prevent "Redirect Injection" where a user is redirected to a malicious site with a valid but hijacked redirect URI code.
+*   **Status:** ✅ **Fixed.** The redirect URI is now validated at the start of the `authorize()` method (before code generation) using `_validate_redirect_uri()` which normalizes URIs and checks against the client's registered `redirect_uris` list. The same validation also runs at exchange time in `exchange_code()`.
 
 ---
 
@@ -53,9 +55,9 @@ This report details a deep architectural review of the `auth-service`. The audit
 *   **Recommendation:** Fetch a "Profile/Status Bundle" in one go.
 
 ### 2. Inconsistent Time Type Management
-*   **Observation:** The code mixes `pendulum` objects, standard Python integers, and string parsing for timestamps across various modules.
-*   **Impact:** Risk of subtle rounding errors or timezone offsets when calculating the "safety_buffer" (e.g., `service_token_lifetime_seconds // 5`).
-*   **Recommendation:** Create a consistent utility class to handle all time mutations.
+*   **Observation:** The code depends on `pendulum` across 13 files for date/time operations. All timezone-aware operations now consistently use `pendulum.now('UTC')`.
+*   **Impact:** Risk of subtle rounding errors or timezone offsets when calculating the "safety_buffer" (e.g., `service_token_lifetime_seconds // 5`). The pendulum dependency also adds maintenance burden.
+*   **Recommendation:** Execute the existing migration plan in [`REPLACE_PENDULUM_PLAN.md`](REPLACE_PENDULUM_PLAN.md) to replace pendulum with standard library `datetime`/`zoneinfo`.
 
 ### 3. Logging Information Leakage Potential
 *   **Observation:** Several logs in `auth_router.py` print raw values from logic steps. Specifically, ensure that `client_secret` or other PII never hit the `log.info()` path during production outages.
@@ -68,9 +70,11 @@ This report details a deep architectural review of the `auth-service`. The audit
 | Phase | Task | Priority | Target Modules |
 | :--- | :--- | :--- | :--- |
 | **Phase I** | Enforce DynamoDB Condition Expressions for Tokens | Critical | `token_repository.py` |
+| **Phase I** ✅ | Enforce DynamoDB Condition Expressions for Auth Codes | Done | `authorization_code_repository.py` |
 | **Phase II** | Standardize "Service Exchange" logic to minimize API hops | High | `auth_service.py`, `user_service_client.py` |
-| **Phase III** | Refactor and Unified Type-Safe Scope handling | Medium | `auth_service.py`, `models/request/*.py` |
-| **Phase IV** | Implementation of standard "Audit Logging" middle-ware | Low | `middleware.py` (if exists) / Router |
+| **Phase III** | Replace pendulum with stdlib (time management) | Medium | 13 files (see [`REPLACE_PENDULUM_PLAN.md`](REPLACE_PENDULUM_PLAN.md)) |
+| **Phase IV** | Refactor and Unified Type-Safe Scope handling | Medium | `auth_service.py`, `models/request/*.py` |
+| **Phase V** | Implementation of standard "Audit Logging" middleware | Low | `middlewares.py` / Router |
 
 ---
-*Report Generated by Nanocoder Architecture Audit Agent.*
+*Report Generated by Nanocoder Architecture Audit Agent. Actualized 2026-07-19.*

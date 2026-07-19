@@ -1,5 +1,7 @@
 # Test Analysis Report - Auth Service
 
+> **Actualized:** 2026-07-19 — test gaps verified against current codebase.
+
 This document outlines the analysis of the test suite for the `auth-service` component, specifically focusing on missing edge cases and potential improvements in implementation quality within the testing layer.
 
 ## 1. Missing Edge Cases
@@ -50,9 +52,20 @@ In some unit tests, `mock.patch` is used on high-level objects where a more spec
 
 ## Summary Table of Findings
 
-| Category | Location | Issue Description | Priority |
-| :--- | :--- | :--- | :--- |
-| Missing Edge Case | `auth_service.py:149` | Service token buffer boundary testing is missing. | Medium |
-| Missing Edge Case | `auth_service.py:68` | Weak validation for malformed scope strings. | Low |
-| Bad Implementation | `test_auth_service.py` | Use of hardcoded integers instead of config values. | Medium |
-| Robustness | `auth_service.py:90` | Limited variation in PKCE method testing. | Low |
+| Category | Location | Issue Description | Priority | Status (2026-07-19) |
+| :--- | :--- | :--- | :--- | :--- |
+| Missing Edge Case | `auth_service.py:149` | Service token buffer boundary testing is missing. | Medium | Still open |
+| Missing Edge Case | `auth_service.py:68` | Weak validation for malformed scope strings. | Low | Still open |
+| Bad Implementation | `test_auth_service.py` | Use of hardcoded integers instead of config values. | Medium | ⚠️ Verify — test may hardcode `3600` vs `settings.jwt_token_lifetime` |
+| Robustness | `auth_service.py:90` | Limited variation in PKCE method testing. | Low | Still open |
+| Dependency | 9 test files | All test files still import `pendulum`. Tests need updating alongside the pendulum→stdlib migration. | Medium | Tracked in [`REPLACE_PENDULUM_PLAN.md`](REPLACE_PENDULUM_PLAN.md) |
+| Coverage | `auth_service.py:login()` | No test for the timing side-channel (user-not-found early return). A test simulating the response-time delta between known vs unknown users would validate the timing-attack resistance. | Medium | New — related to [`audit_report.md`](audit_report.md) critical finding #1 |
+| Coverage | `token_repository.py:delete_by_id()` | No test for concurrent token consumption (two requests racing on the same JTI). The plain `delete_item` has no ConditionExpression. | High | New — related to [`audit_report.md`](audit_report.md) critical finding #2 |
+
+## Updates Since Original Report
+
+1. **Service token buffer** — `_issue_service_token` still uses in-memory caching, and the safety buffer boundary (`max(lifetime // 5, 60)`) remains untested at the edge thresholds.
+2. **Scope parsing** — `_derive_scope` still uses bare `requested_scope.split()` without stripping or filtering empty tokens from multiple consecutive spaces.
+3. **Hardcoded values** — The original finding about hardcoded `3600` in `test_auth_service.py` needs re-verification against the current test file.
+4. **PKCE testing** — Only `S256` and `plain` methods are covered; no test for an unsupported method (e.g., `RS256`) verifying the `OAuthException` is raised with the correct status code.
+5. **Pendulum** — All 9 test files still import pendulum. These will need updating alongside the app code during the migration.

@@ -14,7 +14,7 @@ This code review evaluates the auth service implementation against **RFC 6749 (O
 
 | Category | Score | Status |
 |----------|-------|--------|
-| RFC 6749 Compliance | 92% | ✅ Mostly Compliant |
+| RFC 6749 Compliance | 95% | ✅ Mostly Compliant |
 | RFC 6750 Compliance | 90% | ⚠️ Needs Fixes |
 | Security Best Practices | 80% | ⚠️ Needs Fixes |
 | JWT Best Practices | 90% | ✅ Mostly Compliant |
@@ -149,8 +149,8 @@ aud=settings.jwt_audience if settings.jwt_audience else settings.app_name,
 
 | Issue | Location | Impact | Recommendation |
 |-------|----------|--------|----------------|
-| No `scope` in token response when empty | `auth_service.py` | Low | Omit per RFC or include empty string |
-| No redirect_uri validation in authorize endpoint | `auth_router.py` | Medium | Validate against client registration |
+| No `scope` in token response when empty | `auth_service.py` | Low | Omitted when None per RFC — acceptable |
+| No redirect_uri validation in authorize endpoint | `auth_router.py` | Medium | ✅ **Fixed** — `_validate_redirect_uri()` called in `authorize()` with normalization |
 | No state parameter validation | `auth_router.py` | Medium | Check CSRF token on callback |
 | No rate limiting on token endpoints | `settings.py` | High | Implement rate limiting |
 
@@ -162,7 +162,7 @@ aud=settings.jwt_audience if settings.jwt_audience else settings.app_name,
 
 | Category | Score | Notes |
 |----------|-------|-------|
-| **RFC 6749 Compliance** | 92% | Password grant deprecated with warnings, `token_type` fixed |
+| **RFC 6749 Compliance** | 95% | Password grant deprecated with warnings, `token_type` fixed, `redirect_uri` validated at authorize time |
 | **RFC 6750 Compliance** | 90% | Token binding still outstanding |
 | **Security Best Practices** | 80% | Password grant migration path in place, token binding TBD |
 | **JWT Best Practices** | 90% | `aud` and `iss` now always populated |
@@ -207,12 +207,7 @@ aud=settings.jwt_audience if settings.jwt_audience else settings.app_name,
            raise OAuthException("CSRF token mismatch")
    ```
 
-8. **Validate redirect_uri** against client registration
-   ```python
-   registered_uri = self._get_client_redirect_uri(client_id)
-   if auth_code.redirect_uri != registered_uri:
-       raise OAuthException("invalid_grant", "redirect_uri mismatch")
-   ```
+8. **~~Validate redirect_uri~~** ✅ **Fixed.** `_validate_redirect_uri()` in `auth_service.py` normalizes and compares against the client's registered URIs using `_normalize_uri()` at both authorize and exchange time.
 
 9. **Implement token introspection endpoint** (RFC 7662)
 10. **Add `scope` to token response** even when empty (or omit per RFC)
@@ -225,15 +220,14 @@ Each section below details the remaining work needed to reach full compliance (1
 
 ---
 
-### A. RFC 6749 (OAuth 2.0) — 92% → 100%
+### A. RFC 6749 (OAuth 2.0) — 95% → 100%
 
 | # | Gap | Current State | Implementation Proposal | Effort |
 |---|-----|---------------|-------------------------|--------|
 | 1 | **Password grant removal** | Deprecated with warnings, still functional | Remove `GrantType.PASSWORD` from [`app/models/grant_type.py`](app/models/grant_type.py:12), delete `_handle_password_grant` from [`auth_router.py`](app/routers/oauth/auth_router.py:113), remove `login()` method from [`auth_service.py`](app/services/auth_service.py:241) **OR** gate behind a feature flag to allow staged migration | 1 day |
-| 2 | **`scope` in empty response** | Omitted when `None` (per RFC, allowed) | For consistency, always include `scope` in the response body — either empty string `""` or omit per spec. Update [`OAuthTokenResponse`](app/models/response/token.py:22) to use `Field(default="")` and adjust `model_dump(exclude_none=True)` to include empty scopes | 0.5 day |
-| 3 | **`redirect_uri` validation at authorize time** | Validation happens in `exchange_code` but is partial | Full validation against the registered client's `redirect_uris` list at the start of `authorize()` in [`auth_service.py`](app/services/auth_service.py:440). Reject with `invalid_request` if the URI doesn't match any registered pattern | 1 day |
-| 4 | **State parameter validation** | `state` is accepted but not validated | Store the `state` value server-side during the authorize request and verify it matches on callback. Add a `StateRepository` and wire it into [`auth_router.py:authorize()`](app/routers/oauth/auth_router.py:223) and the token exchange flow | 2 days |
-| 5 | **Token introspection (RFC 7662)** | No introspection endpoint | Add `POST /oauth/introspect` endpoint that accepts a token and returns active/expired status, scope, client_id, and sub. Implement `_introspect_token()` in [`auth_service.py`](app/services/auth_service.py) with DynamoDB lookup | 2 days |
+| 2 | **~~`redirect_uri` validation~~** | ✅ **Fixed** — `_validate_redirect_uri()` in [`auth_service.py`](app/services/auth_service.py:429) validates against registered client URIs with normalization at both authorize and exchange time | — | 0 days |
+| 3 | **State parameter validation** | `state` is accepted but not validated | Store the `state` value server-side during the authorize request and verify it matches on callback. Add a `StateRepository` and wire it into [`auth_router.py:authorize()`](app/routers/oauth/auth_router.py:223) and the token exchange flow | 2 days |
+| 4 | **Token introspection (RFC 7662)** | No introspection endpoint | Add `POST /oauth/introspect` endpoint that accepts a token and returns active/expired status, scope, client_id, and sub. Implement `_introspect_token()` in [`auth_service.py`](app/services/auth_service.py) with DynamoDB lookup | 2 days |
 
 **Score after closure:** 100% — All RFC 6749 mandatory requirements satisfied.
 
@@ -288,7 +282,7 @@ Each section below details the remaining work needed to reach full compliance (1
 
 | Category | Current | Target | Gaps | Total Effort | Priority |
 |----------|---------|--------|------|-------------|----------|
-| **RFC 6749** | 92% | 100% | 5 gaps | ≈ 6.5 days | Medium |
+| **RFC 6749** | 95% | 100% | 4 gaps | ≈ 5 days | Medium |
 | **RFC 6750** | 90% | 100% | 3 gaps | ≈ 6 days | Medium |
 | **Security Best Practices** | 80% | 100% | 8 gaps | ≈ 10 days | **High** |
 | **JWT Best Practices** | 90% | 100% | 7 gaps | ≈ 6 days | Medium |
@@ -358,10 +352,10 @@ The auth service **meets RFC standards** for most critical requirements. Key sec
 - ✅ Password grant deprecated with runtime warnings and response headers
 
 ### What Remains
+- ✅ Redirect URI validated against client registration with normalization
 - ❌ Token binding for refresh tokens (post-MVP)
 - ❌ Rate limiting on token endpoints (post-MVP)
 - ❌ State parameter validation (post-MVP)
-- ❌ Redirect URI validation against client registration (post-MVP)
 
 ### Production Readiness
 

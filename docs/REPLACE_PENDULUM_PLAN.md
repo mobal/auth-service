@@ -1,9 +1,12 @@
 # Migration Plan: Replace Pendulum with Standard Library
 
+> **Status (2026-07-19):** ⏳ **Not yet executed.** Pendulum is still imported across 13 files (4 app modules + 9 test modules). This plan remains accurate and actionable. No blockers identified — purely a matter of scheduling the refactor.
+
 ## 1. Technical Debt Overview
 **Status:** Medium Complexity
 **Risk:** Moderate (Mainly related to timezone behavior and leap year/DST edge cases)
 **Goal:** Remove external dependency `pendulum` and replace with Python's built-in `datetime`, `timedelta`, and `zoneinfo`.
+**Current Pendulum Usage:** 13 files across the codebase still import pendulum (`app/__init__.py`, `app/services/auth_service.py`, `app/services/token_service.py`, `app/repositories/authorization_code_repository.py`, and 9 test files).
 
 ## 2. Key Replacement Logic Reference
 
@@ -66,8 +69,9 @@ The following files utilize `pendulum` primarily for mocking time, generating da
 ---
 
 ## 4. Execution Checklist
-- [ ] Replace all `import pendulum` statements.
-- [ ] Update duration/math logic using `timedelta`.
-- [ ] Replace date parsing with `datetime.fromisoformat`.
-- [ ] Run specialized tests to verify auth and token expiry windows.
-- [ ] Remove `pendulum` from `requirements.txt`/`pyproject.toml`.
+- [ ] Replace all `import pendulum` statements (13 files total: 4 app, 9 test)
+- [ ] Update duration/math logic using `timedelta`
+- [ ] Replace date parsing with `datetime.fromisoformat`
+- [ ] Replace `pendulum.set_local_timezone()` in `app/__init__.py` with `zoneinfo`-based approach
+- [ ] Run specialized tests to verify auth and token expiry windows
+- [ ] Remove `pendulum` from `pyproject.toml` dependencies
