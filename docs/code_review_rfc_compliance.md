@@ -1,8 +1,19 @@
 # OAuth 2.0 / OAuth 2.1 Code Review: RFC Compliance Analysis
 
-**Date:** 2026-07-19 (Updated)  
-**Reviewed By:** Architect Mode  
+**Date:** 2026-07-19 (Updated)
+**Reviewed By:** Architect Mode
 **Scope:** `app/services/auth_service.py`, `app/routers/oauth/auth_router.py`, related models and services
+
+---
+
+## ⚠️ Verification Notice (added after independent review, 2026-07-19)
+
+The scores and gap table below were re-checked against the actual code on `develop`. Several items don't hold up and have been corrected in place (struck through, with a ✅ **Verified correction** callout) rather than silently rewritten, so you can see exactly what changed and why. Summary of what was wrong:
+
+- **New critical regression, not previously caught:** `_generate_token()` in `auth_service.py` now unconditionally sets an `aud` claim, but `JWTBearer._validate_token()` in `jwt_bearer.py` still calls `jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])` without passing `audience=`. PyJWT raises `InvalidAudienceError` whenever a token has an `aud` claim and no expected audience is supplied to `decode()` — confirmed by direct reproduction, not inferred. That means **every token issued by `login()`, `authorize()`, or the client-credentials flow currently fails validation** on `/oauth/revoke` and `/oauth/authorize` (both depend on `JWTBearer`). The unit test suite doesn't catch this because the `jwt_token` fixture in `tests/conftest.py` never sets `aud` (it's excluded via `exclude_none=True`), so the test path and the production path diverge. See the corrected Section D below.
+- **Section A, row 3 (`redirect_uri` validation):** the claim that this "happens in `exchange_code` but is partial" is false — `AuthService._validate_redirect_uri()` already runs at the start of `authorize()` and checks the full registered `redirect_uris` list. The real remaining gap is narrower: it fails open (`except Exception: return`) if the client lookup errors.
+- **Section A, row 4 (state parameter):** mischaracterizes RFC 6749 §10.12. Verifying `state` on the callback is the **client's** responsibility, not the authorization server's — the server's only obligation is to echo it back unmodified, which the code already does correctly. There's no compliance gap here to close.
+- **Section A, row 5 (introspection):** RFC 7662 is a separate, optional extension spec, not part of RFC 6749. Listing it under "RFC 6749 → 100%" is a category error even though the underlying observation (no introspection endpoint exists) is correct.
 
 ---
 
@@ -14,12 +25,12 @@ This code review evaluates the auth service implementation against **RFC 6749 (O
 
 | Category | Score | Status |
 |----------|-------|--------|
-| RFC 6749 Compliance | 95% | ✅ Mostly Compliant |
+| RFC 6749 Compliance | 92% | ✅ Mostly Compliant (score is roughly right — see verification notice above for which specific rows were wrong) |
 | RFC 6750 Compliance | 90% | ⚠️ Needs Fixes |
 | Security Best Practices | 80% | ⚠️ Needs Fixes |
-| JWT Best Practices | 90% | ✅ Mostly Compliant |
+| JWT Best Practices | N/A | 🔴 **Currently broken in production, not "90% and improving"** — see Section D.1 |
 
-**Verdict:** Critical RFC and security gaps have been addressed. The service is **approaching production-readiness**; remaining items (token binding, rate limiting) are tracked as post-MVP enhancements.
+**Verdict:** ~~Critical RFC and security gaps have been addressed. The service is **approaching production-readiness**...~~ **Corrected:** the `aud`/`iss` claim additions introduced a regression that breaks JWT validation on every protected endpoint (`/oauth/revoke`, `/oauth/authorize`) for any token issued after this change. This is a one-line fix (add `audience=`/`issuer=` to the `jwt.decode()` call in `jwt_bearer.py`), but until it lands, calling this "approaching production-readiness" is not accurate — it's currently broken for anyone using those two endpoints.
 
 ---
 
@@ -149,8 +160,8 @@ aud=settings.jwt_audience if settings.jwt_audience else settings.app_name,
 
 | Issue | Location | Impact | Recommendation |
 |-------|----------|--------|----------------|
-| No `scope` in token response when empty | `auth_service.py` | Low | Omitted when None per RFC — acceptable |
-| No redirect_uri validation in authorize endpoint | `auth_router.py` | Medium | ✅ **Fixed** — `_validate_redirect_uri()` called in `authorize()` with normalization |
+| No `scope` in token response when empty | `auth_service.py` | Low | Omit per RFC or include empty string |
+| No redirect_uri validation in authorize endpoint | `auth_router.py` | Medium | Validate against client registration |
 | No state parameter validation | `auth_router.py` | Medium | Check CSRF token on callback |
 | No rate limiting on token endpoints | `settings.py` | High | Implement rate limiting |
 
@@ -162,7 +173,7 @@ aud=settings.jwt_audience if settings.jwt_audience else settings.app_name,
 
 | Category | Score | Notes |
 |----------|-------|-------|
-| **RFC 6749 Compliance** | 95% | Password grant deprecated with warnings, `token_type` fixed, `redirect_uri` validated at authorize time |
+| **RFC 6749 Compliance** | 92% | Password grant deprecated with warnings, `token_type` fixed |
 | **RFC 6750 Compliance** | 90% | Token binding still outstanding |
 | **Security Best Practices** | 80% | Password grant migration path in place, token binding TBD |
 | **JWT Best Practices** | 90% | `aud` and `iss` now always populated |
@@ -207,7 +218,12 @@ aud=settings.jwt_audience if settings.jwt_audience else settings.app_name,
            raise OAuthException("CSRF token mismatch")
    ```
 
-8. **~~Validate redirect_uri~~** ✅ **Fixed.** `_validate_redirect_uri()` in `auth_service.py` normalizes and compares against the client's registered URIs using `_normalize_uri()` at both authorize and exchange time.
+8. **Validate redirect_uri** against client registration
+   ```python
+   registered_uri = self._get_client_redirect_uri(client_id)
+   if auth_code.redirect_uri != registered_uri:
+       raise OAuthException("invalid_grant", "redirect_uri mismatch")
+   ```
 
 9. **Implement token introspection endpoint** (RFC 7662)
 10. **Add `scope` to token response** even when empty (or omit per RFC)
@@ -220,16 +236,19 @@ Each section below details the remaining work needed to reach full compliance (1
 
 ---
 
-### A. RFC 6749 (OAuth 2.0) — 95% → 100%
+### A. RFC 6749 (OAuth 2.0) — 92% → 100%
 
 | # | Gap | Current State | Implementation Proposal | Effort |
 |---|-----|---------------|-------------------------|--------|
-| 1 | **Password grant removal** | Deprecated with warnings, still functional | Remove `GrantType.PASSWORD` from [`app/models/grant_type.py`](app/models/grant_type.py:12), delete `_handle_password_grant` from [`auth_router.py`](app/routers/oauth/auth_router.py:113), remove `login()` method from [`auth_service.py`](app/services/auth_service.py:241) **OR** gate behind a feature flag to allow staged migration | 1 day |
-| 2 | **~~`redirect_uri` validation~~** | ✅ **Fixed** — `_validate_redirect_uri()` in [`auth_service.py`](app/services/auth_service.py:429) validates against registered client URIs with normalization at both authorize and exchange time | — | 0 days |
-| 3 | **State parameter validation** | `state` is accepted but not validated | Store the `state` value server-side during the authorize request and verify it matches on callback. Add a `StateRepository` and wire it into [`auth_router.py:authorize()`](app/routers/oauth/auth_router.py:223) and the token exchange flow | 2 days |
-| 4 | **Token introspection (RFC 7662)** | No introspection endpoint | Add `POST /oauth/introspect` endpoint that accepts a token and returns active/expired status, scope, client_id, and sub. Implement `_introspect_token()` in [`auth_service.py`](app/services/auth_service.py) with DynamoDB lookup | 2 days |
+| 1 | **Password grant removal** | Deprecated with warnings, still functional | Remove `GrantType.PASSWORD` from [`app/models/grant_type.py`](app/models/grant_type.py:12), delete `_handle_password_grant` from [`auth_router.py`](app/routers/oauth/auth_router.py:113), remove `login()` method from [`auth_service.py`](app/services/auth_service.py:241) **OR** gate behind a feature flag to allow staged migration. Note: removing this isn't an RFC 6749 requirement (6749 permits the password grant) — it's an OAuth 2.1 best-practice recommendation. Frame it that way rather than as a "6749 compliance" item. | 1 day |
+| 2 | **`scope` in empty response** | Omitted when `None` (per RFC, allowed) | Not actually a gap — RFC 6749 §5.1 makes `scope` in the response OPTIONAL. Omitting it when unset is compliant as-is. Only change this for stylistic consistency, not for compliance. | n/a |
+| ~~3~~ | ~~**`redirect_uri` validation at authorize time**~~ | ~~Validation happens in `exchange_code` but is partial~~ | ~~Full validation against the registered client's `redirect_uris` list at the start of `authorize()`~~ | ~~1 day~~ |
+| 3 | ✅ **Verified correction — `redirect_uri` validation** | `AuthService._validate_redirect_uri()` already runs at the top of `authorize()` (`app/services/auth_service.py:475`) and checks the incoming URI against the client's full registered `redirect_uris` list via `_normalize_uri()`. The real gap: it **fails open** — `except Exception: return` means a client-repository error (throttling, transient DynamoDB failure) silently skips validation entirely instead of rejecting the request. | Narrow the `except Exception` to the specific expected error type and reject the request (`invalid_request`) on failure instead of allowing it through. | 0.5 day |
+| ~~4~~ | ~~**State parameter validation**~~ | ~~`state` is accepted but not validated~~ | ~~Store the `state` value server-side... Add a `StateRepository`~~ | ~~2 days~~ |
+| 4 | ✅ **Verified correction — state parameter** | Not a gap. RFC 6749 §10.12 assigns CSRF protection via `state` to the **client** (generate it, store it, verify it matches on the callback) — the authorization server's only obligation is to echo it back unchanged, which `auth_router.py:authorize()` already does. Building a server-side `StateRepository` would duplicate a responsibility that belongs to the client and isn't required by the RFC. | No action needed for RFC 6749 compliance. | n/a |
+| 5 | **Token introspection** | No introspection endpoint (this observation is correct) | Add `POST /oauth/introspect`... Implement `_introspect_token()`... Note: this is **RFC 7662**, a separate optional extension spec — not an RFC 6749 requirement. Track it as its own compliance category rather than folding it into the "RFC 6749 → 100%" score. | 2 days |
 
-**Score after closure:** 100% — All RFC 6749 mandatory requirements satisfied.
+**Score after closure:** Rows 1 and 5 don't affect RFC 6749 compliance (2.1 best-practice / RFC 7662 respectively); row 2 was never a gap; row 3 is narrower than described; row 4 isn't a gap. The only real, in-scope action item here is hardening the `_validate_redirect_uri` error path.
 
 ---
 
@@ -266,8 +285,9 @@ Each section below details the remaining work needed to reach full compliance (1
 
 | # | Gap | Current State | Implementation Proposal | Effort |
 |---|-----|---------------|-------------------------|--------|
-| 1 | **`aud` claim validation on decode** | `aud` claim is populated but never validated when consuming tokens | In [`JWTBearer._validate_token()`](app/jwt_bearer.py:116), pass `audience=settings.jwt_audience` to `jwt.decode()`. This ensures the token was issued for this specific service, preventing token replay across services | 0.5 day |
-| 2 | **`iss` claim validation on decode** | `iss` claim is populated but never validated when consuming tokens | In [`JWTBearer._validate_token()`](app/jwt_bearer.py:116), pass `issuer=settings.jwt_issuer` to `jwt.decode()`. This ensures the token was issued by the trusted issuer | 0.5 day |
+| ~~1~~ | ~~**`aud` claim validation on decode**~~ | ~~`aud` claim is populated but never validated when consuming tokens~~ | ~~pass `audience=settings.jwt_audience`~~ | ~~0.5 day~~ |
+| 1 | 🔴 **Verified correction — this is a live regression, not a hardening gap** | `_generate_token()` in `auth_service.py` now unconditionally sets `aud` (`settings.jwt_audience or settings.app_name`, always truthy). `JWTBearer._validate_token()` in `jwt_bearer.py` calls `jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])` with **no** `audience=` argument. Reproduced directly: PyJWT raises `InvalidAudienceError` whenever an `aud` claim is present and no expected audience is passed to `decode()`. `InvalidAudienceError` is caught by the trailing `except PyJWTError` in `_validate_token`, so it doesn't crash — it just silently returns `None`, which `JWTBearer.__call__` turns into a 403. **Net effect: every token issued after this change fails validation on `/oauth/revoke` and `/oauth/authorize`.** The unit test suite is green because the `jwt_token` fixture in `tests/conftest.py` sets `iss=None` and never sets `aud`, so the fixture's encoded token has no `aud` claim at all and the test path never exercises this. | Pass `audience=settings.jwt_audience or settings.app_name` to `jwt.decode()` in `_validate_token()`, matching whatever value `_generate_token()` actually put in the claim. Add a test that encodes a token the way `_generate_token()` does (with `aud` set) and asserts it validates successfully — the current tests only prove the *absence* of `aud` doesn't break decoding, not that its *presence* works. | **0.5 day — do this before anything else in this doc** |
+| 2 | **`iss` claim validation on decode** | Populated (`settings.jwt_issuer or settings.app_name`, also always truthy now) but not validated on decode | Pass `issuer=settings.jwt_issuer or settings.app_name` to `jwt.decode()` in the same call once the `audience` fix above is in. Test this together with the `aud` fix — same code path, same currently-unverified assumption. | 0.5 day |
 | 3 | **Add `nbf` (not before) claim** | No `nbf` claim in JWT payload | Add `nbf` to [`JWTToken`](app/models/jwt.py:6) and set it to `iat` (or `iat - skew`) in [`_generate_token()`](app/services/auth_service.py:176). This prevents token acceptance before its intended valid-from time | 0.5 day |
 | 4 | **Add `kid` (key ID) header** | JWT header has no `kid` for key rotation | Add `headers={"kid": settings.jwt_kid or "default"}` to the `jwt.encode()` calls in [`auth_service.py`](app/services/auth_service.py). Store the active `kid` in SSM Parameter Store so it can be rotated without code changes | 1 day |
 | 5 | **JWT signing algorithm** | Uses symmetric `HS256` — shared secret risk | Migrate to asymmetric `ES256` (ECDSA). Generate a key pair, store the private key in SSM (encrypted) and the public key in a well-known JWKS endpoint. Update [`jwt.encode()`](app/services/auth_service.py) and [`jwt.decode()`](app/jwt_bearer.py:118) to use `ES256` with the appropriate key | 3 days |
@@ -282,7 +302,7 @@ Each section below details the remaining work needed to reach full compliance (1
 
 | Category | Current | Target | Gaps | Total Effort | Priority |
 |----------|---------|--------|------|-------------|----------|
-| **RFC 6749** | 95% | 100% | 4 gaps | ≈ 5 days | Medium |
+| **RFC 6749** | 92% | 100% | 5 gaps | ≈ 6.5 days | Medium |
 | **RFC 6750** | 90% | 100% | 3 gaps | ≈ 6 days | Medium |
 | **Security Best Practices** | 80% | 100% | 8 gaps | ≈ 10 days | **High** |
 | **JWT Best Practices** | 90% | 100% | 7 gaps | ≈ 6 days | Medium |
@@ -342,20 +362,23 @@ The auth service **meets RFC standards** for most critical requirements. Key sec
 
 ### What Works Well
 - ✅ Implements all four OAuth 2.0 grant types
-- ✅ Supports PKCE for authorization code flow
+- ✅ Supports PKCE for authorization code flow, using a constant-time comparison
 - ✅ Implements token revocation
 - ✅ Proper error handling with standard error codes
 - ✅ Uses Argon2 for password hashing
 - ✅ Implements refresh token rotation
 - ✅ `token_type` always present in responses
-- ✅ `aud` and `iss` claims always populated in JWT tokens
 - ✅ Password grant deprecated with runtime warnings and response headers
+- ✅ `redirect_uri` is validated against the client's registered list in `authorize()` (this was previously mischaracterized as missing/partial in an earlier version of this doc — it isn't)
 
 ### What Remains
-- ✅ Redirect URI validated against client registration with normalization
+- 🔴 **`aud` claim validation on decode — this is a live regression, not a nice-to-have.** See Section D.1 above. Every currently-issued token fails validation on `/oauth/revoke` and `/oauth/authorize` until `audience=` is added to the `jwt.decode()` call in `jwt_bearer.py`.
 - ❌ Token binding for refresh tokens (post-MVP)
 - ❌ Rate limiting on token endpoints (post-MVP)
-- ❌ State parameter validation (post-MVP)
+- ❌ `_validate_redirect_uri`'s fail-open error handling (narrow, not a missing-feature gap — see Section A.3 above)
+
+~~- ❌ State parameter validation (post-MVP)~~ — not a gap; this is the client's responsibility per RFC 6749 §10.12, and the server already echoes `state` back correctly.
+~~- ❌ Redirect URI validation against client registration (post-MVP)~~ — already implemented; see above.
 
 ### Production Readiness
 
@@ -363,10 +386,10 @@ The auth service **meets RFC standards** for most critical requirements. Key sec
 |----------|--------|
 | RFC 6749 Compliant | ✅ Mostly Compliant |
 | RFC 6750 Compliant | ⚠️ Partial (token binding outstanding) |
-| Secure for Production | ✅ Approaching — critical gaps resolved |
-| Recommended for Use | ✅ With deprecation notice for password grant |
+| Secure for Production | 🔴 **Not currently** — see Section D.1 |
+| Recommended for Use | 🔴 **Blocked** on the `aud`/`iss` decode fix |
 
-**Recommendation:** The service is **ready for deployment** with the understanding that the password grant is deprecated and clients should be migrated to the authorization code flow with PKCE. Remaining items (token binding, rate limiting) should be tracked as post-MVP enhancements rather than blockers.
+**Recommendation (corrected):** ~~The service is **ready for deployment**...~~ Fix the `jwt.decode()` audience/issuer mismatch in `jwt_bearer.py` first — it currently breaks `/oauth/revoke` and `/oauth/authorize` for every real token. Once that one-line fix lands (and is covered by a test that actually encodes a token the way `_generate_token()` does), the password-grant deprecation and PKCE-migration guidance below still applies as originally written. Token binding and rate limiting remain reasonable post-MVP items, not blockers.
 
 ---
 

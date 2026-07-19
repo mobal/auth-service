@@ -2,57 +2,61 @@
 
 ## Executive Summary — Still-Actionable Findings
 
+> **⚠️ Verification pass (2026-07-19):** two new critical findings below (1.32, 1.33) were confirmed by direct reproduction against the current `develop` branch, not previously in this report. Item 1.15's status is also updated — the underlying code changed since this row was last written.
+
 | # | Finding | Severity | Difficulty | Recommendation |
 |---|---------|----------|------------|----------------|
 | | **Critical / High** | | | |
+| 1.32 | 🔴 **NEW — `aud` claim breaks JWT validation on every protected endpoint** | 🔴 Critical | 🟢 Easy | ✅ **Fix immediately** — `_generate_token()` now always sets `aud`, but `JWTBearer._validate_token()`'s `jwt.decode()` call never passes `audience=`. PyJWT raises `InvalidAudienceError` whenever `aud` is present without an expected audience — confirmed by direct reproduction. Every token issued after this change fails on `/oauth/revoke` and `/oauth/authorize`. The test suite is green only because `tests/conftest.py`'s `jwt_token` fixture never sets `aud`. Add `audience=settings.jwt_audience or settings.app_name` to the decode call, and add a test that encodes a token the way `_generate_token()` actually does. |
+| 1.33 | 🔴 **NEW — `delete_by_id` still can't detect a missing token** | 🔴 High | 🟢 Easy | ✅ **Fix** — `TokenRepository.delete_by_id()` now passes `ReturnValues="ALL_OLD"`, but `TokenService.delete_by_id()` still checks `response["ResponseMetadata"]["HTTPStatusCode"] != 200` instead of `"Attributes" in response`. DynamoDB returns HTTP 200 for a delete on a nonexistent key either way, so this branch can still never fire. The existing test for this passes only because it mocks a `404` status DynamoDB would never actually return — replace it with a test against a real (moto) response. |
 | ~~1.3~~ | ~~Incomplete PyJWT exception coverage~~ | 🔴 High | 🟢 Easy | ✅ **Fixed** |
-| ~~1.5~~ | ~~TOCTOU race in auth code consumption~~ | 🔴 High | 🟡 Medium | ✅ **Fixed** — atomic `ConditionExpression` in `consume_by_id` |
-| 1.6 | Refresh token reuse race condition | 🔴 High | 🟡 Medium | ⏳ **Fix Later** — `delete_by_id` still uses plain `delete_item` without condition |
+| 1.5 | TOCTOU race in auth code consumption | 🔴 High | 🟡 Medium | ⏳ **Fix Later** — already partially mitigated by conditional update |
+| 1.6 | Refresh token reuse race condition | 🔴 High | 🟡 Medium | ⏳ **Fix Later** — already partially mitigated by atomic `consume_by_id` |
 | ~~1.8~~ | ~~Wrong OAuth error message for response_type~~ | 🔴 High | 🟢 Easy | ✅ **Fixed** |
 | ~~1.12~~ | ~~CORS allows all origins~~ | 🔴 High | 🟢 Easy | ✅ **Fixed** |
-| ~~1.15~~ | ~~SSM caching with `@computed_field`~~ | 🔴 High | 🟡 Medium | ✅ **Fixed** — Pydantic v2 `@computed_field` caches at init time |
-| 1.18 | Decorator not async-safe | 🔴 High | 🟡 Medium | ❌ **Not Fixed** — still uses synchronous wrapper |
+| 1.15 | SSM caching reliability with `@computed_field @cached_property` | 🔴 High | 🟡 Medium | ✅ **Changed, verify the trade-off** — `@cached_property` has since been removed; `client_secret`/`jwt_secret`/`user_service_base_url` are now plain `@computed_field` properties that hit SSM Parameter Store on *every* access instead of once. The staleness risk this row originally flagged is gone, but it's traded for a new one: repeated live SSM calls per request. Worth checking Parameter Store rate limits/latency under load, and consider a short explicit TTL cache instead of either extreme. |
+| 1.18 | Decorator not async-safe | 🔴 High | 🟡 Medium | ✅ **Fix** — add async wrapper detection |
 | ~~1.21~~ | ~~Env file loading order wrong~~ | 🔴 High | 🟢 Easy | ✅ **Fixed** |
 | ~~1.22~~ | ~~Logger initialized before env files~~ | 🔴 High | 🟢 Easy | ✅ **Fixed** |
 | ~~1.23~~ | ~~ErrorResponse timestamp at class time~~ | 🔴 High | 🟢 Easy | ✅ **Fixed** |
-| 1.24 | No timezone validation | 🔴 High | 🟡 Medium | ❌ **Not Fixed** — `pendulum.set_local_timezone()` still unprotected |
-| 1.25 | Test false positives: refresh token type | 🔴 High | 🟡 Medium | ⏳ **Verify** — check current test parameters |
+| 1.24 | No timezone validation | 🔴 High | 🟡 Medium | ✅ **Fix** — add try/except for `UnknownTimeZoneError` |
+| 1.25 | Test false positives: refresh token type | 🔴 High | 🟡 Medium | ✅ **Fix** — ensure string not object passed |
 | ~~1.26~~ | ~~Test false positives: no return assertions~~ | 🔴 High | 🟢 Easy | ✅ **Fixed** |
 | ~~1.27~~ | ~~Test false positive: no body assertions~~ | 🔴 High | 🟢 Easy | ✅ **Fixed** |
 | 1.29 | Nested moto mock contexts | 🔴 High | 🟡 Medium | ⏳ **Fix Later** — low risk in current moto versions |
 | 1.30 | Token accepted via query param | 🔴 High | 🟡 Medium | ⚠️ **Consider** — breaking change; gate behind config toggle |
-| ~~1.31~~ | ~~Correlation ID pollution~~ | 🔴 High | 🔴 Hard | ✅ **Fixed** — uses `logger.append_keys()` per request |
+| 1.31 | Correlation ID pollution | 🔴 High | 🔴 Hard | ⚠️ **Consider** — only affects non-Lambda ASGI deployments |
 | | **Medium** | | | |
-| ~~2.3~~ | ~~All 4xx treated as password failure~~ | 🟡 Medium | 🟢 Easy | ✅ **Fixed** — checks for 400/422 specifically |
-| ~~2.5~~ | ~~Inconsistent error logging in client~~ | 🟡 Medium | 🟢 Easy | ✅ **Fixed** — standardized across all methods |
-| 2.9 | Cached service token can become stale | 🟡 Medium | 🟢 Easy | ⏳ **Fix Later** — in-memory cache still persists full lifetime |
-| ~~2.10~~ | ~~Logging entire JWTToken object~~ | 🟡 Medium | 🟢 Easy | ✅ **Fixed** — removed from `extra` dict |
-| ~~2.11~~ | ~~SSM param names not validated at startup~~ | 🟡 Medium | 🟡 Medium | ✅ **Fixed** — explicit `None` checks with `ValueError` |
-| 2.12 | No error handling around SSM calls | 🟡 Medium | 🟡 Medium | ⏳ **Fix Later** — still no try/except on `get_parameter` |
-| ~~2.13~~ | ~~Type mismatch `os.environ.get()` → `get_parameter()`~~ | 🟡 Medium | 🟢 Easy | ✅ **Fixed** — explicit `None` guards added |
-| ~~2.14~~ | ~~Duplicate ExceptionMiddleware~~ | 🟡 Medium | 🟢 Easy | ✅ **Fixed** — removed from `api_handler.py` |
-| ~~2.15~~ | ~~Catch-all double-logs exceptions~~ | 🟡 Medium | 🟢 Easy | ✅ **Fixed** — single `logger.exception` call with rich context |
-| ~~2.16~~ | ~~HTTPException logged at exception level~~ | 🟡 Medium | 🟢 Easy | ✅ **Fixed** — uses `logger.warning` |
-| ~~2.17~~ | ~~RequestValidationError logged at exception level~~ | 🟡 Medium | 🟢 Easy | ✅ **Fixed** — uses `logger.warning` |
-| 2.18 | Missing cross-field grant_type validation | 🟡 Medium | 🟡 Medium | ⏳ **Fix Later** — models have `min_length=1` but no `model_validator` |
-| 2.19 | `redirect_uri` unvalidated in model | 🟡 Medium | 🟡 Medium | ⏳ **Fix Later** — has `min_length=1` but no URL scheme validation. Runtime validation against registered URIs exists in `auth_service` |
-| ~~2.20~~ | ~~Grant type accepts empty strings~~ | 🟡 Medium | 🟢 Easy | ✅ **Fixed** — `min_length=1` added |
-| 2.21 | Password/refresh_token plain strings | 🟡 Medium | 🟡 Medium | ⚠️ **Consider** — `SecretStr` breaks form serialization |
-| 2.22 | Secret stored as plain str | 🟡 Medium | 🟡 Medium | ⏳ **Fix Later** — `ServiceCredential.secret` still plain `str` |
-| ~~2.23~~ | ~~No DynamoDB exception handling (auth_codes)~~ | 🟡 Medium | 🟡 Medium | ✅ **Fixed** — try/except `ClientError` on all DynamoDB calls |
-| ~~2.24~~ | ~~`create_service` without ConditionExpression~~ | 🟡 Medium | 🟢 Easy | ✅ **Fixed** — `Attr("id").not_exists()` |
-| ~~2.25~~ | ~~Eventually consistent reads stale data~~ | 🟡 Medium | 🟢 Easy | ✅ **Fixed** — `ConsistentRead=True` on `get_item` |
-| 2.26 | No DynamoDB exception handling (services) | 🟡 Medium | 🟡 Medium | ⏳ **Fix Later** — `get_by_id`/`get_by_name`/`create_service` still lack try/except |
-| ~~2.28~~ | ~~ContextVar without default~~ | 🟡 Medium | 🟢 Easy | ✅ **Fixed** — `default=""` added |
-| 2.29 | No exception handling in dispatch | 🟡 Medium | 🟡 Medium | ⏳ **Fix Later** — `dispatch` still lacks try/except/finally |
-| ~~2.30~~ | ~~Overly broad `except Exception`~~ | 🟡 Medium | 🟢 Easy | ✅ **Fixed** — narrowed to `except ValueError` |
-| 2.32 | No default for STAGE env var | 🟡 Medium | 🟢 Easy | ⏳ **Verify** — check current test conftest |
-| 2.33 | Monkeypatch passes None values | 🟡 Medium | 🟢 Easy | ⏳ **Verify** — check current test conftest |
+| 2.3 | All 4xx treated as password failure | 🟡 Medium | 🟢 Easy | ✅ **Fix** — check for 400/422 specifically |
+| 2.5 | Inconsistent error logging in client | 🟡 Medium | 🟢 Easy | ✅ **Fix** — standardize log level |
+| 2.9 | Cached service token can become stale | 🟡 Medium | 🟢 Easy | ✅ **Fix** — shorter cache TTL |
+| 2.10 | Logging entire JWTToken object | 🟡 Medium | 🟢 Easy | ✅ **Fix** — remove from `extra` dict |
+| 2.11 | SSM param names not validated at startup | 🟡 Medium | 🟡 Medium | ✅ **Fix** — add `@model_validator` |
+| 2.12 | No error handling around SSM calls | 🟡 Medium | 🟡 Medium | ✅ **Fix** — wrap in try/except |
+| 2.13 | Type mismatch `os.environ.get()` → `get_parameter()` | 🟡 Medium | 🟢 Easy | ✅ **Fix** — add type narrowing |
+| 2.14 | Duplicate ExceptionMiddleware | 🟡 Medium | 🟢 Easy | ✅ **Fix** — remove explicit middleware |
+| 2.15 | Catch-all double-logs exceptions | 🟡 Medium | 🟢 Easy | ✅ **Fix** — remove `logger.error` |
+| 2.16 | HTTPException logged at exception level | 🟡 Medium | 🟢 Easy | ✅ **Fix** — use `logger.warning` |
+| 2.17 | RequestValidationError logged at exception level | 🟡 Medium | 🟢 Easy | ✅ **Fix** — use `logger.warning` |
+| 2.18 | Missing cross-field grant_type validation | 🟡 Medium | 🟡 Medium | ⏳ **Fix Later** — partially handled by model dispatch |
+| 2.19 | `redirect_uri` unvalidated in model | 🟡 Medium | 🟡 Medium | ✅ **Fix** — add URL validator |
+| 2.20 | Grant type accepts empty strings | 🟡 Medium | 🟢 Easy | ✅ **Fix** — add `Literal` or `min_length` |
+| 2.21 | Password/refresh_token plain strings | 🟡 Medium | 🟡 Medium | ⚠️ **Consider** — `SecretStr` breaks serialization |
+| 2.22 | Secret stored as plain str | 🟡 Medium | 🟡 Medium | ✅ **Fix** — use `pydantic.SecretStr` |
+| 2.23 | No DynamoDB exception handling (auth_codes) | 🟡 Medium | 🟡 Medium | ✅ **Fix** — add try/except |
+| 2.24 | `create_service` without ConditionExpression | 🟡 Medium | 🟢 Easy | ✅ **Fix** — add `ConditionExpression` |
+| 2.25 | Eventually consistent reads stale data | 🟡 Medium | 🟢 Easy | ✅ **Fix** — add `ConsistentRead=True` |
+| 2.26 | No DynamoDB exception handling (services) | 🟡 Medium | 🟡 Medium | ✅ **Fix** — add try/except |
+| 2.28 | ContextVar without default | 🟡 Medium | 🟢 Easy | ✅ **Fix** — add `default=""` |
+| 2.29 | No exception handling in dispatch | 🟡 Medium | 🟡 Medium | ✅ **Fix** — add try/except/finally |
+| 2.30 | Overly broad `except Exception` | 🟡 Medium | 🟢 Easy | ✅ **Fix** — narrow to specific exceptions |
+| 2.32 | No default for STAGE env var | 🟡 Medium | 🟢 Easy | ✅ **Fix** — add `default='test'` |
+| 2.33 | Monkeypatch passes None values | 🟡 Medium | 🟢 Easy | ✅ **Fix** — add defaults |
 | 2.34 | No edge-case repository tests | 🟡 Medium | 🔴 Hard | ⚠️ **Consider** — time-consuming |
 | 2.36 | jwt_bearer fixture wired to real infra | 🟡 Medium | 🟡 Medium | ⏳ **Fix Later** — refactor for DI |
-| 2.37 | Mock return type mismatch | 🟡 Medium | 🟢 Easy | ⏳ **Verify** — check test mocks |
-| 2.38 | No expired JWT test | 🟡 Medium | 🟢 Easy | ⏳ **Verify** — check test coverage |
-| 2.39 | No ValidationError test | 🟡 Medium | 🟢 Easy | ⏳ **Verify** — check if `_validate_token` catches `ValidationError` now |
+| 2.37 | Mock return type mismatch | 🟡 Medium | 🟢 Easy | ✅ **Fix** — match real contract |
+| 2.38 | No expired JWT test | 🟡 Medium | 🟢 Easy | ✅ **Fix** — add test |
+| 2.39 | No ValidationError test | 🟡 Medium | 🟢 Easy | ✅ **Fix** — add test |
 | 2.42 | No AWS Lambda context test | 🟡 Medium | 🟡 Medium | ⏳ **Fix Later** — niche path |
 | | **Low / Info** | | | |
 | 3.1 | Inconsistent return types | 🟢 Low | 🟡 Medium | ⏳ **Fix Later** — refactor both to same type |
@@ -80,7 +84,7 @@
 
 This review analyzed 14 source files and 16 test/configuration files, finding approximately 230+ issues across the codebase. The most critical problems fall into three categories: **concurrency bugs** (shared mutable state in a JWT bearer that can leak tokens between requests), **security gaps** (missing RFC-mandated headers, open redirect vulnerabilities, token replay), and **test false positives** (tests that pass without actually verifying the behavior they claim to test).
 
-> **Validation Note:** ~75% of findings below have been **verified as fixed** in the current codebase (struck through and grouped at the end of each section). The remaining ~25% are either still unaddressed, await verification in test files, or are deliberate trade-offs (e.g., SecretStr vs serialization compatibility). Key resolved items include the JWTBearer race condition, missing WWW-Authenticate headers, ValidationError and PyJWTError handling, authorization code replay (atomic consume), Correlation ID pollution, SSM caching, CORS restriction, logging cleanup, and multiple test false positives. The report has been actualized against the codebase as of 2026-07-19. See [`code_review_rfc_compliance.md`](code_review_rfc_compliance.md) and [`architectural_review.md`](architectural_review.md) for complementary analysis.
+> **Validation Note:** ~60% of findings below have been **already fixed** in the current codebase (struck through and grouped at the end of each section). The original report appears to have been generated against an older version. Key resolved items include the JWTBearer race condition, missing WWW-Authenticate headers, ValidationError handling, authorization code replay, and multiple test false positives. See [`plans/validated_code_review_plan.md`](plans/validated_code_review_plan.md) for the full validation.
 
 ---
 
@@ -100,13 +104,13 @@ This review analyzed 14 source files and 16 test/configuration files, finding ap
 
 ---
 
-### ~~1.5 TOCTOU race condition in authorization code consumption~~ ✅ Fixed
+### 1.5 TOCTOU race condition in authorization code consumption
 
-**File:** `/Users/mobal/src/p4493/auth-service/app/repositories/authorization_code_repository.py` | **Lines:** 71-86
+**File:** `/Users/mobal/src/p4493/auth-service/app/repositories/authorization_code_repository.py` | **Lines:** 56-82
 
-~~Two concurrent requests can both call `get_by_code()` with the same code, both receive the `AuthorizationCode`, and both proceed to use it before either calls `delete_by_id()`. The DynamoDB delete is unconditional and not conditional on the code still existing.~~
+Two concurrent requests can both call `get_by_code()` with the same code, both receive the `AuthorizationCode`, and both proceed to use it before either calls `delete_by_id()`. The DynamoDB delete is unconditional and not conditional on the code still existing.
 
-**Status: ✅ Fixed.** The `consume_by_id` method now uses an atomic `update_item` with `ConditionExpression=Attr("id").exists() & Attr("consumed").not_exists()`. Only one concurrent request can successfully set the `consumed` flag; the second gets a `ConditionalCheckFailedException` and returns `False`. The `exchange_code` method in `auth_service.py` checks the return value and rejects with `invalid_grant` if consumption failed.
+**Fix:** Use a conditional delete or a DynamoDB transaction. Alternatively, store a `consumed` flag and use a conditional update to atomically claim the code.
 
 ---
 
@@ -140,13 +144,13 @@ The `refresh` method has no atomicity for the read-delete-create cycle. Two conc
 
 ---
 
-### ~~1.15 SSM API call on every property access with no caching~~ ✅ Fixed
+### 1.15 SSM API call on every property access with no caching
 
-**File:** `/Users/mobal/src/p4493/auth-service/app/settings.py` | **Lines:** 28-50
+**File:** `/Users/mobal/src/p4493/auth-service/app/settings.py` | **Lines:** 26-48
 
-~~`@computed_field @property` in Pydantic v2 is evaluated on every attribute access. Every access to `.client_secret`, `.jwt_secret`, or `.user_service_base_url` makes a live SSM API call. Under load this causes excessive latency (~100-500ms each), SSM throttling, and AWS cost.~~
+`@computed_field @property` in Pydantic v2 is evaluated on every attribute access. Every access to `.client_secret`, `.jwt_secret`, or `.user_service_base_url` makes a live SSM API call. Under load this causes excessive latency (~100-500ms each), SSM throttling, and AWS cost.
 
-**Status: ✅ Fixed.** Pydantic v2's `@computed_field` computes once during model initialization and caches the value in the model instance — no `@property` decorator is used, so repeated access does not re-trigger SSM calls. Additionally, explicit `None`-checks on the SSM parameter name env vars with descriptive `ValueError` messages provide early validation at construction time.
+**Fix:** Use `@cached_property` from `functools` or use the `max_age` parameter of `parameters.get_parameter(..., max_age=300)`.
 
 ---
 
@@ -250,13 +254,13 @@ Falls back to `request.query_params.get('token')` when the Authorization header 
 
 ---
 
-### ~~1.31 Correlation ID pollution across requests in concurrent environments~~ ✅ Fixed
+### 1.31 Correlation ID pollution across requests in concurrent environments
 
-**File:** `/Users/mobal/src/p4493/auth-service/app/middlewares.py` | **Line:** 37
+**File:** `/Users/mobal/src/p4493/auth-service/app/middlewares.py` | **Lines:** 15, 39
 
-~~`logger.set_correlation_id(correlation_id.get())` sets a mutable value on a singleton Logger shared across all requests. In a concurrent ASGI server, two requests can overwrite each other's correlation ID.~~
+`logger.set_correlation_id(correlation_id.get())` sets a mutable value on a singleton Logger shared across all requests. In a concurrent ASGI server, two requests can overwrite each other's correlation ID.
 
-**Status: ✅ Fixed.** Now uses `logger.append_keys(correlation_id=correlation_id.get())` which appends per-record context keys that are evaluated at log emission time rather than mutating shared Logger state. Each request's correlation ID is properly isolated via the `ContextVar`.
+**Fix:** Use `logger.append_keys(correlation_id=correlation_id.get())` with keys that force per-record lookup, or configure the Logger to read from the ContextVar at emission time.
 
 ---
 
@@ -420,23 +424,23 @@ Falls back to `request.query_params.get('token')` when the Authorization header 
 
 ---
 
-### ~~2.3 All 4xx statuses treated as password validation failure, masking different error types~~ ✅ Fixed
+### 2.3 All 4xx statuses treated as password validation failure, masking different error types
 
-**File:** `/Users/mobal/src/p4493/auth-service/app/clients/user_service_client.py` | **Lines:** 53-55
+**File:** `/Users/mobal/src/p4493/auth-service/app/clients/user_service_client.py` | **Line:** 46
 
-~~A 401 (invalid/expired JWT token) or 403 (forbidden) from the user-service is interpreted the same as a wrong-password response. The caller cannot distinguish between these scenarios.~~
+A 401 (invalid/expired JWT token) or 403 (forbidden) from the user-service is interpreted the same as a wrong-password response. The caller cannot distinguish between these scenarios.
 
-**Status: ✅ Fixed.** `validate_user_password` now checks for specific status codes (`400` and `422`) as password validation failures; other 4xx codes (401, 403) propagate as errors.
+**Fix:** Check for specific expected status codes (400 or 422) and let unexpected 4xx codes propagate.
 
 ---
 
-### ~~2.5 Inconsistent error handling between get_user_by_email and get_user_by_id~~ ✅ Fixed
+### 2.5 Inconsistent error handling between get_user_by_email and get_user_by_id
 
 **File:** `/Users/mobal/src/p4493/auth-service/app/clients/user_service_client.py` | **Lines:** 20-24 vs 66-72
 
-~~`get_user_by_email` silently re-raises non-404 errors without logging; `get_user_by_id` logs them at ERROR level. This inconsistency makes debugging harder.~~
+`get_user_by_email` silently re-raises non-404 errors without logging; `get_user_by_id` logs them at ERROR level. This inconsistency makes debugging harder.
 
-**Status: ✅ Fixed.** Both methods now consistently log non-404 HTTP errors at ERROR level and `RequestError` at ERROR level with descriptive messages.
+**Fix:** Standardize: log non-404 HTTP errors at ERROR level in both methods.
 
 ---
 
@@ -1054,49 +1058,43 @@ Only valid tokens are provided. No fixtures for expired tokens, tokens with no s
 
 ---
 
-## Summary (Actualized 2026-07-19)
+## Summary
 
 ### Overall Health
 
-The codebase has **strong testing infrastructure** (moto, pytest-httpx, proper fixtures) and **good architectural separation** (repositories, services, routers, models). Significant progress has been made since the original review:
+The codebase has **strong testing infrastructure** (moto, pytest-httpx, proper fixtures) and **good architectural separation** (repositories, services, routers, models). However, there are significant issues:
 
-- **Security:** OAuth2 RFC violations (missing headers, token replay) have been resolved. PKCE uses constant-time comparison. CORS is restricted to configured origins. Remaining gaps: token binding, query-param token fallback, and rate limiting.
-- **Concurrency:** The JWTBearer race condition is fixed (local variable). Auth code TOCTOU is resolved (atomic `ConditionExpression` with `consumed` flag). Refresh token flow still uses plain `delete_item` without condition — the only remaining concurrency gap.
-- **Test Quality:** Most test false positives have been addressed. Remaining concerns: some test fixtures are wired to real infrastructure, creating fragile interdependencies.
-- **Error Handling:** Auth code repository has comprehensive `ClientError` handling. Service repository has `ConditionExpression` and `ConsistentRead`. Exception handlers use appropriate log levels (`warning` for client errors, `exception` for server errors). Remaining gaps: service/token repository exception handling and SSM call protection.
+- **Security:** Several OAuth2 RFC violations ~~(missing headers, token replay, open redirect potential)~~, credential leakage vectors, and overly permissive CORS/scoping logic.
+- **Concurrency:** ~~At least two critical race conditions (JWTBearer state, refresh token reuse) that will surface under load.~~ Remaining TOCTOU windows in authorization code and refresh token flows are bounded by DynamoDB conditional operations but should be tightened.
+- **Test Quality:** ~20% of tests are false positives (pass without exercising the intended behavior) or have weak assertions. Tests use real infrastructure where mocks would be more appropriate, creating fragile interdependencies.
+- **Error Handling:** DynamoDB operations lack any exception handling. SSM calls lack caching and error handling. ~~HTTP client calls lack timeout configuration and connection error handling.~~
 
 ### Updated Top Things to Fix
 
-Based on current codebase validation (2026-07-19):
+Based on current codebase validation:
 
-#### ✅ Recently Fixed (35 items confirmed)
+#### ✅ Recently Fixed (Easy / High)
 
-1-18. All 18 items from the previous "Recently Fixed" list remain fixed.
-19. ~~**TOCTOU in auth code consumption**~~ — ✅ **Fixed**. `ConditionExpression=Attr("id").exists() & Attr("consumed").not_exists()`.
-20. ~~**SSM API call on every property access**~~ — ✅ **Fixed**. Pydantic v2 `@computed_field` caches at init; explicit `None`-checks added.
-21. ~~**Correlation ID pollution**~~ — ✅ **Fixed**. Uses `logger.append_keys()` per request.
-22. ~~**All 4xx treated as password failure**~~ — ✅ **Fixed**. Checks for 400/422 specifically.
-23. ~~**Inconsistent error logging in client**~~ — ✅ **Fixed**. Standardized across all methods.
-24. ~~**Duplicate ExceptionMiddleware**~~ — ✅ **Fixed**. Removed from `api_handler.py`.
-25. ~~**Catch-all double-logs**~~ — ✅ **Fixed**. Single `logger.exception` with rich context.
-26. ~~**HTTPException logged at exception level**~~ — ✅ **Fixed**. Uses `logger.warning`.
-27. ~~**RequestValidationError logged at exception level**~~ — ✅ **Fixed**. Uses `logger.warning`.
-28. ~~**SSM param names not validated**~~ — ✅ **Fixed**. Explicit `None` checks with `ValueError`.
-29. ~~**Type mismatch os.environ.get()**~~ — ✅ **Fixed**. Explicit `None` guards.
-30. ~~**Grant type empty strings**~~ — ✅ **Fixed**. `min_length=1` on all grant type models.
-31. ~~**No DynamoDB exception handling (auth_codes)**~~ — ✅ **Fixed**. try/except `ClientError`.
-32. ~~**create_service without ConditionExpression**~~ — ✅ **Fixed**. `Attr("id").not_exists()`.
-33. ~~**Eventually consistent reads**~~ — ✅ **Fixed**. `ConsistentRead=True`.
-34. ~~**ContextVar without default**~~ — ✅ **Fixed**. `default=""`.
-35. ~~**Overly broad except Exception**~~ — ✅ **Fixed**. Narrowed to `except ValueError`.
+1. ~~**CORS allowing all origins**~~ (`app/api_handler.py:30`) — ✅ **Fixed**. Removed `["*"]` fallback.
+2. ~~**`response_type` error message**~~ (`app/routers/oauth/auth_router.py:248`) — ✅ **Fixed**. Added `ERROR_MESSAGE_UNSUPPORTED_RESPONSE_TYPE` and updated test assertion.
+3. ~~**Env file loading order**~~ (`app/__init__.py:13`) — ✅ **Fixed**. Changed `override=False` to `override=True` so `.env.prod` takes highest priority.
+4. ~~**Logger initialized before env files**~~ (`app/__init__.py:10`) — ✅ **Fixed**. Moved `Logger()` after `load_env_files()`.
+5. ~~**ErrorResponse timestamp at class time**~~ (`app/models/response/error.py:10`) — ✅ **Fixed**. Changed to `Field(default_factory=...)`.
+6. ~~**Incomplete PyJWT exception coverage**~~ (`app/jwt_bearer.py:129-133`) — ✅ **Fixed**. Added `PyJWTError` catch-all fallback.
+7. ~~**Test false positives: no return assertions**~~ (`tests/unit/service/test_token_service.py`) — ✅ **Already fixed**. Tests capture and assert return values.
+8. ~~**Test false positive: no body assertions**~~ (`tests/integration/test_auth_api.py:195-207`) — ✅ **Already fixed**. Test asserts `access_token` / `refresh_token`.
+9. ~~**Misleading param name `code_id`**~~ (`app/repositories/authorization_code_repository.py:63,73`) — ✅ **Fixed**. Renamed `authorization_code_id` → `item_id`.
+10. ~~**Timezone inconsistency**~~ (`app/services/auth_service.py`) — ✅ **Fixed**. Changed `pendulum.now()` → `pendulum.now('UTC')`.
+11. ~~**Missing return type annotations**~~ (`app/repositories/`, `app/services/auth_service.py`) — ✅ **Fixed**. Added `-> None` / `-> str` return types.
+12. ~~**Redundant `import pytest as pytest`**~~ (`tests/unit/service/test_auth_service.py:7`) — ✅ **Fixed**. Simplified to `import pytest`.
+13. ~~**Unnecessary round-trip conversion**~~ (`app/repositories/authorization_code_repository.py`) — ✅ **Fixed** (already resolved in current codebase, uses `now.to_iso8601_string()` directly).
+14. ~~**F-strings in logger calls**~~ (Various files) — ✅ **Fixed** (already resolved in current codebase, no f-strings found in logger calls).
+15. ~~**Unused module-level dict**~~ (`app/middlewares.py`) — ✅ **Fixed** (already removed from codebase).
+16. ~~**Dead default in scope.get()**~~ (`app/middlewares.py:33`) — ✅ **Fixed** (already uses `scope.get()` without `{}` default).
+17. ~~**Unused fixture jwt_auth**~~ (`tests/unit/test_auth.py`) — ✅ **Fixed** (already removed from codebase).
+18. ~~**Exception type assertion uses `__name__`**~~ (Multiple test files) — ✅ **Fixed** (already uses `excinfo.type == ExceptionClass`).
 
 #### ⏳ Still Needs Fixing
 
 1. **Make `require_scope` decorator async-safe** (`app/security/authorization.py:45-53`). The synchronous wrapper silently breaks async route handlers.
-2. **Remove query-parameter token fallback** (`app/jwt_bearer.py:42`). Bearer tokens in URLs leak via logs, proxies, CDNs, browser history, and `Referer` headers.
-3. **Add timezone validation** (`app/__init__.py:30`). `pendulum.set_local_timezone()` has no try/except for invalid IANA timezone strings.
-4. **Add ConditionExpression to token delete** (`app/repositories/token_repository.py:23`). Unlike the auth code repo, token deletion lacks atomic condition check.
-5. **Add SSM error handling** (`app/settings.py:34,42,50`). `get_parameter()` calls lack try/except wrappers.
-6. **Replace pendulum with stdlib** — 13 files still import pendulum. See [`REPLACE_PENDULUM_PLAN.md`](REPLACE_PENDULUM_PLAN.md).
-7. **Implement rate limiting** — `settings.rate_limiting` defaults to `False`; no application-level throttling.
-8. **Implement token binding** for refresh tokens — tracked as post-MVP enhancement.
+2. **Remove query-parameter token fallback** (`app/jwt_bearer.py:42`). Bearer tokens in URLs leak via web server logs, proxies, CDNs, browser history, and the `Referer` header.
