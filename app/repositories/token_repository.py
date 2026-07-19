@@ -20,10 +20,6 @@ class TokenRepository:
 
     def delete_by_id(self, jti: str) -> dict[str, Any]:
         self._logger.debug("Deleting token record jti=%s", jti)
-        return self._table.delete_item(Key={"jti": jti})
-
-    def consume_by_id(self, jti: str) -> bool:
-        self._logger.debug("Consuming token record jti=%s", jti)
         response = self._table.delete_item(
             Key={"jti": jti},
             ReturnValues="ALL_OLD",
