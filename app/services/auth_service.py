@@ -149,7 +149,7 @@ class AuthService:
             code_verifier,
             auth_code.code_challenge_method,
         )
-        if expected_challenge != auth_code.code_challenge:
+        if not secrets.compare_digest(expected_challenge, auth_code.code_challenge):
             self._logger.warning("PKCE challenge validation failed")
             raise OAuthException(
                 "invalid_grant", status_code=status.HTTP_400_BAD_REQUEST
