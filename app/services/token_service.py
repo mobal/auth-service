@@ -44,7 +44,7 @@ class TokenService:
 
     def consume_by_id(self, jti: str) -> bool:
         self._logger.info("Consuming token record for jti=%s", jti)
-        return self._token_repository.delete_by_id(jti)
+        return self._token_repository.consume_by_id(jti)
 
     def get_by_id(self, jti: str) -> tuple[JWTToken, str, int] | None:
         self._logger.debug("Fetching token record by jti=%s", jti)
