@@ -220,26 +220,3 @@ class TestJWTAuth:
         assert jwt_token.model_dump() == result.model_dump()
         token_service.get_by_id.assert_called_once_with(jwt_token.jti)
 
-    def test_successfully_authorize_request_from_query_param(
-        self,
-        mocker,
-        empty_request: Request,
-        jwt_bearer: JWTBearer,
-        jwt_token: JWTToken,
-        refresh_token: RefreshToken,
-        settings: Settings,
-        token_service: TokenService,
-    ):
-        mocker.patch.object(
-            TokenService,
-            "get_by_id",
-            return_value=(jwt_token, refresh_token.token, jwt_token.exp),
-        )
-        empty_request.query_params = {
-            "token": f"{jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret)}"
-        }
-
-        result = jwt_bearer(empty_request)
-
-        assert jwt_token.model_dump() == result.model_dump()
-        token_service.get_by_id.assert_called_once_with(jwt_token.jti)

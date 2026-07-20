@@ -218,7 +218,8 @@ def jwt_token() -> JWTToken:
     return JWTToken(
         exp=exp.int_timestamp,
         iat=iat.int_timestamp,
-        iss=None,
+        iss="dev-auth-service",
+        aud="dev-auth-service",
         jti=str(uuid.uuid4()),
         sub=str(uuid.uuid4()),
         scope="tokens:revoke users:read users:write",
@@ -232,7 +233,8 @@ def expired_jwt_token() -> JWTToken:
     return JWTToken(
         exp=exp.int_timestamp,
         iat=iat.int_timestamp,
-        iss=None,
+        iss="dev-auth-service",
+        aud="dev-auth-service",
         jti=str(uuid.uuid4()),
         sub=str(uuid.uuid4()),
         scope="tokens:revoke users:read",
@@ -246,7 +248,8 @@ def jwt_token_no_scope() -> JWTToken:
     return JWTToken(
         exp=exp.int_timestamp,
         iat=iat.int_timestamp,
-        iss=None,
+        iss="dev-auth-service",
+        aud="dev-auth-service",
         jti=str(uuid.uuid4()),
         sub=str(uuid.uuid4()),
         scope=None,
@@ -260,7 +263,8 @@ def jwt_token_empty_sub() -> JWTToken:
     return JWTToken(
         exp=exp.int_timestamp,
         iat=iat.int_timestamp,
-        iss=None,
+        iss="dev-auth-service",
+        aud="dev-auth-service",
         jti=str(uuid.uuid4()),
         sub="",
         scope="tokens:revoke",
