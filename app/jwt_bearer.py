@@ -116,7 +116,13 @@ class JWTBearer:
     def _validate_token(self, token: str) -> JWTToken | None:
         try:
             decoded_token = JWTToken(
-                **jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+                **jwt.decode(
+                    token,
+                    settings.jwt_secret,
+                    algorithms=["HS256"],
+                    audience=settings.jwt_audience or settings.app_name,
+                    issuer=settings.jwt_issuer or settings.app_name,
+                )
             )
             if self._token_service.get_by_id(decoded_token.jti):
                 logger.debug(
