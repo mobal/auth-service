@@ -7,12 +7,11 @@ This report details a deep architectural review of the `auth-service`. The audit
 
 ## 🚨 Critical Findings (Immediate Action Required)
 
-### 0. ✅ Verified addition (2026-07-19) — JWT `aud` claim breaks token validation in production
+### 0. ✅ Fixed (2026-07-20) — JWT `aud` claim breaks token validation in production
 *   **Location:** `app/jwt_bearer.py` -> `JWTBearer._validate_token()`, in combination with `app/services/auth_service.py` -> `_generate_token()`
 *   **Issue:** `_generate_token()` now unconditionally sets an `aud` claim on every issued token, but `_validate_token()` still calls `jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])` without passing `audience=`. Reproduced directly against PyJWT 2.7: decoding a token that has an `aud` claim, with no `audience` argument supplied, raises `InvalidAudienceError`. That exception is caught by the trailing `except PyJWTError` in `_validate_token`, so it fails silently into a 403 instead of crashing — which is why this hasn't been noticed from logs alone.
-*   **Risk:** Critical — not theoretical. Every token issued via `login()`, `authorize()`, or the client-credentials flow currently fails to validate on `/oauth/revoke` and `/oauth/authorize`, the only two endpoints in this service that require authentication.
 *   **Why the test suite didn't catch it:** the `jwt_token` fixture in `tests/conftest.py` sets `iss=None` and never sets `aud`, so the fixture-encoded token used in `JWTBearer` tests has no `aud` claim at all — the test and production code paths have diverged.
-*   **Recommendation:** Add `audience=settings.jwt_audience or settings.app_name` (and, while touching this line, `issuer=settings.jwt_issuer or settings.app_name`) to the `jwt.decode()` call in `_validate_token()`. Add a regression test that builds the token the way `_generate_token()` actually does — i.e. with `aud` set — rather than relying on a fixture that omits it.
+*   **Fix applied:** `b7dc314` — added `audience=settings.jwt_audience or settings.app_name` and `issuer=settings.jwt_issuer or settings.app_name` to the `jwt.decode()` call in `_validate_token()`. JWTToken fixtures updated to always include `iss` and `aud` claims matching what `_generate_token()` produces.
 
 ### 1. Timing Attack Exposure in Authentication Flow
 *   **Location:** `app/services/auth_service.py` -> `login()` & `validate_user_password()`

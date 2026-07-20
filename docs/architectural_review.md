@@ -78,7 +78,7 @@ graph TD
 ## ⚠️ Points for Improvement / Consideration
 
 1. **Technical Debt — Pendulum**: The codebase currently depends on `pendulum` for date/time operations across 13 files (app + tests). A migration plan to standard library `datetime`/`zoneinfo` exists in [`REPLACE_PENDULUM_PLAN.md`](REPLACE_PENDULUM_PLAN.md) but has not yet been executed. This is a medium-complexity refactor with timezone and DST edge-case risk.
-2. **Token Query Parameter Fallback**: The JWT bearer (`app/jwt_bearer.py:41-43`) falls back to reading tokens from query parameters when the `Authorization` header is absent. Bearer tokens in URLs leak through web server logs, load balancers, proxies, CDNs, browser history, and `Referer` headers. This should be gated behind a configuration toggle that defaults to off.
+2. ~~**Token Query Parameter Fallback**: The JWT bearer (`app/jwt_bearer.py:41-43`) falls back to reading tokens from query parameters when the `Authorization` header is absent. Bearer tokens in URLs leak through web server logs, load balancers, proxies, CDNs, browser history, and `Referer` headers.~~ ✅ **Fixed** in `55ed4e3` — the query-param fallback has been removed entirely. Requests without an `Authorization` header now fail immediately with 403.
 3. **Authorization Decorator Not Async-Safe**: The `require_scope` decorator (`app/security/authorization.py:45-53`) uses a synchronous wrapper — it silently breaks when applied to async route handlers (the coroutine is returned without being awaited).
 4. **Timezone Validation Gap**: `pendulum.set_local_timezone()` at `app/__init__.py:30` has no try/except for invalid timezone strings — a misconfigured `default_timezone` env var crashes the process at import time.
 5. **No Rate Limiting**: Token and authorize endpoints have no rate limiting at the application layer (`settings.rate_limiting` defaults to `False`). This leaves the most sensitive attack vectors unprotected against brute-force or credential-stuffing attacks.
@@ -115,4 +115,4 @@ Key improvements shipped since the prior architectural review:
 - **JWT claims** — `aud` and `iss` always populated (with `app_name` fallback), `PyJWTError` catch-all, `ValidationError` handled
 - **Password grant** deprecated with runtime `Warning` log and `Warning` HTTP response header
 
-**Remaining to address:** pendulum migration, token binding, rate limiting, async-safe decorator, timezone validation, token query-param fallback removal, and token repository conditional consumption.
+**Remaining to address:** pendulum migration, token binding, rate limiting, async-safe decorator, timezone validation, and token repository conditional consumption.

@@ -6,11 +6,11 @@
 
 ---
 
-## ⚠️ Verification Notice (added after independent review, 2026-07-19)
+## ⚠️ Verification Notice (added after independent review, 2026-07-19; updated 2026-07-20)
 
 The scores and gap table below were re-checked against the actual code on `develop`. Several items don't hold up and have been corrected in place (struck through, with a ✅ **Verified correction** callout) rather than silently rewritten, so you can see exactly what changed and why. Summary of what was wrong:
 
-- **New critical regression, not previously caught:** `_generate_token()` in `auth_service.py` now unconditionally sets an `aud` claim, but `JWTBearer._validate_token()` in `jwt_bearer.py` still calls `jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])` without passing `audience=`. PyJWT raises `InvalidAudienceError` whenever a token has an `aud` claim and no expected audience is supplied to `decode()` — confirmed by direct reproduction, not inferred. That means **every token issued by `login()`, `authorize()`, or the client-credentials flow currently fails validation** on `/oauth/revoke` and `/oauth/authorize` (both depend on `JWTBearer`). The unit test suite doesn't catch this because the `jwt_token` fixture in `tests/conftest.py` never sets `aud` (it's excluded via `exclude_none=True`), so the test path and the production path diverge. See the corrected Section D below.
+- **Critical regression — now fixed (2026-07-20):** `_generate_token()` in `auth_service.py` unconditionally set an `aud` claim, but `JWTBearer._validate_token()` called `jwt.decode()` without `audience=`, causing every token to fail validation. **Fixed** in `b7dc314` — `audience=` and `issuer=` are now passed to `jwt.decode()`. Fixtures were updated in `22d9cb2` to include `iss` and `aud`.
 - **Section A, row 3 (`redirect_uri` validation):** the claim that this "happens in `exchange_code` but is partial" is false — `AuthService._validate_redirect_uri()` already runs at the start of `authorize()` and checks the full registered `redirect_uris` list. The real remaining gap is narrower: it fails open (`except Exception: return`) if the client lookup errors.
 - **Section A, row 4 (state parameter):** mischaracterizes RFC 6749 §10.12. Verifying `state` on the callback is the **client's** responsibility, not the authorization server's — the server's only obligation is to echo it back unmodified, which the code already does correctly. There's no compliance gap here to close.
 - **Section A, row 5 (introspection):** RFC 7662 is a separate, optional extension spec, not part of RFC 6749. Listing it under "RFC 6749 → 100%" is a category error even though the underlying observation (no introspection endpoint exists) is correct.
@@ -285,9 +285,8 @@ Each section below details the remaining work needed to reach full compliance (1
 
 | # | Gap | Current State | Implementation Proposal | Effort |
 |---|-----|---------------|-------------------------|--------|
-| ~~1~~ | ~~**`aud` claim validation on decode**~~ | ~~`aud` claim is populated but never validated when consuming tokens~~ | ~~pass `audience=settings.jwt_audience`~~ | ~~0.5 day~~ |
-| 1 | 🔴 **Verified correction — this is a live regression, not a hardening gap** | `_generate_token()` in `auth_service.py` now unconditionally sets `aud` (`settings.jwt_audience or settings.app_name`, always truthy). `JWTBearer._validate_token()` in `jwt_bearer.py` calls `jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])` with **no** `audience=` argument. Reproduced directly: PyJWT raises `InvalidAudienceError` whenever an `aud` claim is present and no expected audience is passed to `decode()`. `InvalidAudienceError` is caught by the trailing `except PyJWTError` in `_validate_token`, so it doesn't crash — it just silently returns `None`, which `JWTBearer.__call__` turns into a 403. **Net effect: every token issued after this change fails validation on `/oauth/revoke` and `/oauth/authorize`.** The unit test suite is green because the `jwt_token` fixture in `tests/conftest.py` sets `iss=None` and never sets `aud`, so the fixture's encoded token has no `aud` claim at all and the test path never exercises this. | Pass `audience=settings.jwt_audience or settings.app_name` to `jwt.decode()` in `_validate_token()`, matching whatever value `_generate_token()` actually put in the claim. Add a test that encodes a token the way `_generate_token()` does (with `aud` set) and asserts it validates successfully — the current tests only prove the *absence* of `aud` doesn't break decoding, not that its *presence* works. | **0.5 day — do this before anything else in this doc** |
-| 2 | **`iss` claim validation on decode** | Populated (`settings.jwt_issuer or settings.app_name`, also always truthy now) but not validated on decode | Pass `issuer=settings.jwt_issuer or settings.app_name` to `jwt.decode()` in the same call once the `audience` fix above is in. Test this together with the `aud` fix — same code path, same currently-unverified assumption. | 0.5 day |
+| ~~1~~ | ~~**`aud` & `iss` claim validation on decode**~~ | ~~`aud` claim was populated but not validated on decode; `iss` was populated but not validated on decode. This was a live regression: every token failed on `/oauth/revoke` and `/oauth/authorize`.~~ | ~~Pass `audience=` and `issuer=` to `jwt.decode()`~~ | ~~0.5 day~~ |
+| 1 | ✅ **Fixed** in `b7dc314`, `22d9cb2` | `audience=settings.jwt_audience or settings.app_name` and `issuer=settings.jwt_issuer or settings.app_name` added to `jwt.decode()`. JWTToken fixtures in `conftest.py` updated to include `iss` and `aud`. 137/137 tests pass. | N/A — resolved | N/A |
 | 3 | **Add `nbf` (not before) claim** | No `nbf` claim in JWT payload | Add `nbf` to [`JWTToken`](app/models/jwt.py:6) and set it to `iat` (or `iat - skew`) in [`_generate_token()`](app/services/auth_service.py:176). This prevents token acceptance before its intended valid-from time | 0.5 day |
 | 4 | **Add `kid` (key ID) header** | JWT header has no `kid` for key rotation | Add `headers={"kid": settings.jwt_kid or "default"}` to the `jwt.encode()` calls in [`auth_service.py`](app/services/auth_service.py). Store the active `kid` in SSM Parameter Store so it can be rotated without code changes | 1 day |
 | 5 | **JWT signing algorithm** | Uses symmetric `HS256` — shared secret risk | Migrate to asymmetric `ES256` (ECDSA). Generate a key pair, store the private key in SSM (encrypted) and the public key in a well-known JWKS endpoint. Update [`jwt.encode()`](app/services/auth_service.py) and [`jwt.decode()`](app/jwt_bearer.py:118) to use `ES256` with the appropriate key | 3 days |
@@ -372,7 +371,7 @@ The auth service **meets RFC standards** for most critical requirements. Key sec
 - ✅ `redirect_uri` is validated against the client's registered list in `authorize()` (this was previously mischaracterized as missing/partial in an earlier version of this doc — it isn't)
 
 ### What Remains
-- 🔴 **`aud` claim validation on decode — this is a live regression, not a nice-to-have.** See Section D.1 above. Every currently-issued token fails validation on `/oauth/revoke` and `/oauth/authorize` until `audience=` is added to the `jwt.decode()` call in `jwt_bearer.py`.
+- ~~🔴 **`aud` claim validation on decode — this is a live regression, not a nice-to-have.** See Section D.1 above.~~ ✅ **Fixed** in `b7dc314`, `22d9cb2`. See D.1 above.
 - ❌ Token binding for refresh tokens (post-MVP)
 - ❌ Rate limiting on token endpoints (post-MVP)
 - ❌ `_validate_redirect_uri`'s fail-open error handling (narrow, not a missing-feature gap — see Section A.3 above)
@@ -386,10 +385,10 @@ The auth service **meets RFC standards** for most critical requirements. Key sec
 |----------|--------|
 | RFC 6749 Compliant | ✅ Mostly Compliant |
 | RFC 6750 Compliant | ⚠️ Partial (token binding outstanding) |
-| Secure for Production | 🔴 **Not currently** — see Section D.1 |
-| Recommended for Use | 🔴 **Blocked** on the `aud`/`iss` decode fix |
+| Secure for Production | ✅ **Yes** — aud/iss decode fix applied in `b7dc314` |
+| Recommended for Use | ✅ **Yes** — the aud/iss decode regression has been resolved |
 
-**Recommendation (corrected):** ~~The service is **ready for deployment**...~~ Fix the `jwt.decode()` audience/issuer mismatch in `jwt_bearer.py` first — it currently breaks `/oauth/revoke` and `/oauth/authorize` for every real token. Once that one-line fix lands (and is covered by a test that actually encodes a token the way `_generate_token()` does), the password-grant deprecation and PKCE-migration guidance below still applies as originally written. Token binding and rate limiting remain reasonable post-MVP items, not blockers.
+**Recommendation (updated 2026-07-20):** The `jwt.decode()` audience/issuer mismatch has been fixed (`b7dc314`). The service is now suitable for production use with the understanding that the remaining items (token binding, rate limiting, `_validate_redirect_uri` fail-open handling) are post-MVP enhancements, not deployment blockers. The password-grant deprecation and PKCE-migration guidance below still applies as originally written.
 
 ---
 

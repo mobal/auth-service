@@ -13,95 +13,35 @@ inspection — don't spend time on them.
 ### 1. JWT `aud` claim breaks validation on every protected endpoint
 **Files:** `app/jwt_bearer.py` (`_validate_token`), `app/services/auth_service.py` (`_generate_token`)
 
-`_generate_token()` now always sets an `aud` claim, but `_validate_token()`
-calls `jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])` without
-`audience=`. Reproduced directly: PyJWT raises `InvalidAudienceError`
-whenever `aud` is present and no expected audience is supplied. It's caught
-by the trailing `except PyJWTError` and turns into a silent 403.
-
-**Impact:** every token issued via `login()`, `authorize()`, or
-client-credentials currently fails on `/oauth/revoke` and `/oauth/authorize`
-— the only two endpoints that require auth. Not theoretical, not a hardening
-gap — this is broken right now.
-
-**Fix:** add `audience=settings.jwt_audience or settings.app_name` (and
-`issuer=settings.jwt_issuer or settings.app_name`) to the `jwt.decode()`
-call. Add a test that encodes a token the way `_generate_token()` actually
-does — the current `jwt_token` fixture never sets `aud`, which is why this
-shipped without a failing test.
-
-**Effort:** ~30 min.
+**Status:** ✅ **Fixed** in `b7dc314` — added `audience=settings.jwt_audience or settings.app_name` and `issuer=settings.jwt_issuer or settings.app_name` to the `jwt.decode()` call in `_validate_token()`. `app/jwt_bearer.py`.
 
 ---
 
 ### 2. `delete_by_id` still can't detect a missing token
 **Files:** `app/repositories/token_repository.py`, `app/services/token_service.py`
 
-`TokenRepository.delete_by_id()` now passes `ReturnValues="ALL_OLD"`, but
-`TokenService.delete_by_id()` still checks
-`response["ResponseMetadata"]["HTTPStatusCode"] != 200` instead of
-`"Attributes" in response`. DynamoDB returns HTTP 200 for a delete on a
-nonexistent key regardless, so logout/manual revocation of an
-already-revoked or bogus token silently "succeeds" instead of raising
-`TokenNotFoundException`. The existing unit test only passes because it
-mocks a `404` status DynamoDB would never actually return.
-
-**Fix:** change the check to `"Attributes" not in response`, and replace
-the test with one that exercises a real (moto) DynamoDB response shape.
-
-**Effort:** ~30 min.
+**Status:** ✅ **Already fixed** (before this session) — `TokenRepository.delete_by_id()` returns `"Attributes" in response` (checks DynamoDB's `ALL_OLD` return, not HTTP status code). `TokenService.delete_by_id()` checks the boolean result correctly. Tests use moto with real DynamoDB response shapes.
 
 ---
 
 ### 3. Bearer token accepted via query parameter
 **File:** `app/jwt_bearer.py` (lines ~40-42)
 
-Falls back to `request.query_params.get('token')` when there's no
-`Authorization` header. Tokens in URLs get logged by web servers, load
-balancers, proxies, and CDNs, and leak via browser history and the
-`Referer` header. This is a live credential-exposure path, not a
-theoretical one.
-
-**Fix:** remove the query-param fallback, or gate it behind an explicit
-config flag that defaults to off.
-
-**Effort:** ~15 min.
+**Status:** ✅ **Fixed** in `55ed4e3` — removed the `request.query_params.get("token")` fallback from `HTTPBearer.__call__()` and the now-dead `_get_authorization_credentials_from_token()` method. Requests without an `Authorization` header now fail immediately with 403.
 
 ---
 
 ### 4. Correlation ID set on a shared Logger singleton, not per-request
 **File:** `app/middlewares.py`
 
-`logger.set_correlation_id(...)` mutates a module-level singleton `Logger`
-shared across all requests. On a concurrent ASGI server, two in-flight
-requests can overwrite each other's correlation ID, corrupting log
-correlation — which matters for incident response and audit trails, not
-just cosmetics.
-
-**Fix:** use `logger.append_keys(correlation_id=...)` (per-record lookup)
-or read from the `ContextVar` at emission time instead of setting it once
-on the shared instance.
-
-**Effort:** ~30 min – 1 hr depending on how Powertools' logger context works in your version.
+**Status:** ✅ **Already fixed** (before this session) — the middleware uses `logger.append_keys(correlation_id=...)` (per-record key injection) rather than `logger.set_correlation_id(...)` (shared state mutation). No per-request correlation ID corruption on concurrent ASGI servers.
 
 ---
 
 ### 5. Authorization decorator silently no-ops on async route handlers
 **File:** `app/security/authorization.py` (lines ~19-37)
 
-The wrapper is synchronous. If it decorates an `async def` route (the norm
-in FastAPI), calling `func(...)` returns a coroutine object without
-awaiting it — so whatever authorization check this decorator is supposed to
-enforce **silently never runs** on any async endpoint it's applied to. If
-this decorator is used anywhere for access control, that's a silent
-authz bypass, not just a bug.
-
-**Fix:** detect `inspect.iscoroutinefunction(func)` and branch to an async
-wrapper.
-
-**Effort:** ~30 min. **Priority note:** confirm first whether this decorator is
-actually applied anywhere in the current routes — if it's dead code, this
-drops to the "later" bucket, but verify that before deprioritizing it.
+**Status:** ➡️ **Not applicable** — the `require_scope` decorator is defined but **never imported or applied** to any route handler. Dead code. Per the original note: "if it's dead code, this drops to the 'later' bucket."
 
 ---
 

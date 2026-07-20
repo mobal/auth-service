@@ -2,13 +2,13 @@
 
 ## Executive Summary — Still-Actionable Findings
 
-> **⚠️ Verification pass (2026-07-19):** two new critical findings below (1.32, 1.33) were confirmed by direct reproduction against the current `develop` branch, not previously in this report. Item 1.15's status is also updated — the underlying code changed since this row was last written.
+> **⚠️ Verification pass (2026-07-19; updated 2026-07-20):** two new critical findings below (1.32, 1.33) were confirmed by direct reproduction against the current `develop` branch, not previously in this report. Item 1.15's status is also updated — the underlying code changed since this row was last written. Items 1.32, 1.33, and 1.30 are now resolved.
 
 | # | Finding | Severity | Difficulty | Recommendation |
 |---|---------|----------|------------|----------------|
 | | **Critical / High** | | | |
-| 1.32 | 🔴 **NEW — `aud` claim breaks JWT validation on every protected endpoint** | 🔴 Critical | 🟢 Easy | ✅ **Fix immediately** — `_generate_token()` now always sets `aud`, but `JWTBearer._validate_token()`'s `jwt.decode()` call never passes `audience=`. PyJWT raises `InvalidAudienceError` whenever `aud` is present without an expected audience — confirmed by direct reproduction. Every token issued after this change fails on `/oauth/revoke` and `/oauth/authorize`. The test suite is green only because `tests/conftest.py`'s `jwt_token` fixture never sets `aud`. Add `audience=settings.jwt_audience or settings.app_name` to the decode call, and add a test that encodes a token the way `_generate_token()` actually does. |
-| 1.33 | 🔴 **NEW — `delete_by_id` still can't detect a missing token** | 🔴 High | 🟢 Easy | ✅ **Fix** — `TokenRepository.delete_by_id()` now passes `ReturnValues="ALL_OLD"`, but `TokenService.delete_by_id()` still checks `response["ResponseMetadata"]["HTTPStatusCode"] != 200` instead of `"Attributes" in response`. DynamoDB returns HTTP 200 for a delete on a nonexistent key either way, so this branch can still never fire. The existing test for this passes only because it mocks a `404` status DynamoDB would never actually return — replace it with a test against a real (moto) response. |
+| ~~1.32~~ | ~~**`aud` claim breaks JWT validation on every protected endpoint**~~ | 🔴 Critical | 🟢 Easy | ✅ **Fixed** in `b7dc314`, `22d9cb2` — `audience=` and `issuer=` added to `jwt.decode()`. Fixtures updated to include `aud` and `iss`. |
+| ~~1.33~~ | ~~**`delete_by_id` still can't detect a missing token**~~ | 🔴 High | 🟢 Easy | ✅ **Already fixed** — `TokenRepository.delete_by_id()` returns `"Attributes" in response`; `TokenService.delete_by_id()` checks the boolean correctly. Tests use moto with real DynamoDB response shapes. |
 | ~~1.3~~ | ~~Incomplete PyJWT exception coverage~~ | 🔴 High | 🟢 Easy | ✅ **Fixed** |
 | 1.5 | TOCTOU race in auth code consumption | 🔴 High | 🟡 Medium | ⏳ **Fix Later** — already partially mitigated by conditional update |
 | 1.6 | Refresh token reuse race condition | 🔴 High | 🟡 Medium | ⏳ **Fix Later** — already partially mitigated by atomic `consume_by_id` |
@@ -24,8 +24,8 @@
 | ~~1.26~~ | ~~Test false positives: no return assertions~~ | 🔴 High | 🟢 Easy | ✅ **Fixed** |
 | ~~1.27~~ | ~~Test false positive: no body assertions~~ | 🔴 High | 🟢 Easy | ✅ **Fixed** |
 | 1.29 | Nested moto mock contexts | 🔴 High | 🟡 Medium | ⏳ **Fix Later** — low risk in current moto versions |
-| 1.30 | Token accepted via query param | 🔴 High | 🟡 Medium | ⚠️ **Consider** — breaking change; gate behind config toggle |
-| 1.31 | Correlation ID pollution | 🔴 High | 🔴 Hard | ⚠️ **Consider** — only affects non-Lambda ASGI deployments |
+| ~~1.30~~ | ~~Token accepted via query param~~ | 🔴 High | 🟡 Medium | ✅ **Fixed** in `55ed4e3` — the query-param fallback has been removed entirely. |
+| ~~1.31~~ | ~~Correlation ID pollution~~ | 🔴 High | 🔴 Hard | ✅ **Already fixed** — middleware uses `logger.append_keys()` instead of `set_correlation_id()` for per-request correlation. |
 | | **Medium** | | | |
 | 2.3 | All 4xx treated as password failure | 🟡 Medium | 🟢 Easy | ✅ **Fix** — check for 400/422 specifically |
 | 2.5 | Inconsistent error logging in client | 🟡 Medium | 🟢 Easy | ✅ **Fix** — standardize log level |
@@ -244,23 +244,23 @@ The `setup` fixture wraps in `mock_aws()` and the `dynamodb_resource` fixture op
 
 ---
 
-### 1.30 Token accepted via query parameter leaks credentials through URLs
+### ~~1.30 Token accepted via query parameter leaks credentials through URLs~~ ✅ Fixed
 
 **File:** `/Users/mobal/src/p4493/auth-service/app/jwt_bearer.py` | **Lines:** 40-42
 
-Falls back to `request.query_params.get('token')` when the Authorization header is missing. URLs containing bearer tokens are logged by web servers, load balancers, proxies, and CDNs; they appear in browser history and leak via the `Referer` header.
+~~Falls back to `request.query_params.get('token')` when the Authorization header is missing. URLs containing bearer tokens are logged by web servers, load balancers, proxies, and CDNs; they appear in browser history and leak via the `Referer` header.~~
 
-**Fix:** Remove the query-parameter fallback or gate it behind an explicit configuration toggle that defaults to off.
+**Fix:** Removed in `55ed4e3` — the query-param fallback and the now-dead `_get_authorization_credentials_from_token()` method have been deleted. Requests without an `Authorization` header fail immediately with 403.
 
 ---
 
-### 1.31 Correlation ID pollution across requests in concurrent environments
+### ~~1.31 Correlation ID pollution across requests in concurrent environments~~ ✅ Already Fixed
 
 **File:** `/Users/mobal/src/p4493/auth-service/app/middlewares.py` | **Lines:** 15, 39
 
-`logger.set_correlation_id(correlation_id.get())` sets a mutable value on a singleton Logger shared across all requests. In a concurrent ASGI server, two requests can overwrite each other's correlation ID.
+~~`logger.set_correlation_id(correlation_id.get())` sets a mutable value on a singleton Logger shared across all requests. In a concurrent ASGI server, two requests can overwrite each other's correlation ID.~~
 
-**Fix:** Use `logger.append_keys(correlation_id=correlation_id.get())` with keys that force per-record lookup, or configure the Logger to read from the ContextVar at emission time.
+**Resolution:** The middleware already uses `logger.append_keys(correlation_id=correlation_id.get())` which performs per-record key injection rather than mutating shared state on the Logger singleton.
 
 ---
 
@@ -1096,5 +1096,4 @@ Based on current codebase validation:
 
 #### ⏳ Still Needs Fixing
 
-1. **Make `require_scope` decorator async-safe** (`app/security/authorization.py:45-53`). The synchronous wrapper silently breaks async route handlers.
-2. **Remove query-parameter token fallback** (`app/jwt_bearer.py:42`). Bearer tokens in URLs leak via web server logs, proxies, CDNs, browser history, and the `Referer` header.
+1. **Make `require_scope` decorator async-safe** (`app/security/authorization.py:45-53`). The synchronous wrapper silently breaks async route handlers. _(Note: currently dead code — `require_scope` is defined but not applied to any route handler.)_
