@@ -219,4 +219,3 @@ class TestJWTAuth:
 
         assert jwt_token.model_dump() == result.model_dump()
         token_service.get_by_id.assert_called_once_with(jwt_token.jti)
-
