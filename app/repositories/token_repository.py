@@ -8,7 +8,7 @@ from app import settings
 
 
 class TokenRepository:
-    def __init__(self):
+    def __init__(self) -> None:
         self._logger = Logger()
         self._table = (
             boto3.Session().resource("dynamodb").Table(f"{settings.stage}-tokens")
@@ -18,12 +18,8 @@ class TokenRepository:
         self._logger.debug("Persisting token record jti=%s", data.get("jti"))
         return self._table.put_item(Item=data)
 
-    def delete_by_id(self, jti: str) -> dict[str, Any]:
+    def delete_by_id(self, jti: str) -> bool:
         self._logger.debug("Deleting token record jti=%s", jti)
-        return self._table.delete_item(Key={"jti": jti})
-
-    def consume_by_id(self, jti: str) -> bool:
-        self._logger.debug("Consuming token record jti=%s", jti)
         response = self._table.delete_item(
             Key={"jti": jti},
             ReturnValues="ALL_OLD",

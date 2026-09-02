@@ -9,7 +9,7 @@ from starlette.types import ASGIApp
 
 X_CORRELATION_ID = "X-Correlation-ID"
 
-correlation_id: ContextVar[str] = ContextVar(X_CORRELATION_ID)
+correlation_id: ContextVar[str] = ContextVar(X_CORRELATION_ID, default="")
 logger = Logger(utc=True)
 
 

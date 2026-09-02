@@ -1,6 +1,6 @@
-import pendulum
+from datetime import UTC, datetime
+
 from aws_lambda_powertools import Logger
-from starlette import status
 
 from app.exceptions import TokenNotFoundException
 from app.models.jwt import JWTToken, RefreshToken
@@ -23,10 +23,10 @@ class TokenService:
         token_data = {
             "jti": jwt_token.jti,
             "jwt_token": jwt_token.model_dump(),
-            "created_at": pendulum.from_timestamp(jwt_token.iat).to_iso8601_string(),
-            "expire_at": pendulum.from_timestamp(
-                refresh_token.ttl if refresh_token else jwt_token.exp
-            ).to_iso8601_string(),
+            "created_at": datetime.fromtimestamp(jwt_token.iat, tz=UTC).isoformat(),
+            "expire_at": datetime.fromtimestamp(
+                refresh_token.ttl if refresh_token else jwt_token.exp, tz=UTC
+            ).isoformat(),
             "ttl": refresh_token.ttl if refresh_token else jwt_token.exp,
         }
 
@@ -37,14 +37,14 @@ class TokenService:
 
     def delete_by_id(self, jti: str) -> None:
         self._logger.info("Deleting token record for jti=%s", jti)
-        response = self._token_repository.delete_by_id(jti)
-        if response["ResponseMetadata"]["HTTPStatusCode"] != status.HTTP_200_OK:
+        result = self._token_repository.delete_by_id(jti)
+        if not result:
             self._logger.warning("Token delete failed for jti=%s", jti)
             raise TokenNotFoundException(ERROR_MESSAGE_TOKEN_NOT_FOUND)
 
     def consume_by_id(self, jti: str) -> bool:
         self._logger.info("Consuming token record for jti=%s", jti)
-        return self._token_repository.consume_by_id(jti)
+        return self._token_repository.delete_by_id(jti)
 
     def get_by_id(self, jti: str) -> tuple[JWTToken, str, int] | None:
         self._logger.debug("Fetching token record by jti=%s", jti)

@@ -1,0 +1,973 @@
+{
+  "info": {
+    "name": "Auth Service",
+    "description": "End-to-end API collection for the auth-service (OAuth 2.0).\n\n## Variables\n\n| Variable | Default | Description |\n|----------|---------|-------------|\n| `baseUrl` | `http://localhost:8080` | Local app base URL. Set to the deployed API Gateway URL (e.g. `https://<api-id>.execute-api.<region>.amazonaws.com`) when testing a deployed environment. |\n| `clientId` | `user-service` | OAuth client name sent via HTTP Basic auth. Seeded by `scripts/init_localstack.py` in the e2e environment. |\n| `clientSecret` | `client-secret` | Client secret matching the seeded `user-service` registration. |\n| `e2eUserEmail` | `root@example.com` | Email served by the user-service mock for the password grant. |\n| `e2ePassword` | `e2e-password` | Password accepted by the user-service mock. |\n| `accessToken` | *(empty)* | Latest access token — set automatically by the token-response test scripts. |\n| `refreshToken` | *(empty)* | Latest refresh token — set automatically by the password/refresh grant test scripts. |\n| `authCode` | *(empty)* | Authorization code — set automatically by the \"Authorize\" test script. |\n\n## Notes\n\n- The token endpoint accepts `application/x-www-form-urlencoded` bodies.\n- The client-credentials and authorization-code grants authenticate the client with an HTTP Basic `Authorization` header (`clientId:clientSecret`).\n- `/oauth/revoke` and `/oauth/authorize` require a `Bearer` access token issued by this service.\n- The password grant is deprecated per OAuth 2.1; responses carry a `Warning` header.\n- The authorize request uses the RFC 7636 Appendix B PKCE verifier/challenge pair.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Liveness probe — no authentication required. Returns {\"status\": \"healthy\"}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 200', () => pm.response.to.have.status(200));",
+                  "pm.test('reports healthy status', () => {",
+                  "  pm.expect(pm.response.json()).to.eql({ status: 'healthy' });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "OAuth",
+      "item": [
+        {
+          "name": "Token — client credentials",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic {{basicAuth}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                }
+              ]
+            },
+            "description": "Client credentials grant (RFC 6749 Section 4.4). Returns a service token for the seeded `user-service` client. The test script stores the access token in the `accessToken` variable."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.collectionVariables.set('basicAuth', btoa(`${pm.collectionVariables.get('clientId')}:${pm.collectionVariables.get('clientSecret')}`));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns a bearer token with the granted scope', () => {",
+                  "  pm.expect(body.token_type).to.eql('Bearer');",
+                  "  pm.expect(body.access_token).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.scope).to.eql('users:read');",
+                  "});",
+                  "pm.test('expires in the configured service token lifetime', () => {",
+                  "  pm.expect(body.expires_in).to.eql(30);",
+                  "});",
+                  "pm.test('disables response caching', () => {",
+                  "  pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store');",
+                  "});",
+                  "pm.collectionVariables.set('accessToken', body.access_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Token — client credentials with invalid secret",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic {{basicAuthInvalid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                }
+              ]
+            },
+            "description": "Wrong client secret must be rejected with `invalid_client` (RFC 6749 Section 5.2) and a `WWW-Authenticate: Basic` header."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.collectionVariables.set('basicAuthInvalid', btoa(`${pm.collectionVariables.get('clientId')}:wrong-secret`));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 401', () => pm.response.to.have.status(401));",
+                  "pm.test('returns invalid_client error', () => {",
+                  "  pm.expect(pm.response.json().error).to.eql('invalid_client');",
+                  "});",
+                  "pm.test('challenges for basic auth', () => {",
+                  "  pm.expect(pm.response.headers.get('WWW-Authenticate')).to.eql('Basic');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Token — client credentials with unauthorized scope",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic {{basicAuth}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                },
+                {
+                  "key": "scope",
+                  "value": "users:write"
+                }
+              ]
+            },
+            "description": "Requesting a scope the client is not registered for must fail with `invalid_scope`."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.collectionVariables.set('basicAuth', btoa(`${pm.collectionVariables.get('clientId')}:${pm.collectionVariables.get('clientSecret')}`));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 400', () => pm.response.to.have.status(400));",
+                  "pm.test('returns invalid_scope error', () => {",
+                  "  pm.expect(pm.response.json().error).to.eql('invalid_scope');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Token — unsupported grant type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "urn:ietf:params:oauth:grant-type:device_code"
+                }
+              ]
+            },
+            "description": "Unknown grant types must be rejected with `unsupported_grant_type` (RFC 6749 Section 5.2)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 400', () => pm.response.to.have.status(400));",
+                  "pm.test('returns unsupported_grant_type error', () => {",
+                  "  pm.expect(pm.response.json().error).to.eql('unsupported_grant_type');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Token — missing grant type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": []
+            },
+            "description": "A request body without `grant_type` must fail with 422."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 422', () => pm.response.to.have.status(422));",
+                  "pm.test('returns invalid request error', () => {",
+                  "  pm.expect(pm.response.json().error).to.eql('invalid_request');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Token — password grant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                },
+                {
+                  "key": "username",
+                  "value": "{{e2eUserEmail}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{e2ePassword}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "users:read"
+                }
+              ]
+            },
+            "description": "Resource owner password credentials grant (RFC 6749 Section 4.3, deprecated). Validates the user against the user-service mock and issues an access + refresh token pair. The test scripts store both tokens."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns access and refresh tokens', () => {",
+                  "  pm.expect(body.access_token).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.refresh_token).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.expires_in).to.eql(3600);",
+                  "});",
+                  "pm.test('marks the grant as deprecated', () => {",
+                  "  pm.expect(pm.response.headers.get('Warning')).to.include('299');",
+                  "});",
+                  "pm.collectionVariables.set('accessToken', body.access_token);",
+                  "pm.collectionVariables.set('refreshToken', body.refresh_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Token — password grant with wrong password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                },
+                {
+                  "key": "username",
+                  "value": "{{e2eUserEmail}}"
+                },
+                {
+                  "key": "password",
+                  "value": "definitely-wrong"
+                }
+              ]
+            },
+            "description": "Wrong credentials must yield a generic 401 that does not leak whether the user exists."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 401', () => pm.response.to.have.status(401));",
+                  "pm.test('returns generic unauthorized error', () => {",
+                  "  pm.expect(pm.response.json().error).to.eql('Unauthorized');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Token — refresh token grant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "refresh_token"
+                },
+                {
+                  "key": "refresh_token",
+                  "value": "{{refreshToken}}"
+                }
+              ]
+            },
+            "description": "Refresh token grant (RFC 6749 Section 6) with rotation: the old refresh token is consumed and a new pair is issued. The test scripts store the rotated tokens."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns a rotated token pair', () => {",
+                  "  pm.expect(body.access_token).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.refresh_token).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.refresh_token).to.not.eql(pm.collectionVariables.get('refreshToken'));",
+                  "});",
+                  "// Snapshot the just-consumed (pre-rotation) token before overwriting",
+                  "// the variable, so the follow-up request can prove single-use rotation.",
+                  "pm.collectionVariables.set('consumedRefreshToken', pm.collectionVariables.get('refreshToken'));",
+                  "pm.collectionVariables.set('accessToken', body.access_token);",
+                  "pm.collectionVariables.set('refreshToken', body.refresh_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Token — reuse of consumed refresh token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "refresh_token"
+                },
+                {
+                  "key": "refresh_token",
+                  "value": "{{consumedRefreshToken}}"
+                }
+              ]
+            },
+            "description": "Refresh token rotation is single-use: replaying the consumed password-grant token must fail with 404 (token not found). The refresh grant's test script snapshots the pre-rotation token into `consumedRefreshToken`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 404', () => pm.response.to.have.status(404));",
+                  "pm.test('reports the token as not found', () => {",
+                  "  pm.expect(pm.response.json().error).to.include('not found');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Authorize (PKCE)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/authorize?response_type=code&client_id={{clientId}}&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcallback&scope=users%3Aread&state=e2e-state&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "authorize"
+              ],
+              "query": [
+                {
+                  "key": "response_type",
+                  "value": "code"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{clientId}}"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "https://client.example.com/callback"
+                },
+                {
+                  "key": "scope",
+                  "value": "users:read"
+                },
+                {
+                  "key": "state",
+                  "value": "e2e-state"
+                },
+                {
+                  "key": "code_challenge",
+                  "value": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+                },
+                {
+                  "key": "code_challenge_method",
+                  "value": "S256"
+                }
+              ]
+            },
+            "description": "Authorization endpoint (RFC 6749 Section 4.1.1) with PKCE (RFC 7636). The bearer token identifies the resource owner (the sub of the current access token, resolved via the user-service mock). Returns 302 with the code and state on the registered redirect URI. The test script stores the authorization code."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 302 redirect', () => pm.response.to.have.status(302));",
+                  "const location = pm.response.headers.get('Location');",
+                  "pm.test('redirects to the registered URI with code and state', () => {",
+                  "  pm.expect(location).to.match(/^https:\\/\\/client\\.example\\.com\\/callback\\?/);",
+                  "  pm.expect(location).to.include('state=e2e-state');",
+                  "  pm.expect(location).to.match(/code=[^&]+/);",
+                  "});",
+                  "// Newman's sandbox has no URL global — extract the code with a regex.",
+                  "const codeMatch = location ? location.match(/[?&]code=([^&]+)/) : null;",
+                  "if (codeMatch) {",
+                  "  pm.collectionVariables.set('authCode', codeMatch[1]);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Authorize — unsupported response type",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/authorize?response_type=token&client_id={{clientId}}&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcallback",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "authorize"
+              ],
+              "query": [
+                {
+                  "key": "response_type",
+                  "value": "token"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{clientId}}"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "https://client.example.com/callback"
+                }
+              ]
+            },
+            "description": "Only the `code` response type is supported; implicit flow must be rejected."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 400', () => pm.response.to.have.status(400));",
+                  "pm.test('returns unsupported response type error', () => {",
+                  "  pm.expect(pm.response.json().error).to.include('Unsupported response type');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Token — authorization code with PKCE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "authorization_code"
+                },
+                {
+                  "key": "code",
+                  "value": "{{authCode}}"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "https://client.example.com/callback"
+                },
+                {
+                  "key": "code_verifier",
+                  "value": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+                }
+              ]
+            },
+            "description": "Authorization code grant (RFC 6749 Section 4.1.3) with PKCE verification (RFC 7636 Section 4.6). Codes are single-use. The test script stores the new tokens."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns tokens for the exchanged code', () => {",
+                  "  pm.expect(body.access_token).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.refresh_token).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.scope).to.eql('users:read');",
+                  "});",
+                  "pm.collectionVariables.set('accessToken', body.access_token);",
+                  "pm.collectionVariables.set('refreshToken', body.refresh_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Token — reuse of consumed authorization code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "authorization_code"
+                },
+                {
+                  "key": "code",
+                  "value": "{{authCode}}"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "https://client.example.com/callback"
+                },
+                {
+                  "key": "code_verifier",
+                  "value": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+                }
+              ]
+            },
+            "description": "Authorization codes are single-use per RFC 6749 Section 4.1.2; replaying the exchanged code must fail with `invalid_grant`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 400', () => pm.response.to.have.status(400));",
+                  "pm.test('returns invalid_grant error', () => {",
+                  "  pm.expect(pm.response.json().error).to.eql('invalid_grant');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Revoke",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/revoke",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "revoke"
+              ]
+            },
+            "description": "Revokes the bearer token (RFC 7009-style semantics): deletes the token record so the token can no longer be used."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Revoke — missing bearer token",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/revoke",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "revoke"
+              ]
+            },
+            "description": "Requests without an Authorization header are rejected immediately with 403 (no query-parameter fallback)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Revoke — revoked token no longer accepted",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{revokedAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/revoke",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "revoke"
+              ]
+            },
+            "description": "Revocation deletes the token record (the JWT is blacklisted), so using the same token again is rejected as unauthenticated. The prerequest script snapshots the token that the previous request revoked."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.collectionVariables.set('revokedAccessToken', pm.collectionVariables.get('accessToken'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 403', () => pm.response.to.have.status(403));",
+                  "pm.test('rejects the revoked token as unauthenticated', () => {",
+                  "  pm.expect(pm.response.json().error).to.include('Not authenticated');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "clientId",
+      "value": "user-service",
+      "type": "string"
+    },
+    {
+      "key": "clientSecret",
+      "value": "client-secret",
+      "type": "string"
+    },
+    {
+      "key": "e2eUserEmail",
+      "value": "root@example.com",
+      "type": "string"
+    },
+    {
+      "key": "e2ePassword",
+      "value": "e2e-password",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "authCode",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "basicAuth",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "basicAuthInvalid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "consumedRefreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "revokedAccessToken",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

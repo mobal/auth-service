@@ -1,5 +1,5 @@
 import uuid
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 
 import jwt
 import pytest
@@ -108,7 +108,7 @@ class TestJWTAuth:
     ):
         empty_request.headers = {"Authorization": "Bearer asdf"}
 
-        jwt_bearer = JWTBearer(auto_error=False)
+        jwt_bearer = JWTBearer(token_service=MagicMock(), auto_error=False)
 
         result = jwt_bearer(empty_request)
 
@@ -129,7 +129,7 @@ class TestJWTAuth:
         self, empty_request: Mock, jwt_bearer: JWTBearer
     ):
         empty_request.headers = {"Authorization": "Bearer "}
-        jwt_bearer = JWTBearer(auto_error=False)
+        jwt_bearer = JWTBearer(token_service=MagicMock(), auto_error=False)
 
         assert jwt_bearer(empty_request) is None
 
@@ -177,14 +177,14 @@ class TestJWTAuth:
         empty_request.headers = {
             "Authorization": f"Bear {jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret)}"
         }
-        jwt_bearer = JWTBearer(auto_error=False)
+        jwt_bearer = JWTBearer(token_service=MagicMock(), auto_error=False)
 
         assert jwt_bearer(empty_request) is None
 
     def test_fail_to_authorize_request_due_to_missing_credentials(
         self, empty_request: Mock
     ):
-        jwt_bearer = JWTBearer()
+        jwt_bearer = JWTBearer(token_service=MagicMock())
 
         with pytest.raises(HTTPException) as excinfo:
             jwt_bearer(empty_request)
@@ -195,7 +195,7 @@ class TestJWTAuth:
     def test_fail_to_authorize_request_due_to_missing_credentials_with_auto_error_false(
         self, empty_request: Mock
     ):
-        jwt_bearer = JWTBearer(auto_error=False)
+        jwt_bearer = JWTBearer(token_service=MagicMock(), auto_error=False)
         result = jwt_bearer(empty_request)
 
         assert result is None
@@ -216,30 +216,6 @@ class TestJWTAuth:
         )
 
         result = jwt_bearer(valid_request)
-
-        assert jwt_token.model_dump() == result.model_dump()
-        token_service.get_by_id.assert_called_once_with(jwt_token.jti)
-
-    def test_successfully_authorize_request_from_query_param(
-        self,
-        mocker,
-        empty_request: Request,
-        jwt_bearer: JWTBearer,
-        jwt_token: JWTToken,
-        refresh_token: RefreshToken,
-        settings: Settings,
-        token_service: TokenService,
-    ):
-        mocker.patch.object(
-            TokenService,
-            "get_by_id",
-            return_value=(jwt_token, refresh_token.token, jwt_token.exp),
-        )
-        empty_request.query_params = {
-            "token": f"{jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret)}"
-        }
-
-        result = jwt_bearer(empty_request)
 
         assert jwt_token.model_dump() == result.model_dump()
         token_service.get_by_id.assert_called_once_with(jwt_token.jti)

@@ -1,8 +1,8 @@
 import secrets
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import boto3
-import pendulum
 from aws_lambda_powertools import Logger
 from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
@@ -12,7 +12,7 @@ from app.models.authorization_code import AuthorizationCode
 
 
 class AuthorizationCodeRepository:
-    def __init__(self):
+    def __init__(self) -> None:
         self._logger = Logger()
         self._dynamodb = boto3.resource("dynamodb")
         self._table = self._dynamodb.Table(f"{settings.stage}-authorization_codes")
@@ -27,9 +27,9 @@ class AuthorizationCodeRepository:
         code_challenge_method: str | None = None,
     ) -> str:
         code = secrets.token_urlsafe(32)
-        now = pendulum.now("UTC")
-        expire_at = now.add(minutes=10)
-        ttl = expire_at.int_timestamp
+        now = datetime.now(UTC)
+        expire_at = now + timedelta(minutes=10)
+        ttl = int(expire_at.timestamp())
 
         try:
             self._table.put_item(
@@ -42,8 +42,8 @@ class AuthorizationCodeRepository:
                     "scope": scope,
                     "code_challenge": code_challenge,
                     "code_challenge_method": code_challenge_method,
-                    "created_at": now.to_iso8601_string(),
-                    "expire_at": expire_at.to_iso8601_string(),
+                    "created_at": now.isoformat(),
+                    "expire_at": expire_at.isoformat(),
                     "ttl": ttl,
                 }
             )
@@ -60,32 +60,28 @@ class AuthorizationCodeRepository:
         )
         return code
 
-    def delete_by_id(self, authorization_code_id: str) -> None:
+    def delete_by_id(self, item_id: str) -> None:
         try:
-            self._table.delete_item(Key={"id": authorization_code_id})
+            self._table.delete_item(Key={"id": item_id})
         except ClientError:
-            self._logger.exception(
-                "Failed to delete authorization code %s", authorization_code_id
-            )
+            self._logger.exception("Failed to delete authorization code %s", item_id)
             raise
-        self._logger.info("Deleted authorization code %s", authorization_code_id)
+        self._logger.info("Deleted authorization code %s", item_id)
 
-    def consume_by_id(self, authorization_code_id: str) -> bool:
+    def consume_by_id(self, item_id: str) -> bool:
         try:
             self._table.update_item(
-                Key={"id": authorization_code_id},
+                Key={"id": item_id},
                 UpdateExpression="SET #c = :val",
                 ConditionExpression=Attr("id").exists() & Attr("consumed").not_exists(),
                 ExpressionAttributeNames={"#c": "consumed"},
                 ExpressionAttributeValues={":val": True},
             )
-            self._logger.info("Consumed authorization code %s", authorization_code_id)
+            self._logger.info("Consumed authorization code %s", item_id)
             return True
         except ClientError as e:
             if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
-                self._logger.warning(
-                    "Authorization code already consumed %s", authorization_code_id
-                )
+                self._logger.warning("Authorization code already consumed %s", item_id)
                 return False
             raise
 

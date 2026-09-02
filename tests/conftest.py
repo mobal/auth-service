@@ -1,10 +1,11 @@
 import os
 import secrets
+import time
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 import boto3
-import pendulum
 import pytest
 from argon2 import PasswordHasher
 from moto import mock_aws
@@ -78,7 +79,7 @@ def settings() -> Settings:
         default_timezone=os.getenv("DEFAULT_TIMEZONE"),
         aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
         aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-        stage=os.getenv("STAGE"),
+        stage=os.getenv("STAGE", "test"),
         jwt_token_lifetime=3600,
     )
 
@@ -155,7 +156,7 @@ def initialize_services_table(
                 os.getenv("SERVICE_TOKEN_SECRET", "test-service-token-secret")
             ),
             "scopes": ["users:read"],
-            "created_at": pendulum.now().to_iso8601_string(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
     )
 
@@ -188,8 +189,8 @@ def initialize_tokens_table(
             "jti": jwt_token.jti,
             "jwt_token": jwt_token.model_dump(),
             "refresh_token": refresh_token.token,
-            "created_at": pendulum.from_timestamp(jwt_token.iat).to_iso8601_string(),
-            "expire_at": pendulum.from_timestamp(refresh_token.ttl).to_iso8601_string(),
+            "created_at": datetime.fromtimestamp(jwt_token.iat, tz=UTC).isoformat(),
+            "expire_at": datetime.fromtimestamp(refresh_token.ttl, tz=UTC).isoformat(),
             "ttl": refresh_token.ttl,
         }
     )
@@ -212,13 +213,14 @@ def user_data(user_id: str) -> dict:
 
 
 @pytest.fixture
-def jwt_token() -> JWTToken:
-    iat = pendulum.now()
-    exp = iat.add(hours=1)
+def jwt_token(settings: Settings) -> JWTToken:
+    iat = int(time.time())
+    exp = iat + 3600
     return JWTToken(
-        exp=exp.int_timestamp,
-        iat=iat.int_timestamp,
-        iss=None,
+        exp=exp,
+        iat=iat,
+        iss=settings.app_name,
+        aud=settings.app_name,
         jti=str(uuid.uuid4()),
         sub=str(uuid.uuid4()),
         scope="tokens:revoke users:read users:write",
@@ -226,13 +228,14 @@ def jwt_token() -> JWTToken:
 
 
 @pytest.fixture
-def expired_jwt_token() -> JWTToken:
-    iat = pendulum.now().subtract(days=2)
-    exp = iat.add(hours=1)
+def expired_jwt_token(settings: Settings) -> JWTToken:
+    iat = int(time.time()) - 2 * 86400
+    exp = iat + 3600
     return JWTToken(
-        exp=exp.int_timestamp,
-        iat=iat.int_timestamp,
-        iss=None,
+        exp=exp,
+        iat=iat,
+        iss=settings.app_name,
+        aud=settings.app_name,
         jti=str(uuid.uuid4()),
         sub=str(uuid.uuid4()),
         scope="tokens:revoke users:read",
@@ -240,13 +243,14 @@ def expired_jwt_token() -> JWTToken:
 
 
 @pytest.fixture
-def jwt_token_no_scope() -> JWTToken:
-    iat = pendulum.now()
-    exp = iat.add(hours=1)
+def jwt_token_no_scope(settings: Settings) -> JWTToken:
+    iat = int(time.time())
+    exp = iat + 3600
     return JWTToken(
-        exp=exp.int_timestamp,
-        iat=iat.int_timestamp,
-        iss=None,
+        exp=exp,
+        iat=iat,
+        iss=settings.app_name,
+        aud=settings.app_name,
         jti=str(uuid.uuid4()),
         sub=str(uuid.uuid4()),
         scope=None,
@@ -254,13 +258,14 @@ def jwt_token_no_scope() -> JWTToken:
 
 
 @pytest.fixture
-def jwt_token_empty_sub() -> JWTToken:
-    iat = pendulum.now()
-    exp = iat.add(hours=1)
+def jwt_token_empty_sub(settings: Settings) -> JWTToken:
+    iat = int(time.time())
+    exp = iat + 3600
     return JWTToken(
-        exp=exp.int_timestamp,
-        iat=iat.int_timestamp,
-        iss=None,
+        exp=exp,
+        iat=iat,
+        iss=settings.app_name,
+        aud=settings.app_name,
         jti=str(uuid.uuid4()),
         sub="",
         scope="tokens:revoke",
@@ -282,7 +287,7 @@ def password() -> str:
 def refresh_token() -> RefreshToken:
     return RefreshToken(
         token=secrets.token_hex(16),
-        ttl=pendulum.now().add(days=30).int_timestamp,
+        ttl=int(time.time()) + 30 * 86400,
     )
 
 
@@ -294,7 +299,7 @@ def service_credential_dict(
         "name": "test-service",
         "secret": fast_password_hasher.hash(password),
         "scopes": ["users:read", "users:write"],
-        "created_at": pendulum.now().to_iso8601_string(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
 
 

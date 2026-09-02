@@ -33,14 +33,14 @@ class HTTPBearer(FastAPIHTTPBearer):
 
         if authorization is not None:
             return self._get_authorization_credentials_from_header(authorization)
-        else:
-            logger.info(
-                "Missing authentication header, attempt to use token query param"
+
+        if self._auto_error:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=ERROR_MESSAGE_NOT_AUTHENTICATED,
             )
 
-            return self._get_authorization_credentials_from_token(
-                request.query_params.get("token")
-            )
+        return None
 
     def _get_authorization_credentials_from_header(
         self, authorization: str
@@ -69,30 +69,12 @@ class HTTPBearer(FastAPIHTTPBearer):
 
         return HTTPAuthorizationCredentials(scheme=scheme, credentials=credentials)
 
-    def _get_authorization_credentials_from_token(
-        self, token: str | None
-    ) -> HTTPAuthorizationCredentials | None:
-        if not token:
-            logger.warning("Missing token in query parameter fallback")
-            if self._auto_error:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=ERROR_MESSAGE_NOT_AUTHENTICATED,
-                )
-            else:
-                return None
-
-        logger.debug("Using token from query parameter fallback")
-        return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
-
 
 class JWTBearer:
-    def __init__(
-        self, auto_error: bool = True, token_service: TokenService | None = None
-    ):
+    def __init__(self, token_service: TokenService, auto_error: bool = True):
+        self._token_service = token_service
         self._auto_error = auto_error
         self._http_bearer = HTTPBearer(auto_error=auto_error)
-        self._token_service = token_service
         logger.debug("JWTBearer initialized")
 
     def __call__(self, request: Request) -> JWTToken | None:
@@ -118,7 +100,13 @@ class JWTBearer:
     def _validate_token(self, token: str) -> JWTToken | None:
         try:
             decoded_token = JWTToken(
-                **jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+                **jwt.decode(
+                    token,
+                    settings.jwt_secret,
+                    algorithms=["HS256"],
+                    audience=settings.jwt_audience or settings.app_name,
+                    issuer=settings.jwt_issuer or settings.app_name,
+                )
             )
             if self._token_service.get_by_id(decoded_token.jti):
                 logger.debug(

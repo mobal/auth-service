@@ -7,7 +7,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from mangum import Mangum
-from starlette.middleware.exceptions import ExceptionMiddleware
 
 from app import settings
 from app.exceptions import OAuthException
@@ -24,7 +23,6 @@ app = FastAPI(
 )
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(GZipMiddleware)
-app.add_middleware(ExceptionMiddleware, handlers=app.exception_handlers)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
@@ -57,10 +55,6 @@ def oauth_exception_handler(request: Request, error: OAuthException) -> JSONResp
 @app.exception_handler(BotoCoreError)
 @app.exception_handler(Exception)
 def botocore_error_handler(request: Request, error: Exception) -> JSONResponse:
-    logger.error(
-        "Unhandled exception reached global exception handler",
-        extra={"path": request.url.path, "method": request.method},
-    )
     logger.exception(
         "Unhandled exception",
         extra={
@@ -99,7 +93,6 @@ def http_exception_handler(request: Request, error: HTTPException) -> JSONRespon
         "HTTP exception handled",
         extra={"status_code": error.status_code, "path": request.url.path},
     )
-    logger.exception(error)
 
     return JSONResponse(
         content=ErrorResponse(status=error.status_code, error=error.detail).model_dump(
@@ -118,7 +111,6 @@ def request_validation_error_handler(
         "Request validation error handled",
         extra={"path": request.url.path, "method": request.method},
     )
-    logger.exception(error)
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
 
     return JSONResponse(

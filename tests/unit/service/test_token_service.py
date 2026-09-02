@@ -1,6 +1,6 @@
+from datetime import UTC, datetime
 from typing import Any
 
-import pendulum
 import pytest
 
 from app.exceptions import TokenNotFoundException
@@ -48,10 +48,8 @@ class TestTokenService:
             {
                 "jti": jwt_token.jti,
                 "jwt_token": jwt_token.model_dump(),
-                "created_at": pendulum.from_timestamp(
-                    jwt_token.iat
-                ).to_iso8601_string(),
-                "expire_at": pendulum.from_timestamp(jwt_token.exp).to_iso8601_string(),
+                "created_at": datetime.fromtimestamp(jwt_token.iat, tz=UTC).isoformat(),
+                "expire_at": datetime.fromtimestamp(jwt_token.exp, tz=UTC).isoformat(),
                 "ttl": jwt_token.exp,
             }
         )
@@ -83,7 +81,7 @@ class TestTokenService:
         mocker.patch.object(
             TokenRepository,
             "delete_by_id",
-            return_value={"ResponseMetadata": {"HTTPStatusCode": 404}},
+            return_value=False,
         )
 
         with pytest.raises(TokenNotFoundException) as excinfo:
@@ -101,12 +99,12 @@ class TestTokenService:
         token_repository: TokenRepository,
         token_service: TokenService,
     ):
-        mocker.patch.object(TokenRepository, "consume_by_id", return_value=True)
+        mocker.patch.object(TokenRepository, "delete_by_id", return_value=True)
 
         result = token_service.consume_by_id(jwt_token.jti)
 
         assert result is True
-        token_repository.consume_by_id.assert_called_once_with(jwt_token.jti)
+        token_repository.delete_by_id.assert_called_once_with(jwt_token.jti)
 
     def test_consume_by_id_returns_false_when_token_not_found(
         self,
@@ -115,12 +113,12 @@ class TestTokenService:
         token_repository: TokenRepository,
         token_service: TokenService,
     ):
-        mocker.patch.object(TokenRepository, "consume_by_id", return_value=False)
+        mocker.patch.object(TokenRepository, "delete_by_id", return_value=False)
 
         result = token_service.consume_by_id(jwt_token.jti)
 
         assert result is False
-        token_repository.consume_by_id.assert_called_once_with(jwt_token.jti)
+        token_repository.delete_by_id.assert_called_once_with(jwt_token.jti)
 
     def test_successfully_get_token_by_id(
         self,

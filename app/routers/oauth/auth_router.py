@@ -28,6 +28,7 @@ router = APIRouter()
 ERROR_MESSAGE_INVALID_CLIENT = "Invalid client: missing or invalid Authorization header"
 ERROR_MESSAGE_UNSUPPORTED_GRANT_TYPE = "Unsupported grant type"
 ERROR_MESSAGE_UNSUPPORTED_RESPONSE_TYPE = "Unsupported response type"
+WARNING_PASSWORD_GRANT_DEPRECATED = '299 auth-service "The password grant type is deprecated per OAuth 2.1 (RFC 6749 Section 4.3). Migrate to the authorization code grant with PKCE."'
 
 
 def _parse_authorization_header(authorization: str | None) -> tuple[str, str]:
@@ -42,7 +43,7 @@ def _parse_authorization_header(authorization: str | None) -> tuple[str, str]:
         )
     try:
         decoded = base64.b64decode(authorization[6:], validate=True).decode()
-    except Exception:
+    except ValueError:
         logger.warning("Failed to decode Basic Authorization header")
         raise OAuthException(
             ERROR_MESSAGE_INVALID_CLIENT,
@@ -77,7 +78,8 @@ async def parse_oauth_token_request(request: Request) -> BaseGrantRequest:
     match grant_type:
         case None:
             raise OAuthException(
-                "Invalid request: grant_type is required",
+                "invalid_request",
+                "grant_type is required",
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
@@ -86,34 +88,42 @@ async def parse_oauth_token_request(request: Request) -> BaseGrantRequest:
                 return PasswordGrantRequest(**form)
             except ValidationError:
                 raise OAuthException(
-                    "Invalid request: username and password are required"
+                    "invalid_request", "username and password are required"
                 )
 
         case GrantType.REFRESH_TOKEN:
             try:
                 return RefreshTokenGrantRequest(**form)
             except ValidationError:
-                raise OAuthException("Invalid request: refresh_token is required")
+                raise OAuthException("invalid_request", "refresh_token is required")
 
         case GrantType.AUTHORIZATION_CODE:
             try:
                 return AuthorizationCodeGrantRequest(**form)
             except ValidationError:
                 raise OAuthException(
-                    "Invalid request: code and redirect_uri are required"
+                    "invalid_request", "code and redirect_uri are required"
                 )
 
         case GrantType.CLIENT_CREDENTIALS:
             return ClientCredentialsGrantRequest(**form)
 
         case _:
-            raise OAuthException(ERROR_MESSAGE_UNSUPPORTED_GRANT_TYPE)
+            # RFC 6749 Section 5.2: the `error` field must be a machine-readable
+            # code from the registered error-code registry.
+            raise OAuthException(
+                "unsupported_grant_type", ERROR_MESSAGE_UNSUPPORTED_GRANT_TYPE
+            )
 
 
 def _handle_password_grant(
     body: PasswordGrantRequest, auth_service: AuthService
 ) -> OAuthTokenResponse:
-    logger.info("Handling password grant")
+    logger.warning(
+        "Password grant used — this flow is deprecated per OAuth 2.1 (BCP). "
+        "Migrate clients to authorization code grant with PKCE.",
+        extra={"username": body.username},
+    )
 
     access_token, refresh_token, expires_in, scope = auth_service.login(
         body.username, body.password, body.scope
@@ -204,10 +214,17 @@ def token(
                 request, body, auth_service
             )
 
+    headers: dict[str, str] = {
+        "Cache-Control": "no-store",
+        "Pragma": "no-cache",
+    }
+    if isinstance(body, PasswordGrantRequest):
+        headers["Warning"] = WARNING_PASSWORD_GRANT_DEPRECATED
+
     return JSONResponse(
         content=token_response.model_dump(exclude_none=True),
         status_code=status.HTTP_200_OK,
-        headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+        headers=headers,
     )
 
 

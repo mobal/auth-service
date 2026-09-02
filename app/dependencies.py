@@ -7,10 +7,11 @@ mocks by passing them directly to the constructor.
 """
 
 from argon2 import PasswordHasher
-from fastapi import Depends
+from fastapi import Depends, Request
 
 from app.clients.user_service_client import UserServiceClient
 from app.jwt_bearer import JWTBearer
+from app.models.jwt import JWTToken
 from app.repositories.authorization_code_repository import (
     AuthorizationCodeRepository,
 )
@@ -65,6 +66,12 @@ def get_auth_service(
 
 
 def get_jwt_bearer(
+    request: Request,
     token_service: TokenService = Depends(get_token_service),
-) -> JWTBearer:
-    return JWTBearer(token_service=token_service)
+) -> JWTToken:
+    """Resolve the request's bearer token into a validated :class:`JWTToken`.
+
+    Returns the JWTBearer result (not the JWTBearer instance itself) so that
+    FastAPI injects the decoded token into route handlers.
+    """
+    return JWTBearer(token_service=token_service)(request)

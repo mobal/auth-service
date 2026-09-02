@@ -1,0 +1,12 @@
+{
+  "name": "Health check",
+  "request": {
+    "method": "GET",
+    "urlPath": "/health"
+  },
+  "response": {
+    "status": 200,
+    "jsonBody": { "status": "healthy" },
+    "headers": { "Content-Type": "application/json" }
+  }
+}

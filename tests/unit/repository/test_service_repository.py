@@ -1,6 +1,6 @@
 import uuid
+from datetime import UTC, datetime
 
-import pendulum
 import pytest
 from botocore.exceptions import ClientError
 
@@ -20,7 +20,7 @@ class TestServiceRepository:
             "id": service_credential.name,
             "secret": service_credential.secret,
             "scopes": service_credential.scopes,
-            "created_at": pendulum.now().to_iso8601_string(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
         service_repository.create_service(credential)
 
@@ -87,7 +87,7 @@ class TestServiceRepository:
                     "id": str(uuid.uuid4()),
                     "secret": service_credential.secret,
                     "scopes": service_credential.scopes,
-                    "created_at": pendulum.now().to_iso8601_string(),
+                    "created_at": datetime.now(UTC).isoformat(),
                 }
             )
 
@@ -156,7 +156,7 @@ class TestServiceRepository:
             "name": "test-empty-scopes",
             "secret": service_credential.secret,
             "scopes": [],
-            "created_at": pendulum.now().to_iso8601_string(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
         service_repository.create_service(credential)
 

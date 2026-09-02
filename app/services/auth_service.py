@@ -1,11 +1,11 @@
 import base64
 import hashlib
 import secrets
+import time
 import uuid
 from urllib.parse import urlparse, urlunparse
 
 import jwt
-import pendulum
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerifyMismatchError
 from aws_lambda_powertools import Logger
@@ -149,7 +149,7 @@ class AuthService:
             code_verifier,
             auth_code.code_challenge_method,
         )
-        if expected_challenge != auth_code.code_challenge:
+        if not secrets.compare_digest(expected_challenge, auth_code.code_challenge):
             self._logger.warning("PKCE challenge validation failed")
             raise OAuthException(
                 "invalid_grant", status_code=status.HTTP_400_BAD_REQUEST
@@ -166,23 +166,20 @@ class AuthService:
             sub,
             extra={"sub": sub, "has_scope": scope is not None},
         )
-        iat = pendulum.now()
-        exp = (
-            iat.add(seconds=settings.jwt_token_lifetime)
-            if exp is None
-            else iat.add(seconds=exp)
-        )
+        iat = int(time.time())
+        exp = iat + (settings.jwt_token_lifetime if exp is None else exp)
 
         return JWTToken(
-            exp=exp.int_timestamp,
-            iat=iat.int_timestamp,
-            iss=settings.jwt_issuer if settings.jwt_issuer else None,
+            exp=exp,
+            iat=iat,
+            iss=settings.jwt_issuer if settings.jwt_issuer else settings.app_name,
+            aud=settings.jwt_audience if settings.jwt_audience else settings.app_name,
             jti=str(uuid.uuid4()),
             sub=sub,
             scope=scope,
         )
 
-    def _generate_refresh_token(self, length: int = 32):
+    def _generate_refresh_token(self, length: int = 32) -> str:
         self._logger.debug(
             "Generating refresh token",
             extra={"token_length_bytes": length},
@@ -209,7 +206,7 @@ class AuthService:
 
         return jwt_token, refresh_token
 
-    def _revoke_token(self, jwt_token: JWTToken):
+    def _revoke_token(self, jwt_token: JWTToken) -> None:
         self._logger.info(
             "Revoking token with jti=%s",
             jwt_token.jti,
@@ -221,7 +218,7 @@ class AuthService:
         self, client_name: str, client_secret: str, scope: str | None = None
     ) -> JWTToken:
         if self._user_service_token is not None:
-            remaining = self._user_service_token.exp - pendulum.now().int_timestamp
+            remaining = self._user_service_token.exp - int(time.time())
             # Cache with a safety buffer: refresh when less than 20% of lifetime remains
             # or at most 60s before expiry, to reduce the window for serving revoked tokens
             safety_buffer = max(settings.service_token_lifetime_seconds // 5, 60)
@@ -241,9 +238,19 @@ class AuthService:
     def login(
         self, email: str, password: str, requested_scope: str | None = None
     ) -> tuple[str, str, int, str | None]:
-        self._logger.info(
-            "Login requested",
-            extra={"requested_scope": requested_scope},
+        # ⚠️  SECURITY NOTICE — Password Grant (RFC 6749 Section 4.3)
+        #
+        # This flow exposes the resource owner's credentials to the client,
+        # which violates OAuth 2.1 best practices.  It SHOULD only be used
+        # when the client is the resource owner (e.g. a first-party app)
+        # and no other grant type is feasible.
+        #
+        # Deprecation plan:  Remove this flow once all clients have migrated
+        # to the authorization code grant with PKCE.
+        self._logger.warning(
+            "Password grant login invoked — this flow is deprecated per OAuth 2.1 (BCP). "
+            "Migrate to authorization code grant with PKCE.",
+            extra={"email": email, "requested_scope": requested_scope},
         )
         service_token = self._issue_service_token(
             settings.app_name, settings.client_secret
@@ -286,7 +293,7 @@ class AuthService:
             scope,
         )
 
-    def logout(self, jwt_token: JWTToken):
+    def logout(self, jwt_token: JWTToken) -> None:
         self._logger.info("Logout requested for jti=%s", jwt_token.jti)
         self._revoke_token(jwt_token)
 
@@ -300,7 +307,7 @@ class AuthService:
 
         jwt_token, _, ttl = item
 
-        if ttl < pendulum.now().int_timestamp:
+        if ttl < int(time.time()):
             self._logger.warning(
                 "Refresh token expired",
                 extra={"jti": jwt_token.jti},
@@ -502,7 +509,7 @@ class AuthService:
     ) -> tuple[str, str, int, str | None]:
         self._logger.info("Authorization code exchange requested")
         auth_code = self._authorization_code_repository.get_by_code(code)
-        now = pendulum.now().int_timestamp
+        now = int(time.time())
 
         if auth_code is None:
             self._logger.warning("Authorization code exchange failed, code not found")

@@ -1,0 +1,13 @@
+{
+  "name": "Find user by unknown email",
+  "priority": 2,
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/v1/users"
+  },
+  "response": {
+    "status": 404,
+    "jsonBody": { "detail": "not found" },
+    "headers": { "Content-Type": "application/json" }
+  }
+}
