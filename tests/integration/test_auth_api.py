@@ -177,7 +177,8 @@ class TestAuthApi:
         response = test_client.post(token_url, data={"grant_type": "refresh_token"})
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.json()["error"] == "Invalid request: refresh_token is required"
+        assert response.json()["error"] == "invalid_request"
+        assert response.json()["error_description"] == "refresh_token is required"
 
     def test_fail_to_refresh_due_to_refresh_token_not_found(
         self,
@@ -316,9 +317,9 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.json()["error"] == "invalid_request"
         assert (
-            response.json()["error"]
-            == "Invalid request: username and password are required"
+            response.json()["error_description"] == "username and password are required"
         )
 
     def test_fail_to_token_due_to_unsupported_grant_type(
@@ -330,7 +331,8 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.json()["error"] == "Unsupported grant type"
+        assert response.json()["error"] == "unsupported_grant_type"
+        assert response.json()["error_description"] == "Unsupported grant type"
 
     def test_fail_to_authorization_code_exchange_due_to_missing_code(
         self, token_url: str, test_client: TestClient
@@ -344,9 +346,9 @@ class TestAuthApi:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.json()["error"] == "invalid_request"
         assert (
-            response.json()["error"]
-            == "Invalid request: code and redirect_uri are required"
+            response.json()["error_description"] == "code and redirect_uri are required"
         )
 
     def test_successfully_authorization_code_exchange(
@@ -439,6 +441,45 @@ class TestAuthApi:
         assert location.startswith("https://example.com/callback?")
         assert "code=" in location
         assert "state=xyz123" in location
+
+    def test_revoke_with_real_jwt_bearer_dependency(
+        self,
+        jwt_token: JWTToken,
+        refresh_token: RefreshToken,
+        jwt_secret_ssm_param_value: str,
+        revoke_url: str,
+        test_client: TestClient,
+        tokens_table,
+    ):
+        from datetime import datetime
+
+        from app.api_handler import app
+        from app.dependencies import get_jwt_bearer
+
+        # Regression: get_jwt_bearer must inject a validated JWTToken into the
+        # route handler, not the JWTBearer instance itself (which caused a 500
+        # on /oauth/revoke and /oauth/authorize in production wiring).
+        app.dependency_overrides.pop(get_jwt_bearer, None)
+
+        tokens_table.put_item(
+            Item={
+                "jti": jwt_token.jti,
+                "jwt_token": jwt_token.model_dump(),
+                "refresh_token": refresh_token.token,
+                "created_at": datetime.fromtimestamp(jwt_token.iat, tz=UTC).isoformat(),
+                "expire_at": datetime.fromtimestamp(
+                    refresh_token.ttl, tz=UTC
+                ).isoformat(),
+                "ttl": refresh_token.ttl,
+            }
+        )
+
+        response = test_client.post(
+            revoke_url,
+            headers=self._auth_header(jwt_token, jwt_secret_ssm_param_value),
+        )
+
+        assert response.status_code == status.HTTP_200_OK
 
     def test_fail_to_authorize_due_to_invalid_response_type(
         self,

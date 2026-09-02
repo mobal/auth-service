@@ -78,7 +78,8 @@ async def parse_oauth_token_request(request: Request) -> BaseGrantRequest:
     match grant_type:
         case None:
             raise OAuthException(
-                "Invalid request: grant_type is required",
+                "invalid_request",
+                "grant_type is required",
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
@@ -87,28 +88,32 @@ async def parse_oauth_token_request(request: Request) -> BaseGrantRequest:
                 return PasswordGrantRequest(**form)
             except ValidationError:
                 raise OAuthException(
-                    "Invalid request: username and password are required"
+                    "invalid_request", "username and password are required"
                 )
 
         case GrantType.REFRESH_TOKEN:
             try:
                 return RefreshTokenGrantRequest(**form)
             except ValidationError:
-                raise OAuthException("Invalid request: refresh_token is required")
+                raise OAuthException("invalid_request", "refresh_token is required")
 
         case GrantType.AUTHORIZATION_CODE:
             try:
                 return AuthorizationCodeGrantRequest(**form)
             except ValidationError:
                 raise OAuthException(
-                    "Invalid request: code and redirect_uri are required"
+                    "invalid_request", "code and redirect_uri are required"
                 )
 
         case GrantType.CLIENT_CREDENTIALS:
             return ClientCredentialsGrantRequest(**form)
 
         case _:
-            raise OAuthException(ERROR_MESSAGE_UNSUPPORTED_GRANT_TYPE)
+            # RFC 6749 Section 5.2: the `error` field must be a machine-readable
+            # code from the registered error-code registry.
+            raise OAuthException(
+                "unsupported_grant_type", ERROR_MESSAGE_UNSUPPORTED_GRANT_TYPE
+            )
 
 
 def _handle_password_grant(
