@@ -213,14 +213,14 @@ def user_data(user_id: str) -> dict:
 
 
 @pytest.fixture
-def jwt_token() -> JWTToken:
+def jwt_token(settings: Settings) -> JWTToken:
     iat = int(time.time())
     exp = iat + 3600
     return JWTToken(
         exp=exp,
         iat=iat,
-        iss="dev-auth-service",
-        aud="dev-auth-service",
+        iss=settings.app_name,
+        aud=settings.app_name,
         jti=str(uuid.uuid4()),
         sub=str(uuid.uuid4()),
         scope="tokens:revoke users:read users:write",
@@ -228,14 +228,14 @@ def jwt_token() -> JWTToken:
 
 
 @pytest.fixture
-def expired_jwt_token() -> JWTToken:
+def expired_jwt_token(settings: Settings) -> JWTToken:
     iat = int(time.time()) - 2 * 86400
     exp = iat + 3600
     return JWTToken(
         exp=exp,
         iat=iat,
-        iss="dev-auth-service",
-        aud="dev-auth-service",
+        iss=settings.app_name,
+        aud=settings.app_name,
         jti=str(uuid.uuid4()),
         sub=str(uuid.uuid4()),
         scope="tokens:revoke users:read",
@@ -243,14 +243,14 @@ def expired_jwt_token() -> JWTToken:
 
 
 @pytest.fixture
-def jwt_token_no_scope() -> JWTToken:
+def jwt_token_no_scope(settings: Settings) -> JWTToken:
     iat = int(time.time())
     exp = iat + 3600
     return JWTToken(
         exp=exp,
         iat=iat,
-        iss="dev-auth-service",
-        aud="dev-auth-service",
+        iss=settings.app_name,
+        aud=settings.app_name,
         jti=str(uuid.uuid4()),
         sub=str(uuid.uuid4()),
         scope=None,
@@ -258,14 +258,14 @@ def jwt_token_no_scope() -> JWTToken:
 
 
 @pytest.fixture
-def jwt_token_empty_sub() -> JWTToken:
+def jwt_token_empty_sub(settings: Settings) -> JWTToken:
     iat = int(time.time())
     exp = iat + 3600
     return JWTToken(
         exp=exp,
         iat=iat,
-        iss="dev-auth-service",
-        aud="dev-auth-service",
+        iss=settings.app_name,
+        aud=settings.app_name,
         jti=str(uuid.uuid4()),
         sub="",
         scope="tokens:revoke",
