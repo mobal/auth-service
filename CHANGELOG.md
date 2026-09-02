@@ -1,5 +1,91 @@
 # Changelog
 
+## [0.9.0](https://github.com/mobal/auth-service/compare/v0.8.0...v0.9.0) (2026-09-02)
+
+
+### Features
+
+* add docstrings on models explaining OAuth2 value contracts ([5e1786d](https://github.com/mobal/auth-service/commit/5e1786db11ca780efb65259c4276808f411fbe77))
+* **test:** add more user service tests ([6a4d90e](https://github.com/mobal/auth-service/commit/6a4d90e1a6989b7f63a41d042215171429534c5b))
+* updated README.md ([f1c7303](https://github.com/mobal/auth-service/commit/f1c730361232424848843d38fdfc3d95bdbf76e5))
+* use user service validation endpoint instead of password hashing ([afa0f42](https://github.com/mobal/auth-service/commit/afa0f42abc5567f02f1ace081be855427ebf02c8))
+
+
+### Bug Fixes
+
+* add ConditionExpression and ConsistentRead to service repository ([47981d5](https://github.com/mobal/auth-service/commit/47981d56418d7f90c6249016f450abb1405fbc45))
+* add list of allowed urls ([02b8803](https://github.com/mobal/auth-service/commit/02b88037c9ef92109f72b2044793648cfb7442b7))
+* add missing password hasher dep ([cfb08ec](https://github.com/mobal/auth-service/commit/cfb08ec402bc53d8842108d7e0fd1404724857ac))
+* add missing WWW-Authenticate headers on 401 responses ([6c02455](https://github.com/mobal/auth-service/commit/6c02455b5190aee059b6b8292ab96292e6ce26c3))
+* address code review findings ([e322c91](https://github.com/mobal/auth-service/commit/e322c9191f1fd7250dfad2e1e0b976742c45d588))
+* address critical RFC/security gaps for production readiness ([d27751f](https://github.com/mobal/auth-service/commit/d27751f59dc83cac1996cc444d1e8b67bddb11a0))
+* address test false positives and infrastructure issues ([38f7486](https://github.com/mobal/auth-service/commit/38f748622594b6e0510a3dfd789499130386cf76))
+* address test quality and edge-case coverage in unit and integration tests ([bfcf5bb](https://github.com/mobal/auth-service/commit/bfcf5bb170f0d8c4f16c953340efe5a69a1306a9))
+* **auth:** remove bearer token query parameter fallback ([55ed4e3](https://github.com/mobal/auth-service/commit/55ed4e3477d0cc88d32861b687194b95d935fb8a))
+* cache ssm parameters ([1db9be5](https://github.com/mobal/auth-service/commit/1db9be59938a2c0bb0ee6be03ef7cbd21d43a9e8))
+* check Attributes availability ([9133b9c](https://github.com/mobal/auth-service/commit/9133b9c2fee9290b38f6e626e297fd69ae183c41))
+* ContextVar without default ([29fd2f8](https://github.com/mobal/auth-service/commit/29fd2f88bfab73220c949f0ec8ec7e464e4155fe))
+* correlation ID pollution across requests in concurrent environments ([e4a642c](https://github.com/mobal/auth-service/commit/e4a642c6403895c00aea898ae1dc833b827c4b69))
+* CORS allows all origins ([92169cf](https://github.com/mobal/auth-service/commit/92169cfe7ef6da48e4ead5058e4e6489bb909755))
+* CORS allows all origins on an auth service ([32db926](https://github.com/mobal/auth-service/commit/32db9266860bbce7ea703e2efcd6f6aba1e58a11))
+* dead default in request.scope.get() ([55bb6c3](https://github.com/mobal/auth-service/commit/55bb6c35b8cdb031a7835f9f90d07124d9488212))
+* derive test JWT issuer from settings.app_name ([a346935](https://github.com/mobal/auth-service/commit/a3469353cd4c7d85d5536926cc6d08197b67048d))
+* disable log_event (do not leak tokens and other sensitive information) ([03e2083](https://github.com/mobal/auth-service/commit/03e2083d4d2ec545c445b334f2d3149889cefbdc))
+* duplicate ExceptionMiddleware ([dee7e81](https://github.com/mobal/auth-service/commit/dee7e81bb334a902973ff170257c69651284c370))
+* enable debug mode in non prod environment only ([c638ad2](https://github.com/mobal/auth-service/commit/c638ad2dbe7eb6c577fa3e5d718e00a9e7cfddf2))
+* env file loading order wrong ([40ab013](https://github.com/mobal/auth-service/commit/40ab01303a5e04ba0c6235ba4b8f10d77b3011db))
+* ErrorResponse timestamp evaluated at class time ([a400c2f](https://github.com/mobal/auth-service/commit/a400c2f78a19af8bbadb2dfdea542d929eca0627))
+* forbid extra parameters ([eaf72d7](https://github.com/mobal/auth-service/commit/eaf72d75187de8549a71f189a4280fc91f8bb1a4))
+* grant type accepts empty strings ([3101c87](https://github.com/mobal/auth-service/commit/3101c87728ec9f743bf935497a09a21b64883232))
+* imports (and removed accidentaly pushed review documents) ([31f1312](https://github.com/mobal/auth-service/commit/31f1312d04ed65e13be4f106e403e3e093ef909e))
+* incomplete PyJWT exception coverage ([6e4af56](https://github.com/mobal/auth-service/commit/6e4af5669d7cf9ce7c76a973cc4a41d517cff260))
+* inconsistent return types between get_by_id and get_by_refresh_token ([5f9e6ad](https://github.com/mobal/auth-service/commit/5f9e6ad8a1cba1cae101dc96bbae6c72672afbcf))
+* invalid qa ([f82d18d](https://github.com/mobal/auth-service/commit/f82d18d8accf5e480bedd712cd59d11f55f42d32))
+* **jwt:** add audience and issuer validation to token decode ([b7dc314](https://github.com/mobal/auth-service/commit/b7dc3143822114d2b8e69282b204317688f1f9d5))
+* linting ([6d3a4bb](https://github.com/mobal/auth-service/commit/6d3a4bb624728d30654289b7aa3e3ccf4d30ee03))
+* linting ([256a8db](https://github.com/mobal/auth-service/commit/256a8dbef14247d2da28f2647c4ba7d07ecb01f6))
+* logger initialized before env files ([fbe1440](https://github.com/mobal/auth-service/commit/fbe14407adb5388433d7f532605bfbbeda16e694))
+* lower requirements layer size ([3c28172](https://github.com/mobal/auth-service/commit/3c28172e7ae88d7d4e86f2fcfa99e34c215fa036))
+* make JWTBearer.token_service required and add missing TokenRepository.consume_by_id ([4c7a40e](https://github.com/mobal/auth-service/commit/4c7a40e3e98fbfa18ebdb09b0e410f835f46c55c))
+* misleading parameter name code_id in delete_by_id ([df0a74c](https://github.com/mobal/auth-service/commit/df0a74cfc87e22ba3b0987154528ea4143c53f2b))
+* misleading parameter name code_id in delete_by_id and consume_by_id ([54dae6d](https://github.com/mobal/auth-service/commit/54dae6de7fdf8eabc1f138b182666e99d1b94106))
+* missing return type annotations ([e70f906](https://github.com/mobal/auth-service/commit/e70f906b75605fd4cd5006addac59db9c4b87292))
+* missing return type annotations in repositories and auth_service ([a2824ec](https://github.com/mobal/auth-service/commit/a2824ec2f48b6111675fa2db84ae84e3685021d6))
+* no default for STAGE env var in settings fixture ([3ec170a](https://github.com/mobal/auth-service/commit/3ec170a55333b3d4dffa5bfa36bb1a8ee2035e0d))
+* overly broad except Exception in parse authorization header ([4bc1b60](https://github.com/mobal/auth-service/commit/4bc1b600d144a0639971f58939c5ba2d8529d339))
+* pydantic ValidationError in JWT token parsing ([aee9f3a](https://github.com/mobal/auth-service/commit/aee9f3a16e08df093fd04c45a47bd504a8c59b49))
+* redundant import pytest as pytest ([d98ae01](https://github.com/mobal/auth-service/commit/d98ae019f722e2e0abd3668ad1aef38061941645))
+* refresh token reuse ([54152c2](https://github.com/mobal/auth-service/commit/54152c27b421aba40d530da8f85055ea37e9a13f))
+* remove duplicate logging and exception-level logging for expected client errors ([5b77a23](https://github.com/mobal/auth-service/commit/5b77a23006cb2961374e54e339ed3589b3b3a99a))
+* removed the unused clients: dict[str, Any] = {} global and its now-unnecessary from typing import Any import ([9bb9126](https://github.com/mobal/auth-service/commit/9bb912619385913d2d27d613d7689f3623dab459))
+* replaced every f-string logger call across the 10 affected files in app/ with lazy %s formatting, so log messages are only formatted when the respective log level is enabled ([147355a](https://github.com/mobal/auth-service/commit/147355a7a5e532fdbaab1832fdb258320dc8cfff))
+* replaced f string to templates in logging ([871eee3](https://github.com/mobal/auth-service/commit/871eee35bd3f358d45327dc0361498cd2f9687a2))
+* return RFC 6749 error codes and wire JWT bearer dependency ([4d0a29d](https://github.com/mobal/auth-service/commit/4d0a29d3c9da0722385656f6acb2e7cf4cc91ea0))
+* settings fixture missing jwt_token_lifetime, causing pre-existing test failures ([6c51868](https://github.com/mobal/auth-service/commit/6c518680a11d68b914bfbae84726cbae6b4bb915))
+* shared mutable state on JWTBearer ([e75b0d4](https://github.com/mobal/auth-service/commit/e75b0d49c07c536b45c42bdd8826081902520a92))
+* sindle use enforcement for authorization codes ([f73770b](https://github.com/mobal/auth-service/commit/f73770b60c343a2a45f5d22d1c333270f253d09b))
+* support list of string ([03b03ec](https://github.com/mobal/auth-service/commit/03b03ec45fd6ea5bd137783bfbfee6797260671d))
+* **tests:** align repository and service tests with actual API ([a85e7a9](https://github.com/mobal/auth-service/commit/a85e7a9b4b7ba005be25a984f32d4bfe5fb28ea2))
+* timezone inconsistency - use pendulum.now('UTC') consistently ([b9cea3f](https://github.com/mobal/auth-service/commit/b9cea3f74fe167890377669c3fe4cddda3fe2b6f))
+* timezone inconsistency in authorization code repository ([b0206b2](https://github.com/mobal/auth-service/commit/b0206b261088fc1f6417e43e2e9e9dd2a6cb56fc))
+* token can be None, causing AttributeError → 500 instead of 401 ([40efd49](https://github.com/mobal/auth-service/commit/40efd495c4b55e07555de6b940996eaf14f6a79a))
+* type mismatch os.environ.get() to get_parameter() ([9323380](https://github.com/mobal/auth-service/commit/932338021d44241ea9848dce8dca1fd19de9cbf0))
+* unnecessary round-trip conversion for expire_at ([b4346ea](https://github.com/mobal/auth-service/commit/b4346eabbbac7e5fc02bdfe1f95de832ec1bdfb0))
+* use constant-time comparison for PKCE challenge validation ([ecb9016](https://github.com/mobal/auth-service/commit/ecb9016cae2c2b44ff1d3f1dbbf7db61e7365f65))
+* use zip bytes for hash value ([717f890](https://github.com/mobal/auth-service/commit/717f89001bec3263f511658fac15392699954b51))
+* wrong OAuth error message for response type ([e22f8f7](https://github.com/mobal/auth-service/commit/e22f8f724013b1d738e6b45d9dab089c7ede1f76))
+
+
+### Documentation
+
+* actualize all review and audit reports to 2026-07-19 ([058336e](https://github.com/mobal/auth-service/commit/058336e79073a7fba2ecae7a7e92410ebb0c8786))
+* actualize review reports to reflect fixed findings ([1ddf83a](https://github.com/mobal/auth-service/commit/1ddf83a7502eebfe10462ffbf7caccc947a80c01))
+* add fix_priority.md ([cc53fd2](https://github.com/mobal/auth-service/commit/cc53fd2492b99e0fe34096502f7a637ec0f9bfa6))
+* consolidate review docs into single reference ([3400cf9](https://github.com/mobal/auth-service/commit/3400cf9f533f2ff8c8327b70243d3a3a419b008f))
+* fill in AGENTS.md project facts ([06cf632](https://github.com/mobal/auth-service/commit/06cf632edb8be1c01647d1dda841119f20d5c427))
+* move project reports and plans to docs/ directory ([81d25d9](https://github.com/mobal/auth-service/commit/81d25d9f8a4f418d6a62e774f1a8c0b1f8ed9738))
+* verify and update docs ([cc75b79](https://github.com/mobal/auth-service/commit/cc75b79f7c5275975a084d7ec7968939a623320b))
+
 ## [0.8.0](https://github.com/mobal/auth-service/compare/v0.7.0...v0.8.0) (2026-04-01)
 
 
