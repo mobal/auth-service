@@ -1,0 +1,19 @@
+{
+  "name": "Get e2e user by id",
+  "priority": 1,
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/v1/users/e2e-user"
+  },
+  "response": {
+    "status": 200,
+    "jsonBody": {
+      "id": "e2e-user",
+      "email": "root@example.com",
+      "username": "e2e-user",
+      "display_name": "E2E User",
+      "roles": ["root"]
+    },
+    "headers": { "Content-Type": "application/json" }
+  }
+}
