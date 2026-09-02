@@ -1,7 +1,7 @@
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
-import pendulum
 import pytest
 from botocore.exceptions import ClientError
 
@@ -22,8 +22,8 @@ class TestTokenRepository:
             "jti": jwt_token.jti,
             "jwt_token": jwt_token.model_dump(),
             "refresh_token": refresh_token.token,
-            "created_at": pendulum.now().to_iso8601_string(),
-            "expire_at": pendulum.from_timestamp(refresh_token.ttl).to_iso8601_string(),
+            "created_at": datetime.now(UTC).isoformat(),
+            "expire_at": datetime.fromtimestamp(refresh_token.ttl, tz=UTC).isoformat(),
             "ttl": refresh_token.ttl,
         }
         token_repository.create_token(token)
@@ -122,8 +122,8 @@ class TestTokenRepository:
             "jti": str(uuid.uuid4()),
             "jwt_token": jwt_token.model_dump(),
             "refresh_token": refresh_token.token,
-            "created_at": pendulum.now().to_iso8601_string(),
-            "expire_at": pendulum.from_timestamp(refresh_token.ttl).to_iso8601_string(),
+            "created_at": datetime.now(UTC).isoformat(),
+            "expire_at": datetime.fromtimestamp(refresh_token.ttl, tz=UTC).isoformat(),
             "ttl": refresh_token.ttl,
         }
         with pytest.raises(ClientError):

@@ -1,8 +1,8 @@
 import secrets
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import boto3
-import pendulum
 from aws_lambda_powertools import Logger
 from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
@@ -27,9 +27,9 @@ class AuthorizationCodeRepository:
         code_challenge_method: str | None = None,
     ) -> str:
         code = secrets.token_urlsafe(32)
-        now = pendulum.now("UTC")
-        expire_at = now.add(minutes=10)
-        ttl = expire_at.int_timestamp
+        now = datetime.now(UTC)
+        expire_at = now + timedelta(minutes=10)
+        ttl = int(expire_at.timestamp())
 
         try:
             self._table.put_item(
@@ -42,8 +42,8 @@ class AuthorizationCodeRepository:
                     "scope": scope,
                     "code_challenge": code_challenge,
                     "code_challenge_method": code_challenge_method,
-                    "created_at": now.to_iso8601_string(),
-                    "expire_at": expire_at.to_iso8601_string(),
+                    "created_at": now.isoformat(),
+                    "expire_at": expire_at.isoformat(),
                     "ttl": ttl,
                 }
             )

@@ -1,9 +1,10 @@
+import time
 import uuid
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import ANY
 
 import jwt
-import pendulum
 import pytest
 from argon2 import PasswordHasher
 from fastapi import HTTPException, status
@@ -39,7 +40,7 @@ class TestAuthService:
         patched_settings.user_service_base_url = settings.user_service_base_url
 
         monkeypatch.setattr("app.services.auth_service.settings", patched_settings)
-        now = pendulum.now().int_timestamp
+        now = int(time.time())
         service_token = JWTToken(
             exp=now + 3600,
             iat=now,
@@ -93,9 +94,7 @@ class TestAuthService:
         )
 
         assert decoded.sub == user_data["id"]
-        assert (
-            pendulum.from_timestamp(decoded.exp) - pendulum.from_timestamp(decoded.iat)
-        ).in_words() == "1 hour"
+        assert decoded.exp - decoded.iat == settings.jwt_token_lifetime
         auth_service._user_service_client.get_user_by_email.assert_called_once_with(
             user_data["email"], ANY
         )
@@ -234,7 +233,7 @@ class TestAuthService:
         token_service: TokenService,
     ):
         stored_jti = str(uuid.uuid4())
-        now = pendulum.now().int_timestamp
+        now = int(time.time())
         jwt_token_obj = JWTToken(exp=now, iat=now, jti=stored_jti, sub="user-1")
         mocker.patch.object(
             TokenService,
@@ -260,8 +259,8 @@ class TestAuthService:
     ):
         from app.exceptions import TokenExpiredException
 
-        expired_time = pendulum.now().subtract(days=1).int_timestamp
-        now = pendulum.now().int_timestamp
+        expired_time = int(time.time()) - 86400
+        now = int(time.time())
         jwt_token_obj = JWTToken(exp=now, iat=now, jti=str(uuid.uuid4()), sub="user-1")
         mocker.patch.object(
             TokenService,
@@ -285,7 +284,7 @@ class TestAuthService:
         refresh_token: RefreshToken,
         token_service: TokenService,
     ):
-        now = pendulum.now().int_timestamp
+        now = int(time.time())
         jwt_token_obj = JWTToken(exp=now, iat=now, jti=str(uuid.uuid4()), sub="user-1")
         mocker.patch.object(
             TokenService,
@@ -458,7 +457,7 @@ class TestAuthService:
             name="no-scope-service",
             secret=fast_password_hasher.hash(password),
             scopes=[],
-            created_at=pendulum.now().to_iso8601_string(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         mocker.patch(
             "app.services.auth_service.ServiceRepository.get_by_name",
@@ -496,7 +495,7 @@ class TestAuthService:
             name="legacy-service",
             secret=fast_password_hasher.hash(password),
             scopes=[],
-            created_at=pendulum.now().to_iso8601_string(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         object.__setattr__(service, "scopes", None)
         mocker.patch(
@@ -621,7 +620,7 @@ class TestAuthService:
         auth_code.redirect_uri = "https://example.com/callback"
         auth_code.scope = "users:read"
         auth_code.code_challenge = None
-        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
+        auth_code.ttl = int(time.time()) + 300
 
         mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
@@ -673,7 +672,7 @@ class TestAuthService:
         auth_code.code = "auth_code_123"
         auth_code.redirect_uri = "https://example.com/callback"
         auth_code.code_challenge = None
-        auth_code.ttl = pendulum.now().subtract(minutes=5).int_timestamp
+        auth_code.ttl = int(time.time()) - 300
 
         mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
@@ -703,7 +702,7 @@ class TestAuthService:
         auth_code.code = "auth_code_123"
         auth_code.redirect_uri = "https://example.com/callback"
         auth_code.code_challenge = None
-        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
+        auth_code.ttl = int(time.time()) + 300
 
         mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
@@ -728,7 +727,7 @@ class TestAuthService:
         auth_service: AuthService,
     ):
         auth_code = mocker.MagicMock()
-        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
+        auth_code.ttl = int(time.time()) + 300
         auth_code.redirect_uri = "https://example.com/callback"
         auth_code.code_challenge = "E9Mrozoa2owUG2gw61pfAqgxVrQj5zwJckeqyUmKkqM"
         auth_code.code_challenge_method = "S256"
@@ -757,7 +756,7 @@ class TestAuthService:
         auth_service: AuthService,
     ):
         auth_code = mocker.MagicMock()
-        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
+        auth_code.ttl = int(time.time()) + 300
         auth_code.redirect_uri = "https://example.com/callback"
         auth_code.code_challenge = "E9Mrozoa2owUG2gw61pfAqgxVrQj5zwJckeqyUmKkqM"
         auth_code.code_challenge_method = "S256"
@@ -786,7 +785,7 @@ class TestAuthService:
         auth_service: AuthService,
     ):
         auth_code = mocker.MagicMock()
-        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
+        auth_code.ttl = int(time.time()) + 300
         auth_code.redirect_uri = "https://example.com/callback"
         auth_code.code_challenge = "expected_challenge"
         auth_code.code_challenge_method = "plain"
@@ -833,7 +832,7 @@ class TestAuthService:
         auth_code.scope = "users:read"
         auth_code.code_challenge = code_challenge
         auth_code.code_challenge_method = "S256"
-        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
+        auth_code.ttl = int(time.time()) + 300
 
         mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
@@ -872,7 +871,7 @@ class TestAuthService:
         auth_code.scope = "users:read"
         auth_code.code_challenge = "plain_challenge"
         auth_code.code_challenge_method = "plain"
-        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
+        auth_code.ttl = int(time.time()) + 300
 
         mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",
@@ -908,7 +907,7 @@ class TestAuthService:
         auth_code.user_id = "nonexistent_user"
         auth_code.redirect_uri = "https://example.com/callback"
         auth_code.code_challenge = None
-        auth_code.ttl = pendulum.now().add(minutes=5).int_timestamp
+        auth_code.ttl = int(time.time()) + 300
 
         mocker.patch(
             "app.services.auth_service.AuthorizationCodeRepository.get_by_code",

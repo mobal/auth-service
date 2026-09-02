@@ -1,4 +1,5 @@
-import pendulum
+from datetime import UTC, datetime
+
 from aws_lambda_powertools import Logger
 
 from app.exceptions import TokenNotFoundException
@@ -22,10 +23,10 @@ class TokenService:
         token_data = {
             "jti": jwt_token.jti,
             "jwt_token": jwt_token.model_dump(),
-            "created_at": pendulum.from_timestamp(jwt_token.iat).to_iso8601_string(),
-            "expire_at": pendulum.from_timestamp(
-                refresh_token.ttl if refresh_token else jwt_token.exp
-            ).to_iso8601_string(),
+            "created_at": datetime.fromtimestamp(jwt_token.iat, tz=UTC).isoformat(),
+            "expire_at": datetime.fromtimestamp(
+                refresh_token.ttl if refresh_token else jwt_token.exp, tz=UTC
+            ).isoformat(),
             "ttl": refresh_token.ttl if refresh_token else jwt_token.exp,
         }
 

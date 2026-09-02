@@ -1,11 +1,11 @@
 import base64
 import hashlib
 import secrets
+import time
 import uuid
 from urllib.parse import urlparse, urlunparse
 
 import jwt
-import pendulum
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerifyMismatchError
 from aws_lambda_powertools import Logger
@@ -166,16 +166,12 @@ class AuthService:
             sub,
             extra={"sub": sub, "has_scope": scope is not None},
         )
-        iat = pendulum.now("UTC")
-        exp = (
-            iat.add(seconds=settings.jwt_token_lifetime)
-            if exp is None
-            else iat.add(seconds=exp)
-        )
+        iat = int(time.time())
+        exp = iat + (settings.jwt_token_lifetime if exp is None else exp)
 
         return JWTToken(
-            exp=exp.int_timestamp,
-            iat=iat.int_timestamp,
+            exp=exp,
+            iat=iat,
             iss=settings.jwt_issuer if settings.jwt_issuer else settings.app_name,
             aud=settings.jwt_audience if settings.jwt_audience else settings.app_name,
             jti=str(uuid.uuid4()),
@@ -222,7 +218,7 @@ class AuthService:
         self, client_name: str, client_secret: str, scope: str | None = None
     ) -> JWTToken:
         if self._user_service_token is not None:
-            remaining = self._user_service_token.exp - pendulum.now("UTC").int_timestamp
+            remaining = self._user_service_token.exp - int(time.time())
             # Cache with a safety buffer: refresh when less than 20% of lifetime remains
             # or at most 60s before expiry, to reduce the window for serving revoked tokens
             safety_buffer = max(settings.service_token_lifetime_seconds // 5, 60)
@@ -311,7 +307,7 @@ class AuthService:
 
         jwt_token, _, ttl = item
 
-        if ttl < pendulum.now("UTC").int_timestamp:
+        if ttl < int(time.time()):
             self._logger.warning(
                 "Refresh token expired",
                 extra={"jti": jwt_token.jti},
@@ -513,7 +509,7 @@ class AuthService:
     ) -> tuple[str, str, int, str | None]:
         self._logger.info("Authorization code exchange requested")
         auth_code = self._authorization_code_repository.get_by_code(code)
-        now = pendulum.now("UTC").int_timestamp
+        now = int(time.time())
 
         if auth_code is None:
             self._logger.warning("Authorization code exchange failed, code not found")

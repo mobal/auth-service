@@ -1,6 +1,6 @@
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-import pendulum
 from aws_lambda_powertools import Logger
 
 try:
@@ -27,4 +27,10 @@ load_env_files()
 logger = Logger()
 settings = Settings()
 
-pendulum.set_local_timezone(pendulum.timezone(settings.default_timezone))
+# Validate the configured IANA timezone at startup so a misconfigured
+# DEFAULT_TIMEZONE fails fast with a clear message instead of a cryptic
+# error the first time a timezone is actually needed.
+try:
+    ZoneInfo(settings.default_timezone)
+except (ValueError, ZoneInfoNotFoundError) as e:
+    raise ValueError(f"Invalid DEFAULT_TIMEZONE: {settings.default_timezone!r}") from e

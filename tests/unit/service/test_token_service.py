@@ -1,6 +1,6 @@
+from datetime import UTC, datetime
 from typing import Any
 
-import pendulum
 import pytest
 
 from app.exceptions import TokenNotFoundException
@@ -48,10 +48,8 @@ class TestTokenService:
             {
                 "jti": jwt_token.jti,
                 "jwt_token": jwt_token.model_dump(),
-                "created_at": pendulum.from_timestamp(
-                    jwt_token.iat
-                ).to_iso8601_string(),
-                "expire_at": pendulum.from_timestamp(jwt_token.exp).to_iso8601_string(),
+                "created_at": datetime.fromtimestamp(jwt_token.iat, tz=UTC).isoformat(),
+                "expire_at": datetime.fromtimestamp(jwt_token.exp, tz=UTC).isoformat(),
                 "ttl": jwt_token.exp,
             }
         )

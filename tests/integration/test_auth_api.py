@@ -1,8 +1,9 @@
+import time
 import uuid
 from base64 import b64encode
+from datetime import UTC, datetime
 
 import jwt
-import pendulum
 import pytest
 from argon2 import PasswordHasher
 from fastapi import Request, status
@@ -200,17 +201,15 @@ class TestAuthApi:
         test_client: TestClient,
         tokens_table_name: str,
     ):
-        expired_ttl = pendulum.now().subtract(days=1).int_timestamp
+        expired_ttl = int(time.time()) - 86400
         tokens_table = dynamodb_resource.Table(tokens_table_name)
         tokens_table.put_item(
             Item={
                 "jti": jwt_token.jti,
                 "jwt_token": jwt_token.model_dump(),
                 "refresh_token": refresh_token.token,
-                "created_at": pendulum.from_timestamp(
-                    jwt_token.iat
-                ).to_iso8601_string(),
-                "expire_at": pendulum.from_timestamp(expired_ttl).to_iso8601_string(),
+                "created_at": datetime.fromtimestamp(jwt_token.iat, tz=UTC).isoformat(),
+                "expire_at": datetime.fromtimestamp(expired_ttl, tz=UTC).isoformat(),
                 "ttl": expired_ttl,
             }
         )
@@ -373,7 +372,7 @@ class TestAuthApi:
                 "user_id": user_id,
                 "redirect_uri": redirect_uri,
                 "scope": "users:read",
-                "ttl": pendulum.now().add(minutes=10).int_timestamp,
+                "ttl": int(time.time()) + 600,
             }
         )
 

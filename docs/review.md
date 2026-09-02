@@ -6,11 +6,6 @@
 > All claims re-verified against the code on `develop`. Fixed/obsolete items were removed;
 > only still-actionable work is listed. Items marked **not a gap** were disproven on
 > inspection — don't spend time on them.
->
-> **Update 2026-09-02:** the pendulum → stdlib migration (§6) has been **executed** —
-> all 13 files now use `datetime`/`timedelta`/`time.time()`, `pendulum` was removed
-> from `pyproject.toml`, and timezone validation was added in `app/__init__.py`.
-> 137/137 tests pass; ruff clean.
 
 ---
 
@@ -52,7 +47,7 @@ hardening, not blockers.
 | `redirect_uri` not URL-validated at model layer | `app/models/request/oauth_authorize.py` | Reject malformed/non-URL input before business logic (separate from registration matching). |
 | No DynamoDB exception handling in repositories | `app/repositories/*` | Wrap calls in `ClientError` handling; add error-path tests. |
 | Small robustness cluster | various | Cross-field `grant_type` validation, empty-string grant acceptance, `create_service` missing `ConditionExpression`, `ConsistentRead=True` on reads, `SecretStr` for secrets, scope parsing hardening (`strip().split()`), CORS `allow_methods` narrowing. Batch into one cleanup pass. |
-| Test gaps | tests/ | No DynamoDB error-path tests, no expired/malformed JWT fixtures, no Lambda-context correlation test, no PKCE unsupported-method test, no concurrent-consumption test, hardcoded `3600` vs `settings.jwt_token_lifetime`. |
+| Test gaps | tests/ | No DynamoDB error-path tests, no expired/malformed JWT fixtures, no Lambda-context correlation test, no PKCE unsupported-method test, no concurrent-consumption test. The `in_words` hardcoded-duration assertion was fixed in the pendulum-migration commit (now compares against `settings.jwt_token_lifetime`); remaining `assert exp == 3600` literals in exchange-code tests should also use the setting. |
 
 ## 4. 🟡 Fix later / post-MVP
 
@@ -80,7 +75,9 @@ hardening, not blockers.
 
 ## 6. Pendulum → Standard Library Migration — ✅ Completed 2026-09-02
 
-All 13 files migrated; `pendulum` removed from `pyproject.toml` and `uv.lock`.
+All 13 files migrated; `pendulum` removed from `pyproject.toml` and `uv.lock`
+(see "refactor: replace pendulum with stdlib datetime" and
+"chore: update uv lock file").
 
 **Mapping used:**
 

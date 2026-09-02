@@ -1,4 +1,5 @@
-import pendulum
+import time
+
 import pytest
 
 from app.clients.user_service_client import UserServiceClient
@@ -24,7 +25,7 @@ def authorize_url() -> str:
 @pytest.fixture(autouse=True)
 def integration_compatibility_patches(monkeypatch):
     # Integration tests should not depend on service-to-service credential wiring.
-    now = pendulum.now().int_timestamp
+    now = int(time.time())
     service_token = JWTToken(
         exp=now + 3600,
         iat=now,

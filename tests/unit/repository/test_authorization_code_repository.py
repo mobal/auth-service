@@ -1,6 +1,6 @@
+import time
 import uuid
 
-import pendulum
 import pytest
 from botocore.exceptions import ClientError
 
@@ -240,13 +240,13 @@ class TestAuthorizationCodeRepository:
         user_id = str(uuid.uuid4())
         redirect_uri = "https://example.com/callback"
 
-        before_create = pendulum.now().int_timestamp
+        before_create = int(time.time())
         code = repository.create(
             client_id=client_id,
             user_id=user_id,
             redirect_uri=redirect_uri,
         )
-        after_create = pendulum.now().int_timestamp
+        after_create = int(time.time())
 
         auth_code = repository.get_by_code(code)
         assert auth_code is not None

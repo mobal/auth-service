@@ -1,6 +1,6 @@
+from datetime import UTC, datetime
 from typing import Any
 
-import pendulum
 import pytest
 
 from app.jwt_bearer import JWTBearer
@@ -26,8 +26,8 @@ def token(jwt_token: JWTToken, refresh_token: RefreshToken) -> dict[str, Any]:
         "jti": jwt_token.jti,
         "jwt_token": jwt_token.model_dump(),
         "refresh_token": refresh_token.token,
-        "created_at": pendulum.from_timestamp(jwt_token.iat).to_iso8601_string(),
-        "expire_at": pendulum.from_timestamp(refresh_token.ttl).to_iso8601_string(),
+        "created_at": datetime.fromtimestamp(jwt_token.iat, tz=UTC).isoformat(),
+        "expire_at": datetime.fromtimestamp(refresh_token.ttl, tz=UTC).isoformat(),
         "ttl": refresh_token.ttl,
     }
 
