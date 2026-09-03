@@ -36,7 +36,7 @@ def integration_compatibility_patches(monkeypatch):
     monkeypatch.setattr(
         AuthService,
         "_issue_service_token",
-        lambda self, client_id, client_secret, scope=None: service_token,
+        lambda self, client_id, client_secret, scope=None, aud=None: service_token,
     )
 
     # Current AuthService calls get_user_by_id with an extra positional token arg.

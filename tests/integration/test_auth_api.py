@@ -145,6 +145,52 @@ class TestAuthApi:
         assert "expires_in" in body
         self._assert_cache_headers(response)
 
+    def test_revoke_token_issued_by_password_grant(
+        self,
+        httpx_mock,
+        token_url: str,
+        revoke_url: str,
+        test_client: TestClient,
+        user_data: dict,
+    ):
+        """A token issued by the app itself must pass the bearer guard.
+
+        Regression: issued tokens carried no ``aud`` claim, so the real
+        JWTBearer dependency (which requires ``aud`` to name this service)
+        rejected them on /oauth/revoke and /oauth/authorize with 403.
+        """
+        import os
+
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users?email=root%40squarelabs.hu",
+            json={"items": [user_data]},
+            status_code=status.HTTP_200_OK,
+        )
+        httpx_mock.add_response(
+            method="POST",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{user_data['id']}/validate",
+            status_code=status.HTTP_200_OK,
+        )
+
+        login = test_client.post(
+            token_url,
+            data={
+                "grant_type": "password",
+                "username": "root@squarelabs.hu",
+                "password": "password",
+            },
+        )
+        assert login.status_code == status.HTTP_200_OK
+        access_token = login.json()["access_token"]
+
+        response = test_client.post(
+            revoke_url,
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
     def test_fail_to_logout_due_to_missing_bearer_token(
         self, revoke_url: str, test_client: TestClient
     ):

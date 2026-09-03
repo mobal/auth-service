@@ -15,8 +15,6 @@ class Settings(BaseSettings):
     aws_access_key_id: str
     aws_secret_access_key: str
     debug: bool = False
-    jwt_issuer: str = ""
-    jwt_audience: str = ""
     jwt_token_lifetime: int = 3600
     rate_limiting: bool = False
     rate_limit_requests: int = 100

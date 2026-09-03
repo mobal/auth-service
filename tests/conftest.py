@@ -216,11 +216,12 @@ def user_data(user_id: str) -> dict:
 def jwt_token(settings: Settings) -> JWTToken:
     iat = int(time.time())
     exp = iat + 3600
+    issuer = f"{settings.stage}-{settings.app_name}"
     return JWTToken(
         exp=exp,
         iat=iat,
-        iss=settings.app_name,
-        aud=settings.app_name,
+        iss=issuer,
+        aud=issuer,
         jti=str(uuid.uuid4()),
         sub=str(uuid.uuid4()),
         scope="tokens:revoke users:read users:write",
@@ -231,11 +232,12 @@ def jwt_token(settings: Settings) -> JWTToken:
 def expired_jwt_token(settings: Settings) -> JWTToken:
     iat = int(time.time()) - 2 * 86400
     exp = iat + 3600
+    issuer = f"{settings.stage}-{settings.app_name}"
     return JWTToken(
         exp=exp,
         iat=iat,
-        iss=settings.app_name,
-        aud=settings.app_name,
+        iss=issuer,
+        aud=issuer,
         jti=str(uuid.uuid4()),
         sub=str(uuid.uuid4()),
         scope="tokens:revoke users:read",
@@ -246,11 +248,12 @@ def expired_jwt_token(settings: Settings) -> JWTToken:
 def jwt_token_no_scope(settings: Settings) -> JWTToken:
     iat = int(time.time())
     exp = iat + 3600
+    issuer = f"{settings.stage}-{settings.app_name}"
     return JWTToken(
         exp=exp,
         iat=iat,
-        iss=settings.app_name,
-        aud=settings.app_name,
+        iss=issuer,
+        aud=issuer,
         jti=str(uuid.uuid4()),
         sub=str(uuid.uuid4()),
         scope=None,
@@ -261,11 +264,12 @@ def jwt_token_no_scope(settings: Settings) -> JWTToken:
 def jwt_token_empty_sub(settings: Settings) -> JWTToken:
     iat = int(time.time())
     exp = iat + 3600
+    issuer = f"{settings.stage}-{settings.app_name}"
     return JWTToken(
         exp=exp,
         iat=iat,
-        iss=settings.app_name,
-        aud=settings.app_name,
+        iss=issuer,
+        aud=issuer,
         jti=str(uuid.uuid4()),
         sub="",
         scope="tokens:revoke",

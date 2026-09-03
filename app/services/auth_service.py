@@ -160,6 +160,7 @@ class AuthService:
         sub: str,
         exp: int | None = None,
         scope: str | None = None,
+        aud: str | None = None,
     ) -> JWTToken:
         self._logger.debug(
             "Generating JWT payload for sub=%s",
@@ -168,12 +169,18 @@ class AuthService:
         )
         iat = int(time.time())
         exp = iat + (settings.jwt_token_lifetime if exp is None else exp)
+        issuer = f"{settings.stage}-{settings.app_name}"
 
         return JWTToken(
             exp=exp,
             iat=iat,
-            iss=settings.jwt_issuer if settings.jwt_issuer else settings.app_name,
-            aud=settings.jwt_audience if settings.jwt_audience else settings.app_name,
+            iss=issuer,
+            # Default the audience to this service's own identity: tokens are
+            # re-presented to its bearer-protected endpoints (/oauth/authorize,
+            # /oauth/revoke), which require ``aud`` to match the issuer.
+            # Callers targeting another service (e.g. the user-service checks)
+            # pass an explicit audience instead.
+            aud=aud or issuer,
             jti=str(uuid.uuid4()),
             sub=sub,
             scope=scope,
@@ -190,6 +197,7 @@ class AuthService:
         self,
         sub: str,
         scope: str | None = None,
+        aud: str | None = None,
     ) -> tuple[JWTToken, RefreshToken]:
         self._logger.info(
             "Generating new tokens for sub=%s",
@@ -197,7 +205,9 @@ class AuthService:
             extra={"sub": sub, "has_scope": scope is not None},
         )
 
-        jwt_token = self._generate_token(sub, settings.jwt_token_lifetime, scope=scope)
+        jwt_token = self._generate_token(
+            sub, settings.jwt_token_lifetime, scope=scope, aud=aud
+        )
         refresh_token = RefreshToken(
             token=self._generate_refresh_token(),
             ttl=jwt_token.iat + settings.refresh_token_lifetime,
@@ -215,7 +225,11 @@ class AuthService:
         self._token_service.delete_by_id(jwt_token.jti)
 
     def _issue_service_token(
-        self, client_name: str, client_secret: str, scope: str | None = None
+        self,
+        client_name: str,
+        client_secret: str,
+        scope: str | None = None,
+        aud: str | None = None,
     ) -> JWTToken:
         if self._user_service_token is not None:
             remaining = self._user_service_token.exp - int(time.time())
@@ -229,7 +243,7 @@ class AuthService:
         self._logger.info("Issuing new user service token")
 
         service_token = self._generate_client_credentials(
-            client_name, client_secret, scope
+            client_name, client_secret, scope, aud
         )
         self._user_service_token = service_token
 
@@ -253,7 +267,9 @@ class AuthService:
             extra={"email": email, "requested_scope": requested_scope},
         )
         service_token = self._issue_service_token(
-            settings.app_name, settings.client_secret
+            settings.app_name,
+            settings.client_secret,
+            aud=f"{settings.stage}-user-service",
         )
         user = self._user_service_client.get_user_by_email(
             email,
@@ -338,7 +354,11 @@ class AuthService:
         )
 
     def _generate_client_credentials(
-        self, client_name: str, client_secret: str, requested_scope: str | None
+        self,
+        client_name: str,
+        client_secret: str,
+        requested_scope: str | None,
+        aud: str | None = None,
     ) -> JWTToken:
         self._logger.info(
             "Generating client credentials token for client_name=%s",
@@ -393,6 +413,7 @@ class AuthService:
             sub=client_name,
             exp=settings.service_token_lifetime_seconds,
             scope=granted_scope,
+            aud=aud,
         )
         self._token_service.create(
             jwt_token,
@@ -408,14 +429,20 @@ class AuthService:
         return jwt_token
 
     def client_credentials(
-        self, client_name: str, client_secret: str, scope: str | None = None
+        self,
+        client_name: str,
+        client_secret: str,
+        scope: str | None = None,
+        aud: str | None = None,
     ) -> tuple[str, int, str | None]:
         self._logger.info(
             "Client credentials flow requested for client_name=%s",
             client_name,
             extra={"client_name": client_name, "requested_scope": scope},
         )
-        jwt_token = self._generate_client_credentials(client_name, client_secret, scope)
+        jwt_token = self._generate_client_credentials(
+            client_name, client_secret, scope, aud
+        )
         return (
             jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
             settings.service_token_lifetime_seconds,
@@ -463,7 +490,9 @@ class AuthService:
             },
         )  # noqa
         service_token = self._issue_service_token(
-            settings.app_name, settings.client_secret
+            settings.app_name,
+            settings.client_secret,
+            aud=f"{settings.stage}-user-service",
         )
         user = self._user_service_client.get_user_by_id(
             user_id,
@@ -548,7 +577,11 @@ class AuthService:
 
         self._validate_pkce(auth_code, code_verifier)
 
-        jwt_token = self._issue_service_token(settings.app_name, settings.client_secret)
+        jwt_token = self._issue_service_token(
+            settings.app_name,
+            settings.client_secret,
+            aud=f"{settings.stage}-user-service",
+        )
         user = self._user_service_client.get_user_by_id(
             auth_code.user_id,
             jwt.encode(jwt_token.model_dump(exclude_none=True), settings.jwt_secret),
