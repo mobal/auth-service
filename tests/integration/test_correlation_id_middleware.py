@@ -65,15 +65,15 @@ class TestCorrelationIdMiddleware:
         return TestClient(app, raise_server_exceptions=True)
 
     def test_correlation_id_header_is_set_in_response(
-        self, httpx_mock, token_url: str, test_client: TestClient
+        self, httpx2_mock, token_url: str, test_client: TestClient
     ):
-        httpx_mock.add_response(
+        httpx2_mock.add_response(
             method="GET",
             url=USER_SERVICE_USERS_URL,
             json=USER_VERIFY_RESPONSE,
             status_code=status.HTTP_200_OK,
         )
-        httpx_mock.add_response(
+        httpx2_mock.add_response(
             method="POST",
             url=USER_SERVICE_VALIDATE_URL,
             json={"id": USER_ID, "email": "root@squarelabs.hu", "roles": ["root"]},
@@ -94,15 +94,15 @@ class TestCorrelationIdMiddleware:
         assert response.headers[X_CORRELATION_ID] is not None
 
     def test_correlation_id_from_request_header_is_preserved(
-        self, httpx_mock, token_url: str, test_client: TestClient
+        self, httpx2_mock, token_url: str, test_client: TestClient
     ):
-        httpx_mock.add_response(
+        httpx2_mock.add_response(
             method="GET",
             url=USER_SERVICE_USERS_URL,
             json=USER_VERIFY_RESPONSE,
             status_code=status.HTTP_200_OK,
         )
-        httpx_mock.add_response(
+        httpx2_mock.add_response(
             method="POST",
             url=USER_SERVICE_VALIDATE_URL,
             json={"id": USER_ID, "email": "root@squarelabs.hu", "roles": ["root"]},
@@ -125,15 +125,15 @@ class TestCorrelationIdMiddleware:
         assert response.headers[X_CORRELATION_ID] == correlation_id_value
 
     def test_correlation_id_is_generated_when_not_provided(
-        self, httpx_mock, token_url: str, test_client: TestClient
+        self, httpx2_mock, token_url: str, test_client: TestClient
     ):
-        httpx_mock.add_response(
+        httpx2_mock.add_response(
             method="GET",
             url=USER_SERVICE_USERS_URL,
             json=USER_VERIFY_RESPONSE,
             status_code=status.HTTP_200_OK,
         )
-        httpx_mock.add_response(
+        httpx2_mock.add_response(
             method="POST",
             url=USER_SERVICE_VALIDATE_URL,
             json={"id": USER_ID, "email": "root@squarelabs.hu", "roles": ["root"]},
@@ -162,7 +162,7 @@ class TestCorrelationIdMiddleware:
 
     def test_correlation_id_from_aws_lambda_context(
         self,
-        httpx_mock,
+        httpx2_mock,
         token_url: str,
         initialize_tokens_table,
         initialize_services_table,
@@ -191,13 +191,13 @@ class TestCorrelationIdMiddleware:
         wrapped_app = _LambdaContextInjector(app)
         test_client = TestClient(wrapped_app, raise_server_exceptions=True)
 
-        httpx_mock.add_response(
+        httpx2_mock.add_response(
             method="GET",
             url=USER_SERVICE_USERS_URL,
             json=USER_VERIFY_RESPONSE,
             status_code=status.HTTP_200_OK,
         )
-        httpx_mock.add_response(
+        httpx2_mock.add_response(
             method="POST",
             url=USER_SERVICE_VALIDATE_URL,
             json={"id": USER_ID, "email": "root@squarelabs.hu", "roles": ["root"]},

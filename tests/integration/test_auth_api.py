@@ -75,20 +75,20 @@ class TestAuthApi:
 
     def test_fail_to_login_due_to_invalid_credentials(
         self,
-        httpx_mock,
+        httpx2_mock,
         token_url: str,
         test_client: TestClient,
         user_data: dict,
     ):
         import os
 
-        httpx_mock.add_response(
+        httpx2_mock.add_response(
             method="GET",
             url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users?email=root%40squarelabs.hu",
             json={"items": [user_data]},
             status_code=status.HTTP_200_OK,
         )
-        httpx_mock.add_response(
+        httpx2_mock.add_response(
             method="POST",
             url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{user_data['id']}/validate",
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -108,20 +108,20 @@ class TestAuthApi:
 
     def test_successfully_login(
         self,
-        httpx_mock,
+        httpx2_mock,
         token_url: str,
         test_client: TestClient,
         user_data: dict,
     ):
         import os
 
-        httpx_mock.add_response(
+        httpx2_mock.add_response(
             method="GET",
             url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users?email=root%40squarelabs.hu",
             json={"items": [user_data]},
             status_code=status.HTTP_200_OK,
         )
-        httpx_mock.add_response(
+        httpx2_mock.add_response(
             method="POST",
             url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{user_data['id']}/validate",
             json=user_data,
@@ -147,7 +147,7 @@ class TestAuthApi:
 
     def test_revoke_token_issued_by_password_grant(
         self,
-        httpx_mock,
+        httpx2_mock,
         token_url: str,
         revoke_url: str,
         test_client: TestClient,
@@ -161,13 +161,13 @@ class TestAuthApi:
         """
         import os
 
-        httpx_mock.add_response(
+        httpx2_mock.add_response(
             method="GET",
             url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users?email=root%40squarelabs.hu",
             json={"items": [user_data]},
             status_code=status.HTTP_200_OK,
         )
-        httpx_mock.add_response(
+        httpx2_mock.add_response(
             method="POST",
             url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{user_data['id']}/validate",
             status_code=status.HTTP_200_OK,
@@ -399,7 +399,7 @@ class TestAuthApi:
 
     def test_successfully_authorization_code_exchange(
         self,
-        httpx_mock,
+        httpx2_mock,
         dynamodb_resource,
         authorization_codes_table_name: str,
         token_url: str,
@@ -424,7 +424,7 @@ class TestAuthApi:
             }
         )
 
-        httpx_mock.add_response(
+        httpx2_mock.add_response(
             method="GET",
             url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{user_id}",
             json={"id": user_id, "email": "root@squarelabs.hu", "roles": ["root"]},
@@ -450,7 +450,7 @@ class TestAuthApi:
 
     def test_successfully_authorize(
         self,
-        httpx_mock,
+        httpx2_mock,
         jwt_token: JWTToken,
         jwt_secret_ssm_param_value: str,
         authorize_url: str,
@@ -458,7 +458,7 @@ class TestAuthApi:
     ):
         import os
 
-        httpx_mock.add_response(
+        httpx2_mock.add_response(
             method="GET",
             url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{jwt_token.sub}",
             json={
