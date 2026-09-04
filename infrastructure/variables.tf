@@ -64,11 +64,6 @@ variable "powertools_logger_log_event" {
   type    = bool
 }
 
-variable "powertools_service_name" {
-  default = "auth-service"
-  type    = string
-}
-
 variable "requirements_layer_hash" {
   type = string
 }
