@@ -24,8 +24,8 @@ resource "aws_lambda_function" "fastapi" {
       DEBUG                                = var.debug
       DEFAULT_TIMEZONE                     = var.default_timezone
       JWT_SECRET_SSM_PARAM_NAME            = var.jwt_secret_ssm_param_name
-      LOG_LEVEL                            = var.log_level
       POWERTOOLS_LOGGER_LOG_EVENT          = var.powertools_logger_log_event
+      POWERTOOLS_LOGGER_LOG_LEVEL          = var.powertools_logger_log_level
       POWERTOOLS_SERVICE_NAME              = local.app_name
       POWERTOOLS_DEBUG                     = var.powertools_debug
       STAGE                                = var.stage

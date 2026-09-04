@@ -44,11 +44,6 @@ variable "lambda_hash" {
   type = string
 }
 
-variable "log_level" {
-  default = "INFO"
-  type    = string
-}
-
 variable "memory_size" {
   default = 768
   type    = number
@@ -62,6 +57,11 @@ variable "powertools_debug" {
 variable "powertools_logger_log_event" {
   default = true
   type    = bool
+}
+
+variable "powertools_logger_log_level" {
+  default = "INFO"
+  type    = string
 }
 
 variable "requirements_layer_hash" {
