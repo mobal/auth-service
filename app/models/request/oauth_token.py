@@ -10,6 +10,13 @@ class BaseGrantRequest(BaseModel):
     scope: str | None = None
     """Space-separated list of requested permission scopes."""
 
+    resource: str | None = None
+    """Requested resource indicator (RFC 8707 Section 2) — an absolute URI.
+
+    When present, the URI is looked up in the audience registry and, if
+    registered, used as the JWT ``aud`` claim (RFC 7519 Section 4.1.3).
+    """
+
 
 class PasswordGrantRequest(BaseGrantRequest):
     """Resource owner password credentials grant (RFC 6749 Section 4.3)."""

@@ -68,6 +68,17 @@ resource "aws_dynamodb_table" "tokens" {
   }
 }
 
+resource "aws_dynamodb_table" "audiences" {
+  name         = "${var.stage}-audiences"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "audience"
+
+  attribute {
+    name = "audience"
+    type = "S"
+  }
+}
+
 resource "aws_dynamodb_table" "authorization_codes" {
   name         = "${var.stage}-authorization-codes"
   billing_mode = "PAY_PER_REQUEST"

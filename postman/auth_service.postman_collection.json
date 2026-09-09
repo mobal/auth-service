@@ -236,6 +236,133 @@
           "response": []
         },
         {
+          "name": "Token — client credentials with resource",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic {{basicAuth}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                },
+                {
+                  "key": "resource",
+                  "value": "https://api.personal-backend.example"
+                }
+              ]
+            },
+            "description": "Client credentials grant with an RFC 8707 `resource` indicator. The seeded `user-service` client is allowed to request the `https://api.personal-backend.example` resource (seeded by `scripts/init_localstack.py`), so the JWT `aud` claim must equal it."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.collectionVariables.set('basicAuth', btoa(`${pm.collectionVariables.get('clientId')}:${pm.collectionVariables.get('clientSecret')}`));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const payload = body.access_token.split('.');",
+                  "const claims = JSON.parse(atob(payload[1].replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - payload[1].length % 4) % 4)));",
+                  "pm.test('sets the aud claim to the requested resource', () => {",
+                  "  pm.expect(claims.aud).to.eql('https://api.personal-backend.example');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Token — client credentials with unregistered resource",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic {{basicAuth}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                },
+                {
+                  "key": "resource",
+                  "value": "https://unknown.example"
+                }
+              ]
+            },
+            "description": "Requesting a resource indicator (RFC 8707) that is not in the audience registry must fail with `invalid_target`."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.collectionVariables.set('basicAuth', btoa(`${pm.collectionVariables.get('clientId')}:${pm.collectionVariables.get('clientSecret')}`));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 400', () => pm.response.to.have.status(400));",
+                  "pm.test('returns invalid_target error', () => {",
+                  "  pm.expect(pm.response.json().error).to.eql('invalid_target');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
           "name": "Token — unsupported grant type",
           "request": {
             "method": "POST",
@@ -382,6 +509,127 @@
                   "});",
                   "pm.collectionVariables.set('accessToken', body.access_token);",
                   "pm.collectionVariables.set('refreshToken', body.refresh_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Token — password grant with resource",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                },
+                {
+                  "key": "username",
+                  "value": "{{e2eUserEmail}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{e2ePassword}}"
+                },
+                {
+                  "key": "resource",
+                  "value": "https://api.personal-backend.example"
+                }
+              ]
+            },
+            "description": "Password grant with an RFC 8707 `resource` indicator. The resource must be registered in the audience registry (seeded by `scripts/init_localstack.py`), so the JWT `aud` claim must equal it."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const payload = body.access_token.split('.');",
+                  "const claims = JSON.parse(atob(payload[1].replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - payload[1].length % 4) % 4)));",
+                  "pm.test('sets the aud claim to the requested resource', () => {",
+                  "  pm.expect(claims.aud).to.eql('https://api.personal-backend.example');",
+                  "});",
+                  "pm.collectionVariables.set('accessToken', body.access_token);",
+                  "pm.collectionVariables.set('refreshToken', body.refresh_token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Token — password grant with unregistered resource",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                },
+                {
+                  "key": "username",
+                  "value": "{{e2eUserEmail}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{e2ePassword}}"
+                },
+                {
+                  "key": "resource",
+                  "value": "https://unknown.example"
+                }
+              ]
+            },
+            "description": "Requesting an unregistered resource indicator (RFC 8707) must fail with `invalid_target`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 400', () => pm.response.to.have.status(400));",
+                  "pm.test('returns invalid_target error', () => {",
+                  "  pm.expect(pm.response.json().error).to.eql('invalid_target');",
+                  "});"
                 ]
               }
             }

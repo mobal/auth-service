@@ -49,6 +49,14 @@ resource "aws_iam_policy" "lambda_policy" {
       {
         Effect   = "Allow"
         Action   = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+        ]
+        Resource = aws_dynamodb_table.audiences.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = [
           "ec2:DescribeNetworkInterfaces",
           "ec2:CreateNetworkInterface",
           "ec2:DeleteNetworkInterface",

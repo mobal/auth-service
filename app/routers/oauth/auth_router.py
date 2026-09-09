@@ -126,7 +126,7 @@ def _handle_password_grant(
     )
 
     access_token, refresh_token, expires_in, scope = auth_service.login(
-        body.username, body.password, body.scope
+        body.username, body.password, body.scope, body.resource
     )
 
     return OAuthTokenResponse(
@@ -179,7 +179,7 @@ def _handle_client_credentials_grant(
     client_name, client_secret = _parse_authorization_header(authorization)
 
     access_token, expires_in, scope = auth_service.client_credentials(
-        client_name, client_secret, body.scope
+        client_name, client_secret, body.scope, resource=body.resource
     )
 
     return OAuthTokenResponse(

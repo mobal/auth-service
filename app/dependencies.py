@@ -12,6 +12,7 @@ from fastapi import Depends, Request
 from app.clients.user_service_client import UserServiceClient
 from app.jwt_bearer import JWTBearer
 from app.models.jwt import JWTToken
+from app.repositories.audience_repository import AudienceRepository
 from app.repositories.authorization_code_repository import (
     AuthorizationCodeRepository,
 )
@@ -52,6 +53,10 @@ def get_user_service_client() -> UserServiceClient:
     return UserServiceClient()
 
 
+def get_audience_repository() -> AudienceRepository:
+    return AudienceRepository()
+
+
 def get_auth_service(
     password_hasher: PasswordHasher = Depends(get_password_hasher),
     token_service: TokenService = Depends(get_token_service),
@@ -61,6 +66,7 @@ def get_auth_service(
     ),
     user_service_client: UserServiceClient = Depends(get_user_service_client),
     role_scope_repository: RoleScopeRepository = Depends(get_role_scope_repository),
+    audience_repository: AudienceRepository = Depends(get_audience_repository),
 ) -> AuthService:
     return AuthService(
         password_hasher=password_hasher,
@@ -69,6 +75,7 @@ def get_auth_service(
         authorization_code_repository=authorization_code_repository,
         user_service_client=user_service_client,
         role_scope_repository=role_scope_repository,
+        audience_repository=audience_repository,
     )
 
 
