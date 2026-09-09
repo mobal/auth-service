@@ -59,7 +59,7 @@ variable "powertools_logger_log_event" {
   type    = bool
 }
 
-variable "powertools_logger_log_level" {
+variable "powertools_log_level" {
   default = "INFO"
   type    = string
 }
