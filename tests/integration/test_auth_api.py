@@ -14,6 +14,7 @@ from app.models.jwt import JWTToken, RefreshToken
 from app.repositories.authorization_code_repository import (
     AuthorizationCodeRepository,
 )
+from app.repositories.role_scope_repository import RoleScopeRepository
 from app.repositories.service_repository import ServiceRepository
 from app.repositories.token_repository import TokenRepository
 from app.services.auth_service import AuthService
@@ -36,6 +37,7 @@ class TestAuthApi:
             service_repository=ServiceRepository(),
             token_service=token_svc,
             user_service_client=UserServiceClient(),
+            role_scope_repository=RoleScopeRepository(),
         )
 
         def _resolve_jwt(request: Request) -> JWTToken | None:
@@ -49,6 +51,7 @@ class TestAuthApi:
         initialize_tokens_table,
         initialize_services_table,
         initialize_authorization_codes_table,
+        initialize_role_scopes_table,
     ) -> TestClient:
         from app.api_handler import app
 

@@ -15,6 +15,7 @@ from app.models.jwt import JWTToken
 from app.repositories.authorization_code_repository import (
     AuthorizationCodeRepository,
 )
+from app.repositories.role_scope_repository import RoleScopeRepository
 from app.repositories.service_repository import ServiceRepository
 from app.repositories.token_repository import TokenRepository
 from app.services.auth_service import AuthService
@@ -39,6 +40,10 @@ def get_authorization_code_repository() -> AuthorizationCodeRepository:
     return AuthorizationCodeRepository()
 
 
+def get_role_scope_repository() -> RoleScopeRepository:
+    return RoleScopeRepository()
+
+
 def get_password_hasher() -> PasswordHasher:
     return PasswordHasher()
 
@@ -55,6 +60,7 @@ def get_auth_service(
         get_authorization_code_repository
     ),
     user_service_client: UserServiceClient = Depends(get_user_service_client),
+    role_scope_repository: RoleScopeRepository = Depends(get_role_scope_repository),
 ) -> AuthService:
     return AuthService(
         password_hasher=password_hasher,
@@ -62,6 +68,7 @@ def get_auth_service(
         service_repository=service_repository,
         authorization_code_repository=authorization_code_repository,
         user_service_client=user_service_client,
+        role_scope_repository=role_scope_repository,
     )
 
 

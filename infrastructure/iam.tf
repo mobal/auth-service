@@ -41,6 +41,14 @@ resource "aws_iam_policy" "lambda_policy" {
       {
         Effect   = "Allow"
         Action   = [
+          "dynamodb:BatchGetItem",
+          "dynamodb:GetItem",
+        ]
+        Resource = aws_dynamodb_table.role_scopes.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = [
           "ec2:DescribeNetworkInterfaces",
           "ec2:CreateNetworkInterface",
           "ec2:DeleteNetworkInterface",

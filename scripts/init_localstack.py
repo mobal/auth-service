@@ -71,6 +71,10 @@ def create_tables() -> None:
                 }
             ],
         },
+        f"{STAGE}-role-scopes": {
+            "AttributeDefinitions": [{"AttributeName": "role", "AttributeType": "S"}],
+            "KeySchema": [{"AttributeName": "role", "KeyType": "HASH"}],
+        },
     }
 
     for name, schema in tables.items():
@@ -144,8 +148,27 @@ def seed_service_credentials() -> None:
     print(f"seeded service credentials {CLIENT_ID} and auth-service")
 
 
+def seed_role_scopes() -> None:
+    """Insert the role-to-scope mappings used by scope derivation."""
+    dynamodb = boto3.resource(
+        "dynamodb",
+        region_name=REGION,
+        endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localstack:4566"),
+    )
+    table = dynamodb.Table(f"{STAGE}-role-scopes")
+    table.put_item(
+        Item={
+            "role": "root",
+            "scopes": ["tokens:revoke", "users:read", "users:write"],
+        }
+    )
+    table.put_item(Item={"role": "posts:write", "scopes": ["posts:write"]})
+    print("seeded role-scope mappings")
+
+
 if __name__ == "__main__":
     create_tables()
     put_ssm_parameters()
     seed_service_credentials()
+    seed_role_scopes()
     print("localstack seeded")

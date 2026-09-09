@@ -24,16 +24,13 @@ from app.models.authorization_code import AuthorizationCode
 from app.models.jwt import JWTToken, RefreshToken
 from app.models.service import ServiceCredential
 from app.repositories.authorization_code_repository import AuthorizationCodeRepository
+from app.repositories.role_scope_repository import RoleScopeRepository
 from app.repositories.service_repository import ServiceRepository
 from app.services.token_service import TokenService
 
 ERROR_MESSAGE_UNAUTHORIZED = "Unauthorized"
 ERROR_MESSAGE_TOKEN_NOT_FOUND = "The requested token was not found"
 ERROR_MESSAGE_USER_NOT_FOUND = "The requested user was not found"
-
-ROLE_SCOPE_MAP: dict[str, list[str]] = {
-    "root": ["tokens:revoke", "users:read", "users:write"],
-}
 
 
 def _invalid_client_error() -> OAuthException:
@@ -55,6 +52,7 @@ class AuthService:
         service_repository: ServiceRepository,
         token_service: TokenService,
         user_service_client: UserServiceClient,
+        role_scope_repository: RoleScopeRepository,
     ) -> None:
         self._logger = Logger()
         self._password_hasher = password_hasher
@@ -62,6 +60,7 @@ class AuthService:
         self._service_repository = service_repository
         self._token_service = token_service
         self._user_service_client = user_service_client
+        self._role_scope_repository = role_scope_repository
 
         self._user_service_token = None
 
@@ -72,8 +71,9 @@ class AuthService:
             "Deriving scope from roles",
             extra={"roles_count": len(roles), "requested_scope": requested_scope},
         )
+        role_scope_map = self._role_scope_repository.get_by_roles(roles)
         allowed_scopes = {
-            scope for role in roles for scope in ROLE_SCOPE_MAP.get(role, [])
+            scope for role in roles for scope in role_scope_map.get(role, [])
         }
         if not allowed_scopes:
             self._logger.info("No allowed scopes mapped for roles")

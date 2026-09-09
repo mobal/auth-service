@@ -25,6 +25,17 @@ resource "aws_dynamodb_table" "services" {
   }
 }
 
+resource "aws_dynamodb_table" "role_scopes" {
+  name         = "${var.stage}-role-scopes"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "role"
+
+  attribute {
+    name = "role"
+    type = "S"
+  }
+}
+
 resource "aws_dynamodb_table" "tokens" {
   name         = "${var.stage}-tokens"
   billing_mode = "PAY_PER_REQUEST"

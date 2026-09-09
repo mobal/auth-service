@@ -20,6 +20,7 @@ from app.models.service import ServiceCredential
 from app.repositories.authorization_code_repository import (
     AuthorizationCodeRepository,
 )
+from app.repositories.role_scope_repository import RoleScopeRepository
 from app.repositories.service_repository import ServiceRepository
 from app.services.auth_service import AuthService
 from app.services.token_service import TokenService
@@ -58,6 +59,7 @@ class TestAuthService:
         token_service: TokenService,
         service_repository: ServiceRepository,
         fast_password_hasher: PasswordHasher,
+        role_scopes_table,
     ) -> AuthService:
         return AuthService(
             password_hasher=fast_password_hasher,
@@ -65,6 +67,7 @@ class TestAuthService:
             service_repository=service_repository,
             token_service=token_service,
             user_service_client=UserServiceClient(),
+            role_scope_repository=RoleScopeRepository(),
         )
 
     def test_successfully_login(
@@ -302,6 +305,17 @@ class TestAuthService:
         scope = auth_service._derive_scope(["root"], None)
 
         assert scope == "tokens:revoke users:read users:write"
+
+    def test_derive_scope_combines_scopes_of_all_roles(self, auth_service: AuthService):
+        scope = auth_service._derive_scope(["root", "posts:write"], None)
+
+        assert "posts:write" in scope.split()
+        assert "users:read" in scope.split()
+
+    def test_derive_scope_ignores_roles_without_mapping(
+        self, auth_service: AuthService
+    ):
+        assert auth_service._derive_scope(["unknown-role"], None) is None
 
     def test_successfully_derive_scope_with_valid_request(
         self, auth_service: AuthService

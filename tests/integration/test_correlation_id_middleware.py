@@ -32,6 +32,7 @@ class TestCorrelationIdMiddleware:
         from app.repositories.authorization_code_repository import (
             AuthorizationCodeRepository,
         )
+        from app.repositories.role_scope_repository import RoleScopeRepository
         from app.repositories.service_repository import ServiceRepository
         from app.repositories.token_repository import TokenRepository
         from app.services.auth_service import AuthService
@@ -46,6 +47,7 @@ class TestCorrelationIdMiddleware:
             service_repository=ServiceRepository(),
             token_service=token_svc,
             user_service_client=UserServiceClient(),
+            role_scope_repository=RoleScopeRepository(),
         )
         from fastapi import Request
 
@@ -58,7 +60,10 @@ class TestCorrelationIdMiddleware:
 
     @pytest.fixture
     def test_client(
-        self, initialize_tokens_table, initialize_services_table
+        self,
+        initialize_tokens_table,
+        initialize_services_table,
+        initialize_role_scopes_table,
     ) -> TestClient:
         from app.api_handler import app
 
@@ -150,15 +155,10 @@ class TestCorrelationIdMiddleware:
         )
 
         assert response.status_code == status.HTTP_200_OK
+
         correlation_id_value = response.headers.get(X_CORRELATION_ID)
         assert correlation_id_value is not None
-
-        try:
-            uuid.UUID(correlation_id_value)
-        except ValueError:
-            pytest.fail(
-                f"Invalid UUID format for correlation ID: {correlation_id_value}"
-            )
+        assert uuid.UUID(correlation_id_value)
 
     def test_correlation_id_from_aws_lambda_context(
         self,
@@ -166,6 +166,7 @@ class TestCorrelationIdMiddleware:
         token_url: str,
         initialize_tokens_table,
         initialize_services_table,
+        initialize_role_scopes_table,
     ):
         from unittest.mock import Mock
 

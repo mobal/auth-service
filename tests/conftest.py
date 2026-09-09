@@ -162,6 +162,32 @@ def initialize_services_table(
 
 
 @pytest.fixture
+def initialize_role_scopes_table(dynamodb_resource, role_scopes_table_name: str):
+    role_scopes_table = dynamodb_resource.create_table(
+        AttributeDefinitions=[{"AttributeName": "role", "AttributeType": "S"}],
+        TableName=role_scopes_table_name,
+        KeySchema=[{"AttributeName": "role", "KeyType": "HASH"}],
+        ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
+    )
+    role_scopes_table.put_item(
+        Item={"role": "root", "scopes": ["tokens:revoke", "users:read", "users:write"]}
+    )
+    role_scopes_table.put_item(Item={"role": "posts:write", "scopes": ["posts:write"]})
+
+
+@pytest.fixture
+def role_scopes_table_name() -> str:
+    return f"{os.getenv('STAGE', 'test')}-role-scopes"
+
+
+@pytest.fixture
+def role_scopes_table(
+    dynamodb_resource, initialize_role_scopes_table, role_scopes_table_name: str
+):
+    return dynamodb_resource.Table(role_scopes_table_name)
+
+
+@pytest.fixture
 def initialize_tokens_table(
     dynamodb_resource,
     jwt_token: JWTToken,
