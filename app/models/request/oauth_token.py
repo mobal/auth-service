@@ -10,6 +10,14 @@ class BaseGrantRequest(BaseModel):
     scope: str | None = None
     """Space-separated list of requested permission scopes."""
 
+    audience: str | None = None
+    """Requested JWT ``aud`` claim (RFC 7519 Section 4.1.3).
+
+    Temporary project-specific extension: only honoured by the
+    ``client_credentials`` grant and only for clients allowed by the
+    audience registry.
+    """
+
 
 class PasswordGrantRequest(BaseGrantRequest):
     """Resource owner password credentials grant (RFC 6749 Section 4.3)."""

@@ -381,5 +381,46 @@ def services_table(
 
 
 @pytest.fixture
+def audience_name() -> str:
+    return "test-audience"
+
+
+@pytest.fixture
+def audience_item(audience_name: str) -> dict[str, Any]:
+    return {
+        "audience": audience_name,
+        "allowed_clients": ["test-service"],
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+
+
+@pytest.fixture
+def audiences_table_name() -> str:
+    return f"{os.getenv('STAGE', 'test')}-audiences"
+
+
+@pytest.fixture
+def initialize_audiences_table(
+    dynamodb_resource,
+    audiences_table_name: str,
+    audience_item: dict[str, Any],
+):
+    audiences_table = dynamodb_resource.create_table(
+        AttributeDefinitions=[{"AttributeName": "audience", "AttributeType": "S"}],
+        TableName=audiences_table_name,
+        KeySchema=[{"AttributeName": "audience", "KeyType": "HASH"}],
+        ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
+    )
+    audiences_table.put_item(Item=audience_item)
+
+
+@pytest.fixture
+def audiences_table(
+    dynamodb_resource, initialize_audiences_table, audiences_table_name: str
+):
+    return dynamodb_resource.Table(audiences_table_name)
+
+
+@pytest.fixture
 def jwt_secret_ssm_param_value() -> str:
     return os.getenv("JWT_SECRET_SSM_PARAM_VALUE")

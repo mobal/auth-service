@@ -23,6 +23,7 @@ from app.exceptions import (
 from app.models.authorization_code import AuthorizationCode
 from app.models.jwt import JWTToken, RefreshToken
 from app.models.service import ServiceCredential
+from app.repositories.audience_repository import AudienceRepository
 from app.repositories.authorization_code_repository import AuthorizationCodeRepository
 from app.repositories.role_scope_repository import RoleScopeRepository
 from app.repositories.service_repository import ServiceRepository
@@ -53,6 +54,7 @@ class AuthService:
         token_service: TokenService,
         user_service_client: UserServiceClient,
         role_scope_repository: RoleScopeRepository,
+        audience_repository: AudienceRepository | None = None,
     ) -> None:
         self._logger = Logger()
         self._password_hasher = password_hasher
@@ -61,8 +63,47 @@ class AuthService:
         self._token_service = token_service
         self._user_service_client = user_service_client
         self._role_scope_repository = role_scope_repository
+        self._audience_repository = audience_repository
 
         self._user_service_token = None
+
+    def _validate_audience(self, audience: str, client_name: str) -> None:
+        """Check the audience registry before issuing a targeted token.
+
+        The registry defines which audiences exist and which clients may
+        request tokens for them.  Raises ``invalid_target`` for unregistered
+        audiences and ``unauthorized_client`` when the client is not allowed.
+        """
+        if self._audience_repository is None:
+            self._logger.warning(
+                "Audience requested but no audience registry is configured",
+                extra={"audience": audience},
+            )
+            raise OAuthException(
+                "invalid_target",
+                "Audience registry is not available",
+            )
+
+        audience_item = self._audience_repository.get_by_audience(audience)
+        if audience_item is None:
+            self._logger.warning(
+                "Audience validation failed, audience not registered",
+                extra={"audience": audience, "client_name": client_name},
+            )
+            raise OAuthException(
+                "invalid_target",
+                "The requested audience is not registered",
+            )
+
+        if client_name not in audience_item.allowed_clients:
+            self._logger.warning(
+                "Audience validation failed, client not allowed for audience",
+                extra={"audience": audience, "client_name": client_name},
+            )
+            raise OAuthException(
+                "unauthorized_client",
+                "The client is not allowed to request tokens for this audience",
+            )
 
     def _derive_scope(
         self, roles: list[str], requested_scope: str | None
@@ -492,13 +533,26 @@ class AuthService:
         client_secret: str,
         scope: str | None = None,
         aud: str | None = None,
+        audience: str | None = None,
     ) -> tuple[str, int, str | None]:
-        """Issue a client-credentials access token (RFC 6749 Section 4.4)."""
+        """Issue a client-credentials access token (RFC 6749 Section 4.4).
+
+        ``audience`` is a temporary project-specific extension: when given,
+        it is validated against the audience registry and used as the JWT
+        ``aud`` claim (RFC 7519 Section 4.1.3).
+        """
         self._logger.info(
             "Client credentials flow requested for client_name=%s",
             client_name,
-            extra={"client_name": client_name, "requested_scope": scope},
+            extra={
+                "client_name": client_name,
+                "requested_scope": scope,
+                "requested_audience": audience,
+            },
         )
+        if audience:
+            self._validate_audience(audience, client_name)
+            aud = audience
         jwt_token = self._generate_client_credentials(
             client_name, client_secret, scope, aud
         )

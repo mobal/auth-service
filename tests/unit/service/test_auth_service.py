@@ -15,8 +15,10 @@ from app.exceptions import (
     TokenNotFoundException,
     UserNotFoundException,
 )
+from app.models.audience import Audience
 from app.models.jwt import JWTToken, RefreshToken
 from app.models.service import ServiceCredential
+from app.repositories.audience_repository import AudienceRepository
 from app.repositories.authorization_code_repository import (
     AuthorizationCodeRepository,
 )
@@ -60,6 +62,7 @@ class TestAuthService:
         service_repository: ServiceRepository,
         fast_password_hasher: PasswordHasher,
         role_scopes_table,
+        audiences_table,
     ) -> AuthService:
         return AuthService(
             password_hasher=fast_password_hasher,
@@ -68,6 +71,7 @@ class TestAuthService:
             token_service=token_service,
             user_service_client=UserServiceClient(),
             role_scope_repository=RoleScopeRepository(),
+            audience_repository=AudienceRepository(),
         )
 
     def test_successfully_login(
@@ -384,6 +388,91 @@ class TestAuthService:
         assert expires_in == settings.service_token_lifetime_seconds
         assert scope == "users:read users:write"
         auth_service._token_service.create.assert_called_once()
+
+    def test_client_credentials_with_registered_audience_sets_aud_claim(
+        self,
+        mocker,
+        auth_service: AuthService,
+        password: str,
+        service_credential: ServiceCredential,
+        audience_item: dict,
+        settings: Settings,
+    ):
+        mocker.patch(
+            "app.services.auth_service.ServiceRepository.get_by_name",
+            return_value=service_credential,
+        )
+        mocker.patch(
+            "app.repositories.audience_repository.AudienceRepository.get_by_audience",
+            return_value=Audience(**audience_item),
+        )
+        mocker.patch.object(TokenService, "create")
+
+        token, _, _ = auth_service.client_credentials(
+            service_credential.name, password, None, audience=audience_item["audience"]
+        )
+        decoded = JWTToken(
+            **jwt.decode(
+                token,
+                settings.jwt_secret,
+                algorithms=ALGORITHMS,
+                options={"verify_aud": False},
+            )
+        )
+
+        assert decoded.aud == audience_item["audience"]
+        auth_service._token_service.create.assert_called_once()
+
+    def test_client_credentials_fails_for_unregistered_audience(
+        self,
+        mocker,
+        auth_service: AuthService,
+        password: str,
+        service_credential: ServiceCredential,
+    ):
+        mocker.patch(
+            "app.services.auth_service.ServiceRepository.get_by_name",
+            return_value=service_credential,
+        )
+        mocker.patch(
+            "app.repositories.audience_repository.AudienceRepository.get_by_audience",
+            return_value=None,
+        )
+
+        with pytest.raises(OAuthException) as excinfo:
+            auth_service.client_credentials(
+                service_credential.name, password, None, audience="unknown-audience"
+            )
+
+        assert excinfo.value.detail["error"] == "invalid_target"
+
+    def test_client_credentials_fails_for_unauthorized_client(
+        self,
+        mocker,
+        auth_service: AuthService,
+        password: str,
+        service_credential: ServiceCredential,
+        audience_item: dict,
+    ):
+        audience_item["allowed_clients"] = ["other-service"]
+        mocker.patch(
+            "app.services.auth_service.ServiceRepository.get_by_name",
+            return_value=service_credential,
+        )
+        mocker.patch(
+            "app.repositories.audience_repository.AudienceRepository.get_by_audience",
+            return_value=Audience(**audience_item),
+        )
+
+        with pytest.raises(OAuthException) as excinfo:
+            auth_service.client_credentials(
+                service_credential.name,
+                password,
+                None,
+                audience=audience_item["audience"],
+            )
+
+        assert excinfo.value.detail["error"] == "unauthorized_client"
 
     def test_successfully_client_credentials_with_requested_scope(
         self,

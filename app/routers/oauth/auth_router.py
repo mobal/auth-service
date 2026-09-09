@@ -179,7 +179,7 @@ def _handle_client_credentials_grant(
     client_name, client_secret = _parse_authorization_header(authorization)
 
     access_token, expires_in, scope = auth_service.client_credentials(
-        client_name, client_secret, body.scope
+        client_name, client_secret, body.scope, audience=body.audience
     )
 
     return OAuthTokenResponse(

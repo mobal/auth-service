@@ -75,6 +75,12 @@ def create_tables() -> None:
             "AttributeDefinitions": [{"AttributeName": "role", "AttributeType": "S"}],
             "KeySchema": [{"AttributeName": "role", "KeyType": "HASH"}],
         },
+        f"{STAGE}-audiences": {
+            "AttributeDefinitions": [
+                {"AttributeName": "audience", "AttributeType": "S"}
+            ],
+            "KeySchema": [{"AttributeName": "audience", "KeyType": "HASH"}],
+        },
     }
 
     for name, schema in tables.items():
@@ -148,6 +154,28 @@ def seed_service_credentials() -> None:
     print(f"seeded service credentials {CLIENT_ID} and auth-service")
 
 
+def seed_audiences() -> None:
+    """Insert the audience registry entry used by the collection.
+
+    ``user-service-api`` is the audience the client-credentials-with-audience
+    requests target; the ``user-service`` client is its only allowed client.
+    """
+    dynamodb = boto3.resource(
+        "dynamodb",
+        region_name=REGION,
+        endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localstack:4566"),
+    )
+    table = dynamodb.Table(f"{STAGE}-audiences")
+    table.put_item(
+        Item={
+            "audience": "user-service-api",
+            "allowed_clients": [CLIENT_ID],
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+    )
+    print("seeded audience registry")
+
+
 def seed_role_scopes() -> None:
     """Insert the role-to-scope mappings used by scope derivation."""
     dynamodb = boto3.resource(
@@ -171,4 +199,5 @@ if __name__ == "__main__":
     put_ssm_parameters()
     seed_service_credentials()
     seed_role_scopes()
+    seed_audiences()
     print("localstack seeded")
