@@ -11,7 +11,9 @@ class TokenRepository:
     def __init__(self) -> None:
         self._logger = Logger()
         self._table = (
-            boto3.Session().resource("dynamodb").Table(f"{settings.stage}-tokens")
+            boto3.Session().resource("dynamodb").Table(
+                f"{settings.stage}-{settings.app_name}-tokens"
+            )
         )
 
     def create_token(self, data: dict[str, Any]) -> dict[str, Any]:

@@ -15,7 +15,9 @@ class AudienceRepository:
     def __init__(self) -> None:
         self._logger = Logger()
         self._table = (
-            boto3.Session().resource("dynamodb").Table(f"{settings.stage}-audiences")
+            boto3.Session().resource("dynamodb").Table(
+                f"{settings.stage}-{settings.app_name}-audiences"
+            )
         )
 
     def create(self, data: dict) -> dict:

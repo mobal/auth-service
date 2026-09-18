@@ -15,7 +15,9 @@ class AuthorizationCodeRepository:
     def __init__(self) -> None:
         self._logger = Logger()
         self._dynamodb = boto3.resource("dynamodb")
-        self._table = self._dynamodb.Table(f"{settings.stage}-authorization_codes")
+        self._table = self._dynamodb.Table(
+            f"{settings.stage}-{settings.app_name}-authorization-codes"
+        )
 
     def create(
         self,

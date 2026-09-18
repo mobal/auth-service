@@ -1,5 +1,5 @@
 resource "aws_dynamodb_table" "services" {
-  name         = "${var.stage}-services"
+  name         = "${local.app_name}-services"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "id"
 
@@ -26,7 +26,7 @@ resource "aws_dynamodb_table" "services" {
 }
 
 resource "aws_dynamodb_table" "role_scopes" {
-  name         = "${var.stage}-role-scopes"
+  name         = "${local.app_name}-role-scopes"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "role"
 
@@ -37,7 +37,7 @@ resource "aws_dynamodb_table" "role_scopes" {
 }
 
 resource "aws_dynamodb_table" "tokens" {
-  name         = "${var.stage}-tokens"
+  name         = "${local.app_name}-tokens"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "jti"
 
@@ -69,7 +69,7 @@ resource "aws_dynamodb_table" "tokens" {
 }
 
 resource "aws_dynamodb_table" "audiences" {
-  name         = "${var.stage}-audiences"
+  name         = "${local.app_name}-audiences"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "audience"
 
@@ -80,7 +80,7 @@ resource "aws_dynamodb_table" "audiences" {
 }
 
 resource "aws_dynamodb_table" "authorization_codes" {
-  name         = "${var.stage}-authorization-codes"
+  name         = "${local.app_name}-authorization-codes"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "id"
 

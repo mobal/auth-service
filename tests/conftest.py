@@ -177,7 +177,7 @@ def initialize_role_scopes_table(dynamodb_resource, role_scopes_table_name: str)
 
 @pytest.fixture
 def role_scopes_table_name() -> str:
-    return f"{os.getenv('STAGE', 'test')}-role-scopes"
+    return f"{os.getenv('STAGE', 'test')}-{os.getenv('APP_NAME', 'auth-service')}-role-scopes"
 
 
 @pytest.fixture
@@ -346,12 +346,12 @@ def service_credential(service_credential_dict: dict[str, Any]) -> ServiceCreden
 
 @pytest.fixture
 def services_table_name() -> str:
-    return f"{os.getenv('STAGE', 'test')}-services"
+    return f"{os.getenv('STAGE', 'test')}-{os.getenv('APP_NAME', 'auth-service')}-services"
 
 
 @pytest.fixture
 def tokens_table_name() -> str:
-    return f"{os.getenv('STAGE', 'test')}-tokens"
+    return f"{os.getenv('STAGE', 'test')}-{os.getenv('APP_NAME', 'auth-service')}-tokens"
 
 
 @pytest.fixture
@@ -361,7 +361,7 @@ def tokens_table(dynamodb_resource, initialize_tokens_table, tokens_table_name: 
 
 @pytest.fixture
 def authorization_codes_table_name() -> str:
-    return f"{os.getenv('STAGE', 'test')}-authorization_codes"
+    return f"{os.getenv('STAGE', 'test')}-{os.getenv('APP_NAME', 'auth-service')}-authorization-codes"
 
 
 @pytest.fixture
@@ -396,7 +396,7 @@ def audience_item(audience_name: str) -> dict[str, Any]:
 
 @pytest.fixture
 def audiences_table_name() -> str:
-    return f"{os.getenv('STAGE', 'test')}-audiences"
+    return f"{os.getenv('STAGE', 'test')}-{os.getenv('APP_NAME', 'auth-service')}-audiences"
 
 
 @pytest.fixture
