@@ -925,6 +925,64 @@
           "response": []
         },
         {
+          "name": "Token — authorization code without client id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oauth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "authorization_code"
+                },
+                {
+                  "key": "code",
+                  "value": "{{authCode}}"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "https://client.example.com/callback"
+                },
+                {
+                  "key": "code_verifier",
+                  "value": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+                }
+              ]
+            },
+            "description": "A PKCE authorization-code exchange must include the client id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds with 400', () => pm.response.to.have.status(400));",
+                  "pm.test('returns invalid request error', () => {",
+                  "  pm.expect(pm.response.json().error).to.eql('invalid_request');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
           "name": "Token — authorization code with PKCE",
           "request": {
             "method": "POST",

@@ -456,6 +456,50 @@ class TestAuthApi:
         assert "expires_in" in body
         self._assert_cache_headers(response)
 
+    def test_authorization_code_rejects_wrong_pkce_verifier_and_is_consumed(
+        self,
+        dynamodb_resource,
+        authorization_codes_table_name: str,
+        token_url: str,
+        test_client: TestClient,
+    ):
+        code = "pkce-code-wrong-verifier"
+        dynamodb_resource.Table(authorization_codes_table_name).put_item(
+            Item={
+                "id": str(uuid.uuid4()),
+                "code": code,
+                "client_id": "my-app",
+                "user_id": str(uuid.uuid4()),
+                "redirect_uri": "https://example.com/callback",
+                "code_challenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+                "code_challenge_method": "S256",
+                "ttl": int(time.time()) + 600,
+            }
+        )
+        data = {
+            "grant_type": "authorization_code",
+            "client_id": "my-app",
+            "code": code,
+            "redirect_uri": "https://example.com/callback",
+            "code_verifier": "wrong-verifier-that-is-long-enough-for-pkce-x",
+        }
+
+        response = test_client.post(token_url, data=data)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.json()["error"] == "invalid_grant"
+
+        response = test_client.post(
+            token_url,
+            data={
+                **data,
+                "code_verifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+            },
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.json()["error"] == "invalid_grant"
+
     def test_modern_browser_authorization_code_pkce_flow(
         self,
         httpx2_mock,
