@@ -88,9 +88,7 @@ async def parse_oauth_token_request(request: Request) -> BaseGrantRequest:
     complaint error responses.
     """
     form_data = await request.form()
-    form = {
-        key: value for key, value in form_data.items() if isinstance(value, str)
-    }
+    form = {key: value for key, value in form_data.items() if isinstance(value, str)}
     grant_type = form.get("grant_type")
 
     match grant_type:
