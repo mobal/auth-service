@@ -10,9 +10,9 @@ class ServiceRepository:
     def __init__(self) -> None:
         self._logger = Logger()
         self._table = (
-            boto3.Session().resource("dynamodb").Table(
-                f"{settings.stage}-{settings.app_name}-services"
-            )
+            boto3.Session()
+            .resource("dynamodb")
+            .Table(f"{settings.stage}-{settings.app_name}-services")
         )
 
     def create_service(self, data: dict) -> dict:

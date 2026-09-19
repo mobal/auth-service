@@ -6,7 +6,7 @@ class OAuthAuthorizeRequest(BaseModel):
 
     The resource owner's user-agent redirects to this endpoint with
     these query-string parameters to initiate an authorization code grant.
-    PKCE parameters are optional (RFC 7636 Section 4).
+    Browser/public-client requests require PKCE with S256 (RFC 7636 Section 4).
     """  # noqa: E501
 
     response_type: str
@@ -20,6 +20,6 @@ class OAuthAuthorizeRequest(BaseModel):
     state: str | None = None
     """Opaque value for CSRF protection (RFC 6749 Section 4.1.1)."""
     code_challenge: str | None = None
-    """PKCE code challenge (RFC 7636 Section 4.2)."""
+    """PKCE code challenge; required for browser/public clients."""
     code_challenge_method: str | None = None
-    """PKCE challenge method — ``\"S256\"`` or ``\"plain\"`` (RFC 7636 Section 4.2)."""
+    """PKCE challenge method; browser/public clients must use ``\"S256\"``."""

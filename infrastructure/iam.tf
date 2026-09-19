@@ -22,8 +22,8 @@ resource "aws_iam_policy" "lambda_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "dynamodb:DeleteItem",
           "dynamodb:GetItem",
           "dynamodb:PutItem",
@@ -34,29 +34,31 @@ resource "aws_iam_policy" "lambda_policy" {
           "${aws_dynamodb_table.services.arn}/index/NameIndex",
           aws_dynamodb_table.authorization_codes.arn,
           "${aws_dynamodb_table.authorization_codes.arn}/index/CodeIndex",
+          aws_dynamodb_table.browser_sessions.arn,
+          aws_dynamodb_table.pending_authorization_requests.arn,
           aws_dynamodb_table.tokens.arn,
           "${aws_dynamodb_table.tokens.arn}/index/RefreshTokenIndex"
         ]
       },
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "dynamodb:BatchGetItem",
           "dynamodb:GetItem",
         ]
         Resource = aws_dynamodb_table.role_scopes.arn
       },
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "dynamodb:GetItem",
           "dynamodb:PutItem",
         ]
         Resource = aws_dynamodb_table.audiences.arn
       },
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "ec2:DescribeNetworkInterfaces",
           "ec2:CreateNetworkInterface",
           "ec2:DeleteNetworkInterface",
@@ -66,8 +68,8 @@ resource "aws_iam_policy" "lambda_policy" {
         Resource = "*"
       },
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents"
@@ -75,8 +77,8 @@ resource "aws_iam_policy" "lambda_policy" {
         Resource = "*"
       },
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "ssm:GetParameter",
         ]
         Resource = "*"

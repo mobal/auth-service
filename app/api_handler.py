@@ -1,4 +1,4 @@
-from aws_lambda_powertools import Logger
+from aws_lambda_powertools import Logger, Metrics
 from botocore.exceptions import BotoCoreError
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.encoders import jsonable_encoder
@@ -15,6 +15,7 @@ from app.models.response.error import ErrorResponse, ValidationErrorResponse
 from app.routers.oauth.auth_router import router as auth_router
 
 logger = Logger()
+metrics = Metrics(namespace="AuthService")
 
 app = FastAPI(
     debug=settings.debug if settings.stage != "prod" else False,
@@ -33,6 +34,7 @@ app.include_router(auth_router, tags=["auth"])
 
 handler = Mangum(app)
 handler = logger.inject_lambda_context(handler, clear_state=True, log_event=False)
+handler = metrics.log_metrics(handler)
 
 
 @app.exception_handler(OAuthException)

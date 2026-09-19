@@ -14,11 +14,11 @@ resource "aws_dynamodb_table" "services" {
   }
 
   global_secondary_index {
-    name            = "NameIndex"
+    name = "NameIndex"
 
     key_schema {
       attribute_name = "name"
-      key_type = "HASH"
+      key_type       = "HASH"
     }
 
     projection_type = "ALL"
@@ -52,11 +52,11 @@ resource "aws_dynamodb_table" "tokens" {
   }
 
   global_secondary_index {
-    name            = "RefreshTokenIndex"
+    name = "RefreshTokenIndex"
 
     key_schema {
       attribute_name = "refresh_token"
-      key_type = "HASH"
+      key_type       = "HASH"
     }
 
     projection_type = "ALL"
@@ -95,14 +95,46 @@ resource "aws_dynamodb_table" "authorization_codes" {
   }
 
   global_secondary_index {
-    name            = "CodeIndex"
+    name = "CodeIndex"
 
     key_schema {
       attribute_name = "code"
-      key_type = "HASH"
+      key_type       = "HASH"
     }
 
     projection_type = "ALL"
+  }
+
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+}
+
+resource "aws_dynamodb_table" "browser_sessions" {
+  name         = "${local.app_name}-browser-sessions"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+}
+
+resource "aws_dynamodb_table" "pending_authorization_requests" {
+  name         = "${local.app_name}-pending-authorization-requests"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
   }
 
   ttl {

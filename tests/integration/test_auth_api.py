@@ -1,7 +1,9 @@
+import hashlib
 import time
 import uuid
 from base64 import b64encode
 from datetime import UTC, datetime
+from urllib.parse import parse_qs, urlparse
 
 import jwt
 import pytest
@@ -52,6 +54,8 @@ class TestAuthApi:
         initialize_services_table,
         initialize_authorization_codes_table,
         initialize_role_scopes_table,
+        initialize_browser_sessions_table,
+        initialize_pending_authorization_requests_table,
     ) -> TestClient:
         from app.api_handler import app
 
@@ -438,6 +442,7 @@ class TestAuthApi:
             token_url,
             data={
                 "grant_type": "authorization_code",
+                "client_id": "my-app",
                 "code": code,
                 "redirect_uri": redirect_uri,
             },
@@ -450,6 +455,186 @@ class TestAuthApi:
         assert body["token_type"] == "Bearer"
         assert "expires_in" in body
         self._assert_cache_headers(response)
+
+    def test_modern_browser_authorization_code_pkce_flow(
+        self,
+        httpx2_mock,
+        services_table,
+        service_credential,
+        user_data,
+        authorize_url: str,
+        test_client: TestClient,
+    ):
+        import os
+
+        redirect_uri = "https://example.com/callback"
+        services_table.put_item(
+            Item={
+                "id": service_credential.id,
+                "name": service_credential.name,
+                "secret": service_credential.secret,
+                "scopes": ["users:read"],
+                "redirect_uris": [redirect_uri],
+                "created_at": service_credential.created_at,
+            }
+        )
+        verifier = "test-verifier-that-is-long-enough-for-pkce-x"
+        challenge = (
+            b64encode(hashlib.sha256(verifier.encode()).digest())
+            .decode()
+            .replace("+", "-")
+            .replace("/", "_")
+            .rstrip("=")
+        )
+        response = test_client.get(
+            authorize_url,
+            params={
+                "response_type": "code",
+                "client_id": service_credential.id,
+                "redirect_uri": redirect_uri,
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+                "state": "state-123",
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == status.HTTP_302_FOUND
+        login_url = response.headers["location"]
+        request_id = parse_qs(urlparse(login_url).query)["request_id"][0]
+        login_page = test_client.get(login_url)
+        csrf_token = login_page.text.split('name="csrf_token" value="')[1].split('"')[0]
+
+        httpx2_mock.add_response(
+            method="GET",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users?email=root%40squarelabs.hu",
+            json={"items": [user_data]},
+            status_code=status.HTTP_200_OK,
+        )
+        httpx2_mock.add_response(
+            method="POST",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{user_data['id']}/validate",
+            status_code=status.HTTP_200_OK,
+        )
+        httpx2_mock.add_response(
+            method="GET",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{user_data['id']}",
+            json=user_data,
+            status_code=status.HTTP_200_OK,
+        )
+        response = test_client.post(
+            "/login",
+            data={
+                "request_id": request_id,
+                "csrf_token": csrf_token,
+                "email": user_data["email"],
+                "password": "password",
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == status.HTTP_302_FOUND
+        callback = urlparse(response.headers["location"])
+        callback_params = parse_qs(callback.query)
+        assert callback_params["state"] == ["state-123"]
+        code = callback_params["code"][0]
+
+        httpx2_mock.add_response(
+            method="GET",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}/api/v1/users/{user_data['id']}",
+            json=user_data,
+            status_code=status.HTTP_200_OK,
+        )
+        response = test_client.post(
+            "/oauth/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": service_credential.id,
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "code_verifier": verifier,
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert "access_token" in response.json()
+
+    def test_browser_authorization_rejects_plain_pkce(
+        self,
+        services_table,
+        service_credential,
+        authorize_url: str,
+        test_client: TestClient,
+    ):
+        redirect_uri = "https://example.com/callback"
+        services_table.put_item(
+            Item={
+                "id": service_credential.id,
+                "name": service_credential.name,
+                "secret": service_credential.secret,
+                "scopes": ["users:read"],
+                "redirect_uris": [redirect_uri],
+                "created_at": service_credential.created_at,
+            }
+        )
+
+        response = test_client.get(
+            authorize_url,
+            params={
+                "response_type": "code",
+                "client_id": service_credential.id,
+                "redirect_uri": redirect_uri,
+                "code_challenge": "plain-challenge",
+                "code_challenge_method": "plain",
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.json()["error"] == "invalid_request"
+
+    def test_login_rejects_csrf_cookie_mismatch(
+        self,
+        services_table,
+        service_credential,
+        authorize_url: str,
+        test_client: TestClient,
+    ):
+        redirect_uri = "https://example.com/callback"
+        services_table.put_item(
+            Item={
+                "id": service_credential.id,
+                "name": service_credential.name,
+                "secret": service_credential.secret,
+                "scopes": ["users:read"],
+                "redirect_uris": [redirect_uri],
+                "created_at": service_credential.created_at,
+            }
+        )
+        response = test_client.get(
+            authorize_url,
+            params={
+                "response_type": "code",
+                "client_id": service_credential.id,
+                "redirect_uri": redirect_uri,
+                "code_challenge": "E9Mrozoa2owUG2gw61pfAqgxVrQj5zwJckeqyUmKkqM",
+                "code_challenge_method": "S256",
+            },
+            follow_redirects=False,
+        )
+        request_id = parse_qs(urlparse(response.headers["location"]).query)[
+            "request_id"
+        ][0]
+        login_page = test_client.get(response.headers["location"])
+        csrf_token = login_page.text.split('name="csrf_token" value="')[1].split('"')[0]
+        test_client.cookies.set("login_csrf", "wrong-cookie-value")
+
+        response = test_client.post(
+            "/login",
+            data={"request_id": request_id, "csrf_token": csrf_token},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_successfully_authorize(
         self,

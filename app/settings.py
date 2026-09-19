@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     rate_limit_duration_in_seconds: int = 60
     refresh_token_lifetime: int = 2592000  # 30 days
     service_token_lifetime_seconds: int = 30
+    browser_session_lifetime_seconds: int = 3600
+    pending_authorization_request_lifetime_seconds: int = 600
     stage: str
 
     @computed_field

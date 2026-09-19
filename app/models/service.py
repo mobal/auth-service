@@ -20,5 +20,7 @@ class ServiceCredential(CamelModel):
     """List of OAuth 2.0 scopes this credential is authorized for."""
     redirect_uris: list[str] = []
     """List of allowed redirect URIs for the authorization code grant (RFC 6749 Section 3.1.2)."""
+    allowed_grant_types: list[str] | None = None
+    """Optional grant allowlist; omitted means preserve legacy behavior."""
     created_at: str
     """ISO 8601 timestamp of when this credential was created."""

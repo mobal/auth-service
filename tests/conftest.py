@@ -117,6 +117,44 @@ def initialize_authorization_codes_table(
 
 
 @pytest.fixture
+def browser_sessions_table_name() -> str:
+    return (
+        f"{os.getenv('STAGE', 'test')}-{os.getenv('APP_NAME', 'auth-service')}"
+        "-browser-sessions"
+    )
+
+
+@pytest.fixture
+def initialize_browser_sessions_table(dynamodb_resource, browser_sessions_table_name):
+    dynamodb_resource.create_table(
+        AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
+        TableName=browser_sessions_table_name,
+        KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
+        ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
+    )
+
+
+@pytest.fixture
+def pending_authorization_requests_table_name() -> str:
+    return (
+        f"{os.getenv('STAGE', 'test')}-{os.getenv('APP_NAME', 'auth-service')}"
+        "-pending-authorization-requests"
+    )
+
+
+@pytest.fixture
+def initialize_pending_authorization_requests_table(
+    dynamodb_resource, pending_authorization_requests_table_name
+):
+    dynamodb_resource.create_table(
+        AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
+        TableName=pending_authorization_requests_table_name,
+        KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
+        ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
+    )
+
+
+@pytest.fixture
 def initialize_services_table(
     dynamodb_resource,
     service_credential: ServiceCredential,
@@ -346,12 +384,16 @@ def service_credential(service_credential_dict: dict[str, Any]) -> ServiceCreden
 
 @pytest.fixture
 def services_table_name() -> str:
-    return f"{os.getenv('STAGE', 'test')}-{os.getenv('APP_NAME', 'auth-service')}-services"
+    return (
+        f"{os.getenv('STAGE', 'test')}-{os.getenv('APP_NAME', 'auth-service')}-services"
+    )
 
 
 @pytest.fixture
 def tokens_table_name() -> str:
-    return f"{os.getenv('STAGE', 'test')}-{os.getenv('APP_NAME', 'auth-service')}-tokens"
+    return (
+        f"{os.getenv('STAGE', 'test')}-{os.getenv('APP_NAME', 'auth-service')}-tokens"
+    )
 
 
 @pytest.fixture

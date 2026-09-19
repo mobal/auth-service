@@ -7,7 +7,7 @@ mocks by passing them directly to the constructor.
 """
 
 from argon2 import PasswordHasher
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request
 
 from app.clients.user_service_client import UserServiceClient
 from app.jwt_bearer import JWTBearer
@@ -15,6 +15,10 @@ from app.models.jwt import JWTToken
 from app.repositories.audience_repository import AudienceRepository
 from app.repositories.authorization_code_repository import (
     AuthorizationCodeRepository,
+)
+from app.repositories.browser_session_repository import BrowserSessionRepository
+from app.repositories.pending_authorization_request_repository import (
+    PendingAuthorizationRequestRepository,
 )
 from app.repositories.role_scope_repository import RoleScopeRepository
 from app.repositories.service_repository import ServiceRepository
@@ -39,6 +43,16 @@ def get_service_repository() -> ServiceRepository:
 
 def get_authorization_code_repository() -> AuthorizationCodeRepository:
     return AuthorizationCodeRepository()
+
+
+def get_browser_session_repository() -> BrowserSessionRepository:
+    return BrowserSessionRepository()
+
+
+def get_pending_authorization_request_repository() -> (
+    PendingAuthorizationRequestRepository
+):
+    return PendingAuthorizationRequestRepository()
 
 
 def get_role_scope_repository() -> RoleScopeRepository:
@@ -88,4 +102,14 @@ def get_jwt_bearer(
     Returns the JWTBearer result (not the JWTBearer instance itself) so that
     FastAPI injects the decoded token into route handlers.
     """
-    return JWTBearer(token_service=token_service)(request)
+    token = JWTBearer(token_service=token_service)(request)
+    if token is None:
+        raise HTTPException(status_code=403, detail="Not authenticated")
+    return token
+
+
+def get_optional_jwt_bearer(
+    request: Request,
+    token_service: TokenService = Depends(get_token_service),
+) -> JWTToken | None:
+    return JWTBearer(token_service=token_service, auto_error=False)(request)

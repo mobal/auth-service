@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import re
 import secrets
 import time
 import uuid
@@ -217,6 +218,14 @@ class AuthService:
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
+        if auth_code.code_challenge_method == "S256" and not re.fullmatch(
+            r"[A-Za-z0-9\-._~]{43,128}", code_verifier
+        ):
+            self._logger.warning("PKCE code_verifier format validation failed")
+            raise OAuthException(
+                "invalid_grant", status_code=status.HTTP_400_BAD_REQUEST
+            )
+
         expected_challenge = self._get_pkce_challenge(
             code_verifier,
             auth_code.code_challenge_method,
@@ -381,6 +390,11 @@ class AuthService:
             extra={"client_name": client_name, "requested_scope": requested_scope},
         )
         service = self._authenticate_service(client_name, client_secret)
+        if (
+            service.allowed_grant_types is not None
+            and "client_credentials" not in service.allowed_grant_types
+        ):
+            raise OAuthException("unauthorized_client")
         granted_scope = self._resolve_scope(
             set(service.scopes or []),
             requested_scope,
@@ -453,11 +467,7 @@ class AuthService:
         if not client or not client.redirect_uris:
             return
 
-        normalized_redirect = self._normalize_uri(redirect_uri)
-        if not any(
-            self._normalize_uri(allowed) == normalized_redirect
-            for allowed in client.redirect_uris
-        ):
+        if redirect_uri not in client.redirect_uris:
             self._logger.warning(
                 "Authorization failed, redirect_uri not registered for client_id=%s",
                 client_id,
@@ -467,6 +477,57 @@ class AuthService:
                 "Redirect URI is not registered for this client",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
+
+    def validate_authorization_request(
+        self,
+        response_type: str,
+        client_id: str,
+        redirect_uri: str,
+        code_challenge: str | None,
+        code_challenge_method: str | None,
+    ) -> None:
+        """Validate the browser-facing authorization request before login."""
+        if response_type != "code":
+            raise OAuthException("unsupported_response_type")
+        if not code_challenge or code_challenge_method != "S256":
+            raise OAuthException(
+                "invalid_request",
+                "SPA clients must use PKCE with S256",
+            )
+
+        client = self._service_repository.get_by_id(client_id)
+        if client is None:
+            raise OAuthException("invalid_client", "Unknown client")
+        if (
+            client.allowed_grant_types is not None
+            and "authorization_code" not in client.allowed_grant_types
+        ):
+            raise OAuthException("unauthorized_client")
+        if not client.redirect_uris:
+            raise OAuthException(
+                "invalid_request", "Client has no registered redirect URI"
+            )
+        if urlparse(redirect_uri).fragment:
+            raise OAuthException(
+                "invalid_request", "Redirect URI must not contain a fragment"
+            )
+
+        normalized_redirect = self._normalize_uri(redirect_uri)
+        if not any(
+            self._normalize_uri(allowed) == normalized_redirect
+            for allowed in client.redirect_uris
+        ):
+            raise OAuthException(
+                "invalid_request",
+                "Redirect URI is not registered for this client",
+            )
+
+    def authenticate_user(self, email: str, password: str) -> dict:
+        """Authenticate a browser user without issuing OAuth tokens."""
+        user = self._fetch_user_by_email(email)
+        if user is None or not self._validate_user_password(user["id"], password):
+            raise InvalidCredentialsException("Invalid email or password.")
+        return user
 
     def login(
         self,
@@ -487,7 +548,7 @@ class AuthService:
         self._logger.warning(
             "Password grant login invoked — this flow is deprecated per OAuth 2.1 (BCP). "
             "Migrate to authorization code grant with PKCE.",
-            extra={"email": email, "requested_scope": requested_scope},
+            extra={"requested_scope": requested_scope},
         )
         user = self._fetch_user_by_email(email)
         if user is None:
@@ -587,6 +648,15 @@ class AuthService:
             jwt_token.scope,
         )
 
+    def validate_grant_type(self, client_id: str | None, grant_type: str) -> None:
+        """Apply an optional per-client grant allowlist."""
+        if client_id is None:
+            return
+        client = self._service_repository.get_by_id(client_id)
+        if client is not None and client.allowed_grant_types is not None:
+            if grant_type not in client.allowed_grant_types:
+                raise OAuthException("unauthorized_client")
+
     def authorize(
         self,
         user_id: str,
@@ -656,9 +726,13 @@ class AuthService:
             )
             raise OAuthException("invalid_grant")
 
-        if self._normalize_uri(auth_code.redirect_uri) != self._normalize_uri(
-            redirect_uri
-        ):
+        redirect_matches = (
+            auth_code.redirect_uri == redirect_uri
+            if auth_code.code_challenge
+            else self._normalize_uri(auth_code.redirect_uri)
+            == self._normalize_uri(redirect_uri)
+        )
+        if not redirect_matches:
             self._logger.warning(
                 "Authorization code exchange failed, redirect_uri mismatch",
                 extra={"authorization_code_id": auth_code.id},
@@ -669,11 +743,23 @@ class AuthService:
         return auth_code
 
     def exchange_code(
-        self, code: str, redirect_uri: str, code_verifier: str | None = None
+        self,
+        code: str,
+        redirect_uri: str,
+        code_verifier: str | None = None,
+        client_id: str | None = None,
     ) -> tuple[str, str, int, str | None]:
         """Exchange a valid authorization code for tokens (RFC 6749 4.1.3)."""
         self._logger.info("Authorization code exchange requested")
         auth_code = self._load_auth_code(code, redirect_uri, code_verifier)
+        if auth_code.code_challenge and client_id is None:
+            self._logger.warning(
+                "Authorization code exchange failed, client is missing"
+            )
+            raise OAuthException("invalid_grant")
+        if client_id is not None and auth_code.client_id != client_id:
+            self._logger.warning("Authorization code exchange failed, client mismatch")
+            raise OAuthException("invalid_grant")
 
         self._fetch_user_by_id(auth_code.user_id, "Authorization code exchange")
 

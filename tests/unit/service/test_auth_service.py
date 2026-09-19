@@ -780,6 +780,7 @@ class TestAuthService:
         auth_code.id = "auth-code-id-123"
         auth_code.code = "auth_code_123"
         auth_code.user_id = user_data["id"]
+        auth_code.client_id = "client_123"
         auth_code.redirect_uri = "https://example.com/callback"
         auth_code.scope = "users:read"
         auth_code.code_challenge = None
@@ -980,7 +981,7 @@ class TestAuthService:
         import base64
         import hashlib
 
-        code_verifier = "test_verifier_for_pkce"
+        code_verifier = "test_verifier_for_pkce_1234567890123456789012345"
         code_challenge = (
             base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest())
             .decode()
@@ -991,6 +992,7 @@ class TestAuthService:
         auth_code.id = "auth-code-id-s256"
         auth_code.code = "auth_code_123"
         auth_code.user_id = user_data["id"]
+        auth_code.client_id = "client_123"
         auth_code.redirect_uri = "https://example.com/callback"
         auth_code.scope = "users:read"
         auth_code.code_challenge = code_challenge
@@ -1012,6 +1014,7 @@ class TestAuthService:
             code="auth_code_123",
             redirect_uri="https://example.com/callback",
             code_verifier=code_verifier,
+            client_id="client_123",
         )
 
         assert jwt_str is not None
@@ -1030,6 +1033,7 @@ class TestAuthService:
         auth_code.id = "auth-code-id-plain"
         auth_code.code = "auth_code_123"
         auth_code.user_id = user_data["id"]
+        auth_code.client_id = "client_123"
         auth_code.redirect_uri = "https://example.com/callback"
         auth_code.scope = "users:read"
         auth_code.code_challenge = "plain_challenge"
@@ -1051,6 +1055,7 @@ class TestAuthService:
             code="auth_code_123",
             redirect_uri="https://example.com/callback",
             code_verifier="plain_challenge",
+            client_id="client_123",
         )
 
         assert jwt_str is not None

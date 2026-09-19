@@ -17,6 +17,8 @@ class BaseGrantRequest(BaseModel):
     registered, used as the JWT ``aud`` claim (RFC 7519 Section 4.1.3).
     """
 
+    client_id: str | None = None
+
 
 class PasswordGrantRequest(BaseGrantRequest):
     """Resource owner password credentials grant (RFC 6749 Section 4.3)."""
@@ -37,6 +39,7 @@ class AuthorizationCodeGrantRequest(BaseGrantRequest):
     """Authorization code grant (RFC 6749 Section 4.1)."""
 
     grant_type: str = Field(min_length=1)
+    client_id: str = Field(min_length=1)
     code: str = Field(min_length=1)
     redirect_uri: str = Field(min_length=1)
     code_verifier: str | None = None
