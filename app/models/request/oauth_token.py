@@ -19,6 +19,8 @@ class BaseGrantRequest(BaseModel):
 
     client_id: str | None = None
 
+    grant_type: str
+
 
 class PasswordGrantRequest(BaseGrantRequest):
     """Resource owner password credentials grant (RFC 6749 Section 4.3)."""

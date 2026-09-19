@@ -4,6 +4,7 @@ import re
 import secrets
 import time
 import uuid
+from typing import cast
 from urllib.parse import urlparse, urlunparse
 
 import jwt
@@ -299,7 +300,9 @@ class AuthService:
     @staticmethod
     def _encode_token(token: JWTToken) -> str:
         """Sign a JWT payload with the auth-service signing secret."""
-        return jwt.encode(token.model_dump(exclude_none=True), settings.jwt_secret)
+        return jwt.encode(
+            token.model_dump(exclude_none=True), cast(str, settings.jwt_secret)
+        )
 
     def _token_response(
         self, jwt_token: JWTToken, refresh_token: RefreshToken
@@ -419,7 +422,7 @@ class AuthService:
         """Fetch a user from the user service by email."""
         service_token = self._issue_service_token(
             settings.app_name,
-            settings.client_secret,
+            cast(str, settings.client_secret),
             aud=f"{settings.stage}-user-service",
         )
         return self._user_service_client.get_user_by_email(
@@ -430,7 +433,7 @@ class AuthService:
         """Fetch a user by id, raising ``UserNotFoundException`` if missing."""
         service_token = self._issue_service_token(
             settings.app_name,
-            settings.client_secret,
+            cast(str, settings.client_secret),
             aud=f"{settings.stage}-user-service",
         )
         user = self._user_service_client.get_user_by_id(
@@ -450,7 +453,7 @@ class AuthService:
         """Ask the user service to verify a password for ``user_id``."""
         service_token = self._issue_service_token(
             settings.app_name,
-            settings.client_secret,
+            cast(str, settings.client_secret),
             aud=f"{settings.stage}-user-service",
         )
         return self._user_service_client.validate_user_password(

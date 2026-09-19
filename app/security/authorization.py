@@ -43,7 +43,10 @@ def require_scope(
         )
 
     def decorator_wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
-        logger.debug("Applying scope decorator to function=%s", func.__name__)
+        logger.debug(
+            "Applying scope decorator to function=%s",
+            getattr(func, "__name__", type(func).__name__),
+        )
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:

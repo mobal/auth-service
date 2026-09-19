@@ -5,7 +5,7 @@ from urllib.parse import urlencode
 
 from aws_lambda_powertools import Logger, Metrics
 from aws_lambda_powertools.metrics import MetricUnit
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import ValidationError
 
@@ -87,7 +87,10 @@ async def parse_oauth_token_request(request: Request) -> BaseGrantRequest:
     correct Pydantic model.  Validation errors are converted to OAuth 2.0
     complaint error responses.
     """
-    form = dict(await request.form())
+    form_data = await request.form()
+    form = {
+        key: value for key, value in form_data.items() if isinstance(value, str)
+    }
     grant_type = form.get("grant_type")
 
     match grant_type:
@@ -329,9 +332,9 @@ def authorize(
         Depends(get_pending_authorization_request_repository),
     ],
     jwt_token: Annotated[JWTToken | None, Depends(get_optional_jwt_bearer)],
-    response_type: str = ...,
-    client_id: str = ...,
-    redirect_uri: str = ...,
+    response_type: str = Query(...),
+    client_id: str = Query(...),
+    redirect_uri: str = Query(...),
     scope: str | None = None,
     state: str | None = None,
     code_challenge: str | None = None,

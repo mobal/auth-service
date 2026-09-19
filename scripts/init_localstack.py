@@ -1,5 +1,6 @@
 import os
 from datetime import UTC, datetime
+from typing import Any, cast
 
 import boto3
 from argon2 import PasswordHasher
@@ -13,8 +14,8 @@ REDIRECT_URI = "https://client.example.com/callback"
 SCOPES = ["users:read"]
 
 
-def _client(service: str) -> "boto3.client":
-    return boto3.client(
+def _client(service: str) -> Any:
+    return cast(Any, boto3.client)(
         service,
         region_name=REGION,
         endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localstack:4566"),

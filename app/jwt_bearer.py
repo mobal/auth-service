@@ -1,9 +1,10 @@
+from typing import cast
+
 import jwt
 from aws_lambda_powertools import Logger
 from fastapi import HTTPException, Request, status
 from fastapi.security.http import (
     HTTPAuthorizationCredentials,
-    HTTPBearer as FastAPIHTTPBearer,
 )
 from fastapi.security.utils import get_authorization_scheme_param
 from jwt import DecodeError, ExpiredSignatureError, PyJWTError
@@ -18,9 +19,8 @@ logger = Logger(utc=True)
 ERROR_MESSAGE_NOT_AUTHENTICATED = "Not authenticated"
 
 
-class HTTPBearer(FastAPIHTTPBearer):
+class HTTPBearer:
     def __init__(self, auto_error: bool = True):
-        super().__init__(auto_error=auto_error)
         self._auto_error = auto_error
         logger.debug("HTTPBearer initialized")
 
@@ -103,7 +103,7 @@ class JWTBearer:
             decoded_token = JWTToken(
                 **jwt.decode(
                     token,
-                    settings.jwt_secret,
+                    cast(str, settings.jwt_secret),
                     algorithms=["HS256"],
                     audience=iss,
                     issuer=iss,
