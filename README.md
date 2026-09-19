@@ -21,6 +21,7 @@ The service provides OAuth-style token issuance and revocation endpoints, PKCE a
    - [Grant Types](#grant-types)
    - [PKCE Implementation (RFC 7636)](#pkce-implementation-rfc-7636)
    - [Role-Based Scope Derivation](#role-based-scope-derivation)
+   - [Resource Indicators and Audience Claims (RFC 8707)](#resource-indicators-and-audience-claims-rfc-8707)
 6. [Security Architecture](#security-architecture-️)
    - [Defense in Depth](#defense-in-depth)
    - [Threat Model & Mitigations](#threat-model--mitigations)
@@ -63,10 +64,12 @@ Core responsibilities:
 - Scope-aware authorization (`users:write`, `users:read`, etc.)
 - JWT access token generation with configurable lifetime
 - Refresh token persistence and revocation via DynamoDB
+- DynamoDB-backed role-to-scope mappings, configurable per environment
+- RFC 8707 resource indicators with registry-validated JWT `aud` claims
 - Centralized exception handling with consistent JSON error responses
 - Correlation ID middleware for request tracing
 - CI pipeline with lint, security scan, tests, coverage, and SonarQube scan
-- 99 passing tests
+- Automated test suite covering API, service, repository, and client behavior
 
 ## Tech Stack
 
@@ -217,9 +220,13 @@ block-beta
 |----------------------|-------------|----------------------------------------------------------|--------------------------|
 | tokens               | `jti` (str) | Unique per JWT — primary key                             | RefreshTokenIndex (GSI)  |
 | authorization_codes  | `id` (UUID4)| Scope, claims, challenge, method                         | CodeIndex (GSI)          |
-| svc_credentials      | `name`      | Human-readable client name instead of ID                 | ScopesNameIndex          |
+| services             | `id`        | Service credentials and client scopes                    | NameIndex (GSI)          |
+| role-scopes          | `role`      | Role-to-OAuth-scope mappings                             | —                        |
+| audiences            | `audience`  | Registered resources and allowed client names           | —                        |
+| browser-sessions     | `id`        | Opaque browser authentication sessions with TTL         | —                        |
+| pending-authorization-requests | `id` | Short-lived server-side login continuation state | —                        |
 
-**Stage isolation**: Table names use `{stage}-tokens`, `{stage}-codes`, `{stage}-svc_credentials` prefix ensuring dev/staging/prod separation.
+**Stage isolation**: Table names use the `{stage}-{app_name}-` prefix, for example `{stage}-{app_name}-tokens`, `{stage}-{app_name}-authorization-codes`, and `{stage}-{app_name}-browser-sessions`, ensuring dev/staging/prod separation.
 
 ---
 
@@ -230,14 +237,14 @@ block-beta
 | Type                 | RFC Section | Method Description                                          | Status      |
 |----------------------|-------------|-------------------------------------------------------------|-------------|
 | Password             | §4.3        | POST body username + password — direct submission           | Deprecated  |
-| Authorization Code   | §4.1 / RFC 7636 | PKCE `code_verifier` + `code_challenge` — browser CSRF defense, state nonce verification | Default |
+| Authorization Code   | §4.1 / RFC 7636 | Hosted browser login + PKCE `S256` for SPA/public clients | Default |
 | Client Credentials   | §4.4        | BasicAuth `client_id:client_secret` — M2M, no user context  | Active      |
 | Refresh Token        | §1.5        | POST refresh token — single-use rotation via atomic CAS     | Active      |
 
 ### PKCE Implementation (RFC 7636)
 
 - **S256 challenge**: SHA-256 digest + base64url encode (strip trailing `=`)
-- **plain**: `code_verifier` as-is for legacy non-PKCE clients only — not default secure practice
+- **plain**: retained only for legacy non-SPA authorization-code clients; browser/public-client requests require `S256`
 
 ```python
 code_challenge = b64_url(sha256(code_verifier))  # S256 method
@@ -245,11 +252,32 @@ code_challenge = b64_url(sha256(code_verifier))  # S256 method
 
 ### Role-Based Scope Derivation
 
-| Role   | Mapped Scopes                              | Description                                                   |
-|--------|--------------------------------------------|---------------------------------------------------------------|
-| root   | `tokens:read`, `tokens:revoke`, `users:read`, `users:write` | Full admin access, revoke any token, read/write all user data |
+Role-to-scope mappings are read from the stage-specific `role-scopes` DynamoDB
+table at token issuance time. This allows permissions to be provisioned per
+environment without redeploying the service.
 
-Derived scope logic prevents clients from exceeding permissions granted via role hierarchy.
+The LocalStack seed data includes:
+
+| Role          | Mapped Scopes                              | Description                                                   |
+|---------------|--------------------------------------------|---------------------------------------------------------------|
+| `root`        | `tokens:revoke`, `users:read`, `users:write` | Full admin access, revoke any token, read/write all user data |
+| `posts:write` | `posts:write`                               | Permission to write posts                                    |
+
+Requested scopes are intersected with the scopes allowed by the user's roles, so
+callers cannot request permissions their roles do not grant.
+
+### Resource Indicators and Audience Claims (RFC 8707)
+
+The `resource` form parameter may be supplied to `/oauth/token` for the
+`password` and `client_credentials` grants. It must identify an entry in the
+stage-specific `audiences` DynamoDB table.
+
+- Password-grant requests require the resource to be registered.
+- Client-credentials requests additionally require the client name to appear in
+  the audience's `allowed_clients` list.
+- A valid resource is copied to the JWT `aud` claim (RFC 7519 Section 4.1.3).
+- An unknown resource returns `invalid_target`; a client that is not allowed
+  returns `unauthorized_client`.
 
 ---
 
@@ -299,6 +327,11 @@ Supported `grant_type` values:
 - `client_credentials`
 - `authorization_code`
 
+The `password` and `client_credentials` grants also accept an optional
+`resource` parameter (RFC 8707). Registered resources are emitted as the JWT
+`aud` claim; client-credentials requests must also be authorized for that
+resource in the audience registry.
+
 Response model:
 
 - `access_token`
@@ -314,7 +347,8 @@ curl -X POST http://localhost:8080/oauth/token \
 	-H "Content-Type: application/x-www-form-urlencoded" \
 	-d "grant_type=password" \
 	-d "username=root@squarelabs.hu" \
-	-d "password=not_so_secure_password"
+	-d "password=not_so_secure_password" \
+	-d "resource=https://api.personal-backend.example"
 ```
 
 #### Refresh token grant example
@@ -333,7 +367,8 @@ curl -X POST http://localhost:8080/oauth/token \
 	-H "Content-Type: application/x-www-form-urlencoded" \
 	-H "Authorization: Basic <base64(client_id:client_secret)>" \
 	-d "grant_type=client_credentials" \
-	-d "scope=users:read"
+	-d "scope=users:read" \
+	-d "resource=https://api.personal-backend.example"
 ```
 
 #### Authorization code grant example
@@ -342,6 +377,7 @@ curl -X POST http://localhost:8080/oauth/token \
 curl -X POST http://localhost:8080/oauth/token \
 	-H "Content-Type: application/x-www-form-urlencoded" \
 	-d "grant_type=authorization_code" \
+	-d "client_id=<client_id>" \
 	-d "code=<authorization_code>" \
 	-d "redirect_uri=https://client.example.com/callback" \
 	-d "code_verifier=<pkce_verifier>"
@@ -349,7 +385,9 @@ curl -X POST http://localhost:8080/oauth/token \
 
 ### `GET /oauth/authorize`
 
-Initiates the authorization code flow. Requires authentication with a valid JWT bearer token.
+Initiates the authorization code flow. SPA/public clients use the hosted login
+page and `S256` PKCE. A bearer-authenticated compatibility path remains
+available for existing clients.
 
 **Query parameters:**
 
@@ -358,8 +396,8 @@ Initiates the authorization code flow. Requires authentication with a valid JWT 
 - `response_type` (required) — Must be `code`
 - `scope` (optional) — Space-separated scopes (defaults to user's role-based scopes)
 - `state` (optional) — Client state for CSRF protection
-- `code_challenge` (optional) — PKCE code challenge (RFC 7636)
-- `code_challenge_method` (optional) — `S256` or `plain` (required if code_challenge provided)
+- `code_challenge` (required for SPA/public clients) — PKCE code challenge (RFC 7636)
+- `code_challenge_method` (required for SPA/public clients) — `S256`
 
 **Response:**
 
@@ -371,7 +409,6 @@ Redirects to `redirect_uri` with query parameters:
 
 ```bash
 curl -X GET "http://localhost:8080/oauth/authorize?client_id=my-app&redirect_uri=https://client.example.com/callback&response_type=code&scope=users:read&state=xyz123&code_challenge=E9Melhoa2OwkFrlvQYW3jxjfkTRzIxXfsQeuCCqRCw&code_challenge_method=S256" \
-	-H "Authorization: Bearer <access_token>" \
 	-L
 ```
 
@@ -441,6 +478,8 @@ OAuth errors follow RFC 6749 error specifications:
 - `invalid_client` — Client authentication failed (Basic auth)
 - `invalid_grant` — User/credential validation failed
 - `invalid_scope` — Requested scope not allowed
+- `invalid_target` — Requested resource is not registered
+- `unauthorized_client` — Client is not allowed to request the resource
 - `unsupported_grant_type` — Unknown grant type
 
 All errors include optional `error_description` field.
@@ -504,7 +543,7 @@ Optional variables (with defaults):
 - `REFRESH_TOKEN_LIFETIME` (default: `2592000`)
 - `DEBUG` (default: `false`)
 - `JWT_ISSUER` (default: empty)
-- `LOG_LEVEL`
+- `POWERTOOLS_LOG_LEVEL` (default: `INFO`)
 - `POWERTOOLS_*`
 
 User-service integration variables:
@@ -515,10 +554,13 @@ User-service integration variables:
 Notes:
 
 - `jwt_secret` is fetched from AWS SSM Parameter Store at runtime.
+- Lambda Powertools reads its log level from `POWERTOOLS_LOG_LEVEL`.
 - DynamoDB table names are stage-prefixed, for example:
 	- `<stage>-tokens`
 	- `<stage>-services`
-	- `<stage>-authorization_codes`
+	- `<stage>-authorization-codes`
+	- `<stage>-role-scopes`
+	- `<stage>-audiences`
 
 ---
 
@@ -630,9 +672,12 @@ Terraform provisions:
 
 - Lambda function (`python3.14`) running `app.api_handler.handler`
 - API Gateway integration
-- DynamoDB tables for tokens, services, and authorization codes
+- DynamoDB tables for tokens, services, authorization codes, role-scope mappings, and audience registrations
 - IAM roles/policies
 - SSM-based secret integration for JWT secret
+
+LocalStack initialization (`scripts/init_localstack.py`) creates and seeds the
+role-scope and audience registries used by local development.
 
 `terraform.auto.tfvars` contains environment-specific values like artifact bucket and hashes.
 
