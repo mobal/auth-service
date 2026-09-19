@@ -952,6 +952,10 @@
                   "value": "authorization_code"
                 },
                 {
+                  "key": "client_id",
+                  "value": "{{clientId}}"
+                },
+                {
                   "key": "code",
                   "value": "{{authCode}}"
                 },
@@ -1013,6 +1017,10 @@
                 {
                   "key": "grant_type",
                   "value": "authorization_code"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{clientId}}"
                 },
                 {
                   "key": "code",

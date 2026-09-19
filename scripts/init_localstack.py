@@ -7,6 +7,8 @@ from argon2 import PasswordHasher
 
 REGION = os.getenv("AWS_REGION_NAME", "eu-central-1")
 STAGE = os.getenv("STAGE", "local")
+APP_NAME = os.getenv("APP_NAME", "auth-service")
+TABLE_PREFIX = f"{STAGE}-{APP_NAME}"
 CLIENT_ID = "user-service"
 CLIENT_SECRET = "client-secret"
 SSM_CLIENT_SECRET = "client-secret"
@@ -26,7 +28,7 @@ def create_tables() -> None:
     dynamodb = _client("dynamodb")
 
     tables = {
-        f"{STAGE}-services": {
+        f"{TABLE_PREFIX}-services": {
             "AttributeDefinitions": [
                 {"AttributeName": "id", "AttributeType": "S"},
                 {"AttributeName": "name", "AttributeType": "S"},
@@ -40,7 +42,7 @@ def create_tables() -> None:
                 }
             ],
         },
-        f"{STAGE}-tokens": {
+        f"{TABLE_PREFIX}-tokens": {
             "AttributeDefinitions": [
                 {"AttributeName": "jti", "AttributeType": "S"},
                 {"AttributeName": "refresh_token", "AttributeType": "S"},
@@ -56,9 +58,7 @@ def create_tables() -> None:
                 }
             ],
         },
-        # NOTE: matches app/repositories/authorization_code_repository.py, which
-        # uses an underscore (the Terraform definition uses a dash — known drift).
-        f"{STAGE}-authorization_codes": {
+        f"{TABLE_PREFIX}-authorization-codes": {
             "AttributeDefinitions": [
                 {"AttributeName": "id", "AttributeType": "S"},
                 {"AttributeName": "code", "AttributeType": "S"},
@@ -72,15 +72,23 @@ def create_tables() -> None:
                 }
             ],
         },
-        f"{STAGE}-role-scopes": {
+        f"{TABLE_PREFIX}-role-scopes": {
             "AttributeDefinitions": [{"AttributeName": "role", "AttributeType": "S"}],
             "KeySchema": [{"AttributeName": "role", "KeyType": "HASH"}],
         },
-        f"{STAGE}-audiences": {
+        f"{TABLE_PREFIX}-audiences": {
             "AttributeDefinitions": [
                 {"AttributeName": "audience", "AttributeType": "S"}
             ],
             "KeySchema": [{"AttributeName": "audience", "KeyType": "HASH"}],
+        },
+        f"{TABLE_PREFIX}-browser-sessions": {
+            "AttributeDefinitions": [{"AttributeName": "id", "AttributeType": "S"}],
+            "KeySchema": [{"AttributeName": "id", "KeyType": "HASH"}],
+        },
+        f"{TABLE_PREFIX}-pending-authorization-requests": {
+            "AttributeDefinitions": [{"AttributeName": "id", "AttributeType": "S"}],
+            "KeySchema": [{"AttributeName": "id", "KeyType": "HASH"}],
         },
     }
 
@@ -132,7 +140,7 @@ def seed_service_credentials() -> None:
         region_name=REGION,
         endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localstack:4566"),
     )
-    table = dynamodb.Table(f"{STAGE}-services")
+    table = dynamodb.Table(f"{TABLE_PREFIX}-services")
     table.put_item(
         Item={
             "id": "client",
@@ -146,7 +154,7 @@ def seed_service_credentials() -> None:
     table.put_item(
         Item={
             "id": "app",
-            "name": os.getenv("APP_NAME", "auth-service"),
+            "name": APP_NAME,
             "secret": PasswordHasher().hash(SSM_CLIENT_SECRET),
             "scopes": [],
             "created_at": datetime.now(UTC).isoformat(),
@@ -167,7 +175,7 @@ def seed_audiences() -> None:
         region_name=REGION,
         endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localstack:4566"),
     )
-    table = dynamodb.Table(f"{STAGE}-audiences")
+    table = dynamodb.Table(f"{TABLE_PREFIX}-audiences")
     table.put_item(
         Item={
             "audience": "https://api.personal-backend.example",
@@ -185,7 +193,7 @@ def seed_role_scopes() -> None:
         region_name=REGION,
         endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localstack:4566"),
     )
-    table = dynamodb.Table(f"{STAGE}-role-scopes")
+    table = dynamodb.Table(f"{TABLE_PREFIX}-role-scopes")
     table.put_item(
         Item={
             "role": "root",
