@@ -36,6 +36,7 @@ resource "aws_iam_policy" "lambda_policy" {
           "${aws_dynamodb_table.authorization_codes.arn}/index/CodeIndex",
           aws_dynamodb_table.browser_sessions.arn,
           aws_dynamodb_table.pending_authorization_requests.arn,
+          aws_dynamodb_table.google_oidc_states.arn,
           aws_dynamodb_table.tokens.arn,
           "${aws_dynamodb_table.tokens.arn}/index/RefreshTokenIndex"
         ]

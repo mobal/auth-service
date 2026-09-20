@@ -189,6 +189,26 @@ def initialize_pending_authorization_requests_table(
 
 
 @pytest.fixture
+def google_oidc_states_table_name() -> str:
+    return (
+        f"{os.getenv('STAGE', 'test')}-{os.getenv('APP_NAME', 'auth-service')}"
+        "-google-oidc-states"
+    )
+
+
+@pytest.fixture
+def initialize_google_oidc_states_table(
+    dynamodb_resource, google_oidc_states_table_name
+):
+    dynamodb_resource.create_table(
+        AttributeDefinitions=[{"AttributeName": "state", "AttributeType": "S"}],
+        TableName=google_oidc_states_table_name,
+        KeySchema=[{"AttributeName": "state", "KeyType": "HASH"}],
+        ProvisionedThroughput={"ReadCapacityUnits": 1, "WriteCapacityUnits": 1},
+    )
+
+
+@pytest.fixture
 def initialize_services_table(
     dynamodb_resource,
     service_credential: ServiceCredential,
