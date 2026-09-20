@@ -92,3 +92,7 @@ variable "google_client_id_ssm_param_name" {
 variable "google_client_secret_ssm_param_name" {
   type = string
 }
+
+variable "google_redirect_uri" {
+  type = string
+}

@@ -25,6 +25,7 @@ resource "aws_lambda_function" "fastapi" {
       DEFAULT_TIMEZONE                     = var.default_timezone
       GOOGLE_CLIENT_ID_SSM_PARAM_NAME     = var.google_client_id_ssm_param_name
       GOOGLE_CLIENT_SECRET_SSM_PARAM_NAME = var.google_client_secret_ssm_param_name
+      GOOGLE_REDIRECT_URI                 = var.google_redirect_uri
       JWT_SECRET_SSM_PARAM_NAME            = var.jwt_secret_ssm_param_name
       POWERTOOLS_LOGGER_LOG_EVENT          = var.powertools_logger_log_event
       POWERTOOLS_LOG_LEVEL                 = var.powertools_log_level

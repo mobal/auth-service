@@ -10,9 +10,12 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import ValidationError
 
 from app import settings
+from app.clients.google_oidc_client import GoogleOIDCClient
 from app.dependencies import (
     get_auth_service,
     get_browser_session_repository,
+    get_google_oidc_client,
+    get_google_oidc_state_repository,
     get_jwt_bearer,
     get_optional_jwt_bearer,
     get_pending_authorization_request_repository,
@@ -30,6 +33,7 @@ from app.models.request.oauth_token import (
 )
 from app.models.response.token import OAuthTokenResponse
 from app.repositories.browser_session_repository import BrowserSessionRepository
+from app.repositories.google_oidc_state_repository import GoogleOIDCStateRepository
 from app.repositories.pending_authorization_request_repository import (
     PendingAuthorizationRequestRepository,
 )
@@ -281,13 +285,17 @@ body{{font-family:system-ui,sans-serif;background:#f4f6f8;display:grid;place-ite
 main{{background:#fff;padding:2rem;border-radius:.75rem;box-shadow:0 .5rem 2rem #0002;width:min(22rem,calc(100% - 3rem))}}
 label{{display:block;margin:.9rem 0 .3rem}}input{{box-sizing:border-box;width:100%;padding:.7rem;border:1px solid #bbc3cc;border-radius:.35rem}}
 button{{width:100%;margin-top:1.2rem;padding:.75rem;border:0;border-radius:.35rem;background:#175cd3;color:#fff;font-weight:600}}
+.google{{display:block;box-sizing:border-box;text-align:center;text-decoration:none;background:#fff;color:#344054;border:1px solid #d0d5dd}}
+.divider{{display:flex;align-items:center;gap:.6rem;margin-top:1.2rem;color:#667085;font-size:.85rem}}
+.divider::before,.divider::after{{content:"";height:1px;background:#d0d5dd;flex:1}}
 .error{{color:#b42318;min-height:1.4rem}}h1{{margin-top:0}}
 </style></head><body><main><h1>Sign in</h1><div class="error" role="alert">{message}</div>
 <form method="post" action="/login"><input type="hidden" name="request_id" value="{escaped_request_id}">
 <input type="hidden" name="csrf_token" value="{html.escape(csrf_token, quote=True)}">
 <label for="email">Email</label><input id="email" name="email" type="email" autocomplete="username" required>
 <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required>
-<button type="submit">Sign in</button></form></main></body></html>"""
+<button type="submit">Sign in</button></form><div class="divider">or</div>
+<a class="google" href="/login/google?request_id={escaped_request_id}">Continue with Google</a></main></body></html>"""
     return HTMLResponse(content)
 
 
@@ -449,6 +457,36 @@ def login_page(
             "Authorization request expired or invalid.", status_code=400
         )
     return _login_page(request_id, pending.csrf_token)
+
+
+@router.get("/login/google")
+def google_login(
+    request: Request,
+    request_id: str,
+    pending_requests: Annotated[
+        PendingAuthorizationRequestRepository,
+        Depends(get_pending_authorization_request_repository),
+    ],
+    google_states: Annotated[
+        GoogleOIDCStateRepository, Depends(get_google_oidc_state_repository)
+    ],
+    google_client: Annotated[GoogleOIDCClient, Depends(get_google_oidc_client)],
+) -> Response:
+    pending = pending_requests.get(request_id)
+    if pending is None or request.cookies.get("login_csrf") != pending.csrf_token:
+        return HTMLResponse(
+            "Authorization request expired or invalid.", status_code=400
+        )
+
+    oidc_state = google_states.create(
+        pending_request_id=request_id,
+        lifetime_seconds=settings.pending_authorization_request_lifetime_seconds,
+    )
+    logger.info("Google login started", extra={"pending_request_id": request_id})
+    return RedirectResponse(
+        url=google_client.authorization_url(oidc_state.state, oidc_state.nonce),
+        status_code=status.HTTP_302_FOUND,
+    )
 
 
 @router.post("/login")

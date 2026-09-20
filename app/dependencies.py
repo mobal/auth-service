@@ -9,6 +9,7 @@ mocks by passing them directly to the constructor.
 from argon2 import PasswordHasher
 from fastapi import Depends, HTTPException, Request
 
+from app.clients.google_oidc_client import GoogleOIDCClient
 from app.clients.user_service_client import UserServiceClient
 from app.jwt_bearer import JWTBearer
 from app.models.jwt import JWTToken
@@ -17,6 +18,7 @@ from app.repositories.authorization_code_repository import (
     AuthorizationCodeRepository,
 )
 from app.repositories.browser_session_repository import BrowserSessionRepository
+from app.repositories.google_oidc_state_repository import GoogleOIDCStateRepository
 from app.repositories.pending_authorization_request_repository import (
     PendingAuthorizationRequestRepository,
 )
@@ -53,6 +55,14 @@ def get_pending_authorization_request_repository() -> (
     PendingAuthorizationRequestRepository
 ):
     return PendingAuthorizationRequestRepository()
+
+
+def get_google_oidc_state_repository() -> GoogleOIDCStateRepository:
+    return GoogleOIDCStateRepository()
+
+
+def get_google_oidc_client() -> GoogleOIDCClient:
+    return GoogleOIDCClient()
 
 
 def get_role_scope_repository() -> RoleScopeRepository:
