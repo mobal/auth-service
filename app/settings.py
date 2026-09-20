@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     service_token_lifetime_seconds: int = 30
     browser_session_lifetime_seconds: int = 3600
     pending_authorization_request_lifetime_seconds: int = 600
+    google_oidc_issuer: str = "https://accounts.google.com"
+    google_redirect_uri: str = ""
     stage: str
 
     @computed_field
@@ -48,3 +50,19 @@ class Settings(BaseSettings):
         if param_name is None:
             raise ValueError("USER_SERVICE_BASE_URL_SSM_PARAM_NAME is not set")
         return parameters.get_parameter(param_name)
+
+    @computed_field
+    def google_client_id(self) -> str:
+        logger.debug("Resolving google_client_id from parameter store")
+        param_name = os.environ.get("GOOGLE_CLIENT_ID_SSM_PARAM_NAME")
+        if param_name is None:
+            raise ValueError("GOOGLE_CLIENT_ID_SSM_PARAM_NAME is not set")
+        return parameters.get_parameter(param_name)
+
+    @computed_field
+    def google_client_secret(self) -> str:
+        logger.debug("Resolving google_client_secret from parameter store")
+        param_name = os.environ.get("GOOGLE_CLIENT_SECRET_SSM_PARAM_NAME")
+        if param_name is None:
+            raise ValueError("GOOGLE_CLIENT_SECRET_SSM_PARAM_NAME is not set")
+        return parameters.get_parameter(param_name, decrypt=True)

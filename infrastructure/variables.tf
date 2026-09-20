@@ -84,3 +84,11 @@ variable "timeout" {
 variable "user_service_base_url_ssm_param_name" {
   type = string
 }
+
+variable "google_client_id_ssm_param_name" {
+  type = string
+}
+
+variable "google_client_secret_ssm_param_name" {
+  type = string
+}

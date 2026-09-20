@@ -35,6 +35,20 @@ def setup(monkeypatch):
                 "/test/user-service/base-url",
             ),
         )
+        monkeypatch.setenv(
+            "GOOGLE_CLIENT_ID_SSM_PARAM_NAME",
+            os.getenv(
+                "GOOGLE_CLIENT_ID_SSM_PARAM_NAME",
+                "/test/auth-service/google-client-id",
+            ),
+        )
+        monkeypatch.setenv(
+            "GOOGLE_CLIENT_SECRET_SSM_PARAM_NAME",
+            os.getenv(
+                "GOOGLE_CLIENT_SECRET_SSM_PARAM_NAME",
+                "/test/auth-service/google-client-secret",
+            ),
+        )
         ssm_client = boto3.client(
             "ssm",
             region_name=os.getenv("AWS_REGION_NAME", "eu-central-1"),
@@ -67,6 +81,26 @@ def setup(monkeypatch):
                 "https://test.user-service.local",
             ),
             Type="String",
+        )
+        ssm_client.put_parameter(
+            Name=os.getenv(
+                "GOOGLE_CLIENT_ID_SSM_PARAM_NAME",
+                "/test/auth-service/google-client-id",
+            ),
+            Value=os.getenv(
+                "GOOGLE_CLIENT_ID_SSM_PARAM_VALUE", "test-google-client-id"
+            ),
+            Type="String",
+        )
+        ssm_client.put_parameter(
+            Name=os.getenv(
+                "GOOGLE_CLIENT_SECRET_SSM_PARAM_NAME",
+                "/test/auth-service/google-client-secret",
+            ),
+            Value=os.getenv(
+                "GOOGLE_CLIENT_SECRET_SSM_PARAM_VALUE", "test-google-client-secret"
+            ),
+            Type="SecureString",
         )
 
         yield
