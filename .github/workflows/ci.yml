@@ -105,6 +105,7 @@ jobs:
           -v "$PWD/postman:/postman:ro" \
           postman/newman:latest run /postman/auth_service.postman_collection.json \
           --env-var baseUrl=http://app:8080 \
+          --env-var userServiceUrl=http://user-service:9000 \
           --ignore-redirects
 
     - name: Clean up containers
