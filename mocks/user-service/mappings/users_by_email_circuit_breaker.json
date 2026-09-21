@@ -1,0 +1,16 @@
+{
+  "name": "Circuit breaker upstream failure",
+  "priority": 1,
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/v1/users",
+    "queryParameters": {
+      "email": { "equalTo": "circuit-breaker@example.com" }
+    }
+  },
+  "response": {
+    "status": 503,
+    "jsonBody": { "detail": "simulated upstream failure" },
+    "headers": { "Content-Type": "application/json" }
+  }
+}

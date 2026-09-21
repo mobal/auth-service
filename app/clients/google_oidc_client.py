@@ -6,6 +6,7 @@ import httpx2 as httpx
 from aws_lambda_powertools import Logger
 
 from app import settings
+from app.clients.circuit_breaker import create_circuit_breaker
 from app.models.google_oidc_provider import GoogleOIDCProviderMetadata
 
 
@@ -19,6 +20,19 @@ class GoogleOIDCClient:
     def __init__(self) -> None:
         self._logger = Logger()
         self._client = httpx.Client(timeout=httpx.Timeout(10.0))
+        self._breaker = create_circuit_breaker("google-oidc")
+
+    def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
+        """Make a request and count transport and upstream-server failures."""
+        if method == "GET":
+            response = self._client.get(url, **kwargs)
+        elif method == "POST":
+            response = self._client.post(url, **kwargs)
+        else:
+            raise ValueError(f"Unsupported HTTP method: {method}")
+        if response.status_code >= 500:
+            response.raise_for_status()
+        return response
 
     def get_metadata(self) -> GoogleOIDCProviderMetadata:
         now = time.monotonic()
@@ -34,7 +48,7 @@ class GoogleOIDCClient:
                 f"{settings.google_oidc_issuer.rstrip('/')}/",
                 ".well-known/openid-configuration",
             )
-            response = self._client.get(discovery_url)
+            response = self._breaker.call(self._request, "GET", discovery_url)
             response.raise_for_status()
             metadata = GoogleOIDCProviderMetadata.model_validate(response.json())
             if str(metadata.issuer).rstrip("/") != settings.google_oidc_issuer.rstrip(
@@ -59,7 +73,9 @@ class GoogleOIDCClient:
 
     def exchange_code(self, code: str) -> dict:
         metadata = self.get_metadata()
-        response = self._client.post(
+        response = self._breaker.call(
+            self._request,
+            "POST",
             str(metadata.token_endpoint),
             data={
                 "grant_type": "authorization_code",

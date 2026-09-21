@@ -44,6 +44,9 @@ metrics = Metrics(namespace="AuthService")
 
 router = APIRouter()
 
+ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID = (
+    "Authorization request expired or invalid."
+)
 ERROR_MESSAGE_INVALID_CLIENT = "Invalid client: missing or invalid Authorization header"
 ERROR_MESSAGE_UNSUPPORTED_GRANT_TYPE = "Unsupported grant type"
 ERROR_MESSAGE_UNSUPPORTED_RESPONSE_TYPE = "Unsupported response type"
@@ -338,9 +341,9 @@ def authorize(
         Depends(get_pending_authorization_request_repository),
     ],
     jwt_token: Annotated[JWTToken | None, Depends(get_optional_jwt_bearer)],
-    response_type: str = Query(...),
-    client_id: str = Query(...),
-    redirect_uri: str = Query(...),
+    response_type: str = Annotated[str, Query()],
+    client_id: str = Annotated[str, Query()],
+    redirect_uri: str = Annotated[str, Query()],
     scope: str | None = None,
     state: str | None = None,
     code_challenge: str | None = None,
@@ -454,7 +457,7 @@ def login_page(
     pending = pending_requests.get(request_id)
     if pending is None:
         return HTMLResponse(
-            "Authorization request expired or invalid.", status_code=400
+            ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID, status_code=400
         )
     return _login_page(request_id, pending.csrf_token)
 
@@ -475,7 +478,7 @@ def google_login(
     pending = pending_requests.get(request_id)
     if pending is None or request.cookies.get("login_csrf") != pending.csrf_token:
         return HTMLResponse(
-            "Authorization request expired or invalid.", status_code=400
+            ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID, status_code=400
         )
 
     oidc_state = google_states.create(
@@ -510,7 +513,7 @@ async def login(
         or request.cookies.get("login_csrf") != pending.csrf_token
     ):
         return HTMLResponse(
-            "Authorization request expired or invalid.", status_code=400
+            ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID, status_code=400
         )
 
     try:
@@ -523,7 +526,7 @@ async def login(
     consumed = pending_requests.consume(request_id)
     if consumed is None:
         return HTMLResponse(
-            "Authorization request expired or invalid.", status_code=400
+            ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID, status_code=400
         )
     response = _authorization_redirect(auth_service, consumed, user["id"])
     response.set_cookie(

@@ -1,4 +1,5 @@
 import httpx2
+import pybreaker
 import pytest
 from pytest_httpx2 import HTTPXMock
 
@@ -247,3 +248,22 @@ class TestUserServiceClient:
 
         with pytest.raises(httpx2.RequestError):
             client.get_user_by_id(user_id, jwt_token)
+
+    def test_get_user_by_email_opens_circuit_after_upstream_failure(
+        self,
+        httpx2_mock: HTTPXMock,
+        client: UserServiceClient,
+        user_data: dict,
+        jwt_token: str,
+    ):
+        client._breaker = pybreaker.CircuitBreaker(fail_max=1, reset_timeout=60)
+        url = f"http://user-service/api/v1/users?email={user_data['email']}"
+        httpx2_mock.add_response(method="GET", url=url, status_code=503)
+
+        with pytest.raises(pybreaker.CircuitBreakerError):
+            client.get_user_by_email(user_data["email"], jwt_token)
+
+        with pytest.raises(pybreaker.CircuitBreakerError):
+            client.get_user_by_email(user_data["email"], jwt_token)
+
+        assert len(httpx2_mock.get_requests()) == 1

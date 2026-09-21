@@ -3,6 +3,7 @@ from aws_lambda_powertools import Logger
 from starlette import status
 
 from app import settings
+from app.clients.circuit_breaker import create_circuit_breaker
 
 logger = Logger()
 
@@ -10,11 +11,26 @@ logger = Logger()
 class UserServiceClient:
     def __init__(self) -> None:
         self._client = httpx.Client(timeout=httpx.Timeout(10.0))
+        self._breaker = create_circuit_breaker("user-service")
+
+    def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
+        """Make a request and count transport and upstream-server failures."""
+        if method == "GET":
+            response = self._client.get(url, **kwargs)
+        elif method == "POST":
+            response = self._client.post(url, **kwargs)
+        else:
+            raise ValueError(f"Unsupported HTTP method: {method}")
+        if response.status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR:
+            response.raise_for_status()
+        return response
 
     def get_user_by_email(self, email: str, jwt_token: str) -> dict | None:
         logger.info("Fetching user from user-service by email")
         try:
-            response = self._client.get(
+            response = self._breaker.call(
+                self._request,
+                "GET",
                 f"{settings.user_service_base_url}/api/v1/users",
                 params={"email": email},
                 headers={"Authorization": f"Bearer {jwt_token}"},
@@ -43,7 +59,9 @@ class UserServiceClient:
         logger.info("Validating user password user_id=%s", user_id)
 
         try:
-            response = self._client.post(
+            response = self._breaker.call(
+                self._request,
+                "POST",
                 f"{settings.user_service_base_url}/api/v1/users/{user_id}/validate",
                 json={"password": password},
                 headers={"Authorization": f"Bearer {jwt_token}"},
@@ -77,7 +95,9 @@ class UserServiceClient:
         logger.info("Fetching user from user-service user_id=%s", user_id)
 
         try:
-            response = self._client.get(
+            response = self._breaker.call(
+                self._request,
+                "GET",
                 f"{settings.user_service_base_url}/api/v1/users/{user_id}",
                 headers={"Authorization": f"Bearer {jwt_token}"},
             )

@@ -6,6 +6,8 @@ dependency graph explicit and allows tests to swap real implementations for
 mocks by passing them directly to the constructor.
 """
 
+from functools import lru_cache
+
 from argon2 import PasswordHasher
 from fastapi import Depends, HTTPException, Request
 
@@ -61,6 +63,7 @@ def get_google_oidc_state_repository() -> GoogleOIDCStateRepository:
     return GoogleOIDCStateRepository()
 
 
+@lru_cache(maxsize=1)
 def get_google_oidc_client() -> GoogleOIDCClient:
     return GoogleOIDCClient()
 
@@ -73,6 +76,7 @@ def get_password_hasher() -> PasswordHasher:
     return PasswordHasher()
 
 
+@lru_cache(maxsize=1)
 def get_user_service_client() -> UserServiceClient:
     return UserServiceClient()
 
