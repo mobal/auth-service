@@ -49,6 +49,7 @@ def setup(monkeypatch):
                 "/test/auth-service/google-client-secret",
             ),
         )
+        monkeypatch.setenv("GOOGLE_DEV_EMAIL_LOGIN_ENABLED", "true")
         ssm_client = boto3.client(
             "ssm",
             region_name=os.getenv("AWS_REGION_NAME", "eu-central-1"),

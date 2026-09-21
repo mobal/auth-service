@@ -1222,6 +1222,48 @@
       ]
     },
     {
+      "name": "Google Login",
+      "item": [
+        {
+          "name": "Reject invalid callback state",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/login/google/callback?code=unused",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "login",
+                "google",
+                "callback"
+              ],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "unused"
+                }
+              ]
+            },
+            "description": "Safe smoke test for the Google callback. A real Google login must supply a one-time state created by /login/google; callbacks without state are rejected."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('rejects an invalid Google state', () => pm.response.to.have.status(400));",
+                  "pm.test('does not continue the login flow', () => pm.expect(pm.response.text()).to.include('Invalid Google login state.'));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Circuit breaker",
       "item": [
         {

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     pending_authorization_request_lifetime_seconds: int = 600
     google_oidc_issuer: str = "https://accounts.google.com"
     google_redirect_uri: str = ""
+    google_dev_email_login_enabled: bool = False
     stage: str
 
     @computed_field

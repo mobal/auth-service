@@ -1,3 +1,4 @@
+import pybreaker
 from aws_lambda_powertools import Logger, Metrics
 from botocore.exceptions import BotoCoreError
 from fastapi import FastAPI, HTTPException, Request, status
@@ -51,6 +52,23 @@ def oauth_exception_handler(request: Request, error: OAuthException) -> JSONResp
         content=content,
         status_code=error.status_code,
         headers=dict(error.headers) if error.headers else {},
+    )
+
+
+@app.exception_handler(pybreaker.CircuitBreakerError)
+def circuit_breaker_error_handler(
+    request: Request, error: pybreaker.CircuitBreakerError
+) -> JSONResponse:
+    logger.warning(
+        "Circuit breaker prevented outbound request",
+        extra={"path": request.url.path, "method": request.method},
+    )
+    return JSONResponse(
+        content=ErrorResponse(
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            error="Internal Server Error",
+        ).model_dump(by_alias=True),
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
 
 

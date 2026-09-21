@@ -20,7 +20,11 @@ from app.dependencies import (
     get_optional_jwt_bearer,
     get_pending_authorization_request_repository,
 )
-from app.exceptions import InvalidCredentialsException, OAuthException
+from app.exceptions import (
+    GoogleOIDCValidationError,
+    InvalidCredentialsException,
+    OAuthException,
+)
 from app.models.grant_type import GrantType
 from app.models.jwt import JWTToken
 from app.models.pending_authorization_request import PendingAuthorizationRequest
@@ -490,6 +494,88 @@ def google_login(
         url=google_client.authorization_url(oidc_state.state, oidc_state.nonce),
         status_code=status.HTTP_302_FOUND,
     )
+
+
+@router.get("/login/google/callback")
+def google_callback(
+    request: Request,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    browser_sessions: Annotated[
+        BrowserSessionRepository, Depends(get_browser_session_repository)
+    ],
+    pending_requests: Annotated[
+        PendingAuthorizationRequestRepository,
+        Depends(get_pending_authorization_request_repository),
+    ],
+    google_states: Annotated[
+        GoogleOIDCStateRepository, Depends(get_google_oidc_state_repository)
+    ],
+    google_client: Annotated[GoogleOIDCClient, Depends(get_google_oidc_client)],
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+) -> Response:
+    """Complete the temporary Google login flow for an existing local user."""
+    if not state:
+        return HTMLResponse("Invalid Google login state.", status_code=400)
+
+    oidc_state = google_states.consume(state)
+    if oidc_state is None:
+        return HTMLResponse("Invalid Google login state.", status_code=400)
+
+    pending = pending_requests.get(oidc_state.pending_request_id)
+    if pending is None:
+        return HTMLResponse(
+            "Authorization request expired or invalid.", status_code=400
+        )
+
+    if error:
+        return _login_page(oidc_state.pending_request_id, pending.csrf_token, error)
+    if not code:
+        return _login_page(
+            oidc_state.pending_request_id,
+            pending.csrf_token,
+            "Google did not return an authorization code.",
+        )
+
+    try:
+        token_response = google_client.exchange_code(code)
+        id_token = token_response.get("id_token")
+        if not isinstance(id_token, str):
+            raise GoogleOIDCValidationError("Google did not return an ID token")
+        identity = google_client.validate_id_token(id_token, oidc_state.nonce)
+        user = auth_service.authenticate_google_user(identity)
+    except GoogleOIDCValidationError:
+        return _login_page(
+            oidc_state.pending_request_id,
+            pending.csrf_token,
+            "Google authentication could not be verified.",
+        )
+    except OAuthException as oauth_error:
+        return _login_page(
+            oidc_state.pending_request_id,
+            pending.csrf_token,
+            str(oauth_error.detail.get("error_description", "Google login failed")),
+        )
+
+    consumed = pending_requests.consume(oidc_state.pending_request_id)
+    if consumed is None:
+        return HTMLResponse(
+            "Authorization request expired or invalid.", status_code=400
+        )
+
+    response = _authorization_redirect(auth_service, consumed, user["id"])
+    response.set_cookie(
+        "auth_session",
+        browser_sessions.create(user["id"], settings.browser_session_lifetime_seconds),
+        max_age=settings.browser_session_lifetime_seconds,
+        httponly=True,
+        secure=settings.stage == "prod",
+        samesite="lax",
+        path="/",
+    )
+    response.delete_cookie("login_csrf", path="/")
+    return response
 
 
 @router.post("/login")

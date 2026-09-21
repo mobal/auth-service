@@ -38,6 +38,10 @@ class OAuthException(HTTPException):
         self.oauth_error_description = error_description
 
 
+class GoogleOIDCValidationError(ValueError):
+    """Raised when a Google OIDC response fails validation."""
+
+
 class TokenExpiredException(HTTPException):
     def __init__(self, detail: Any):
         super().__init__(

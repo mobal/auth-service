@@ -49,6 +49,7 @@ services:
       CLIENT_SECRET_SSM_PARAM_NAME: /local/auth-service/client-secret
       JWT_SECRET_SSM_PARAM_NAME: /local/secrets/jwt-secret
       USER_SERVICE_BASE_URL_SSM_PARAM_NAME: /local/user-service/base-url
+      GOOGLE_DEV_EMAIL_LOGIN_ENABLED: "true"
     depends_on:
       localstack:
         condition: service_healthy

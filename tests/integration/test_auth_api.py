@@ -1,4 +1,5 @@
 import hashlib
+import json
 import time
 import uuid
 from base64 import b64encode
@@ -8,13 +9,19 @@ from urllib.parse import parse_qs, urlparse
 import jwt
 import pytest
 from argon2 import PasswordHasher
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import Request, status
 from fastapi.testclient import TestClient
 
+from app.clients.google_oidc_client import GoogleOIDCClient
 from app.jwt_bearer import JWTBearer
 from app.models.jwt import JWTToken, RefreshToken
 from app.repositories.authorization_code_repository import (
     AuthorizationCodeRepository,
+)
+from app.repositories.google_oidc_state_repository import GoogleOIDCStateRepository
+from app.repositories.pending_authorization_request_repository import (
+    PendingAuthorizationRequestRepository,
 )
 from app.repositories.role_scope_repository import RoleScopeRepository
 from app.repositories.service_repository import ServiceRepository
@@ -56,6 +63,7 @@ class TestAuthApi:
         initialize_role_scopes_table,
         initialize_browser_sessions_table,
         initialize_pending_authorization_requests_table,
+        initialize_google_oidc_states_table,
     ) -> TestClient:
         from app.api_handler import app
 
@@ -151,6 +159,107 @@ class TestAuthApi:
         assert body["token_type"] == "Bearer"
         assert "expires_in" in body
         self._assert_cache_headers(response)
+
+    def test_google_callback_resolves_verified_email_and_resumes_authorization(
+        self,
+        httpx2_mock,
+        monkeypatch,
+        test_client: TestClient,
+        user_data: dict,
+    ):
+        import os
+
+        from app import settings
+
+        monkeypatch.setattr(settings, "google_dev_email_login_enabled", True)
+        GoogleOIDCClient._metadata_cache = None
+        GoogleOIDCClient._metadata_expires_at = 0.0
+
+        pending_requests = PendingAuthorizationRequestRepository()
+        request_id = pending_requests.create(
+            client_id="my-app",
+            redirect_uri="https://example.com/callback",
+            response_type="code",
+            scope="users:read",
+            state="oauth-state",
+            code_challenge="challenge",
+            code_challenge_method="S256",
+        )
+        google_state = GoogleOIDCStateRepository().create(
+            pending_request_id=request_id,
+            lifetime_seconds=600,
+        )
+
+        httpx2_mock.add_response(
+            method="GET",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}"
+            f"/api/v1/users?email={user_data['email'].replace('@', '%40')}",
+            json={"items": [user_data]},
+            status_code=status.HTTP_200_OK,
+        )
+
+        httpx2_mock.add_response(
+            method="GET",
+            url=f"{os.getenv('USER_SERVICE_BASE_URL_SSM_PARAM_VALUE')}"
+            f"/api/v1/users/{user_data['id']}",
+            json=user_data,
+            status_code=status.HTTP_200_OK,
+        )
+
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        id_token = jwt.encode(
+            {
+                "iss": "https://accounts.google.com",
+                "sub": "google-subject",
+                "aud": "test-google-client-id",
+                "exp": int(time.time()) + 600,
+                "nonce": google_state.nonce,
+                "email": user_data["email"],
+                "email_verified": True,
+            },
+            private_key,
+            algorithm="RS256",
+            headers={"kid": "google-test-key"},
+        )
+        jwk = {
+            **json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(private_key.public_key())),
+            "kid": "google-test-key",
+        }
+        httpx2_mock.add_response(
+            method="GET",
+            url="https://accounts.google.com/.well-known/openid-configuration",
+            json={
+                "issuer": "https://accounts.google.com",
+                "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+                "token_endpoint": "https://oauth2.googleapis.com/token",
+                "jwks_uri": "https://www.googleapis.com/oauth2/v3/certs",
+            },
+            status_code=status.HTTP_200_OK,
+        )
+        httpx2_mock.add_response(
+            method="POST",
+            url="https://oauth2.googleapis.com/token",
+            json={"id_token": id_token},
+            status_code=status.HTTP_200_OK,
+        )
+        httpx2_mock.add_response(
+            method="GET",
+            url="https://www.googleapis.com/oauth2/v3/certs",
+            json={"keys": [jwk]},
+            status_code=status.HTTP_200_OK,
+        )
+
+        response = test_client.get(
+            "/login/google/callback",
+            params={"code": "google-code", "state": google_state.state},
+            follow_redirects=False,
+        )
+
+        assert response.status_code == status.HTTP_302_FOUND
+        assert response.headers["location"].startswith(
+            "https://example.com/callback?code="
+        )
+        assert "auth_session=" in response.headers["set-cookie"]
 
     def test_revoke_token_issued_by_password_grant(
         self,

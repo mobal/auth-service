@@ -23,6 +23,7 @@ from app.exceptions import (
     UserNotFoundException,
 )
 from app.models.authorization_code import AuthorizationCode
+from app.models.google_identity import GoogleIdentity
 from app.models.jwt import JWTToken, RefreshToken
 from app.models.service import ServiceCredential
 from app.repositories.audience_repository import AudienceRepository
@@ -530,6 +531,21 @@ class AuthService:
         user = self._fetch_user_by_email(email)
         if user is None or not self._validate_user_password(user["id"], password):
             raise InvalidCredentialsException("Invalid email or password.")
+        return user
+
+    def authenticate_google_user(self, identity: GoogleIdentity) -> dict:
+        """Resolve a verified Google email to an existing local user.
+
+        This is a temporary development path until user-service owns external
+        identity records. It is deliberately disabled by default.
+        """
+        if not settings.google_dev_email_login_enabled:
+            raise OAuthException("access_denied", "Google login is not enabled")
+        user = self._fetch_user_by_email(str(identity.email))
+        if user is None:
+            raise OAuthException(
+                "access_denied", "No local account matches Google email"
+            )
         return user
 
     def login(

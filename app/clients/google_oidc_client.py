@@ -1,12 +1,17 @@
+import json
+import secrets
 import time
 from threading import Lock
 from urllib.parse import urlencode, urljoin
 
 import httpx2 as httpx
+import jwt
 from aws_lambda_powertools import Logger
 
 from app import settings
 from app.clients.circuit_breaker import create_circuit_breaker
+from app.exceptions import GoogleOIDCValidationError
+from app.models.google_identity import GoogleIdentity
 from app.models.google_oidc_provider import GoogleOIDCProviderMetadata
 
 
@@ -87,3 +92,58 @@ class GoogleOIDCClient:
         )
         response.raise_for_status()
         return response.json()
+
+    def validate_id_token(self, id_token: str, nonce: str) -> GoogleIdentity:
+        """Validate Google's signed ID token and return its identity claims."""
+        try:
+            metadata = self.get_metadata()
+            header = jwt.get_unverified_header(id_token)
+            key_id = header.get("kid")
+            if not key_id or header.get("alg") != "RS256":
+                raise GoogleOIDCValidationError("Unsupported Google ID token header")
+
+            jwks_response = self._breaker.call(
+                self._request, "GET", str(metadata.jwks_uri)
+            )
+            jwks_response.raise_for_status()
+            jwk = next(
+                (
+                    key
+                    for key in jwks_response.json().get("keys", [])
+                    if key.get("kid") == key_id
+                ),
+                None,
+            )
+            if jwk is None:
+                raise GoogleOIDCValidationError("Google signing key was not found")
+
+            signing_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))
+            claims = jwt.decode(
+                id_token,
+                signing_key,
+                algorithms=["RS256"],
+                audience=settings.google_client_id,
+                issuer=settings.google_oidc_issuer,
+                options={"require": ["iss", "sub", "aud", "exp", "nonce"]},
+            )
+            token_nonce = claims.get("nonce")
+            if not isinstance(token_nonce, str) or not secrets.compare_digest(
+                token_nonce, nonce
+            ):
+                raise GoogleOIDCValidationError("Google ID token nonce mismatch")
+
+            email = claims.get("email")
+            if not isinstance(email, str) or claims.get("email_verified") is not True:
+                raise GoogleOIDCValidationError("Google email is not verified")
+
+            return GoogleIdentity(
+                issuer=str(claims["iss"]),
+                subject=str(claims["sub"]),
+                email=email,
+                email_verified=True,
+                nonce=token_nonce,
+            )
+        except GoogleOIDCValidationError:
+            raise
+        except (jwt.InvalidTokenError, KeyError, TypeError, ValueError) as error:
+            raise GoogleOIDCValidationError("Invalid Google ID token") from error

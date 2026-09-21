@@ -1,9 +1,13 @@
+import json
 from types import SimpleNamespace
 
+import jwt
 import pybreaker
 import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 from app.clients.google_oidc_client import GoogleOIDCClient
+from app.exceptions import GoogleOIDCValidationError
 
 
 @pytest.fixture(autouse=True)
@@ -65,3 +69,73 @@ class TestGoogleOIDCClient:
             client.get_metadata()
 
         assert len(httpx2_mock.get_requests()) == 1
+
+    def test_validate_id_token_accepts_signed_verified_identity(
+        self, mocker, client: GoogleOIDCClient
+    ):
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        id_token = jwt.encode(
+            {
+                "iss": "https://accounts.google.com",
+                "sub": "google-subject",
+                "aud": "test-google-client-id",
+                "exp": 2_000_000_000,
+                "nonce": "expected-nonce",
+                "email": "root@squarelabs.hu",
+                "email_verified": True,
+            },
+            private_key,
+            algorithm="RS256",
+            headers={"kid": "google-key"},
+        )
+        client.get_metadata = mocker.Mock(
+            return_value=SimpleNamespace(jwks_uri="https://google.test/jwks")
+        )
+        jwk = {
+            **json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(private_key.public_key())),
+            "kid": "google-key",
+        }
+        jwks_response = SimpleNamespace(
+            json=lambda: {"keys": [jwk]},
+            raise_for_status=mocker.Mock(),
+        )
+        client._breaker.call = mocker.Mock(return_value=jwks_response)
+
+        identity = client.validate_id_token(id_token, "expected-nonce")
+
+        assert identity.email == "root@squarelabs.hu"
+        assert identity.subject == "google-subject"
+
+    def test_validate_id_token_rejects_nonce_mismatch(
+        self, mocker, client: GoogleOIDCClient
+    ):
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        id_token = jwt.encode(
+            {
+                "iss": "https://accounts.google.com",
+                "sub": "google-subject",
+                "aud": "test-google-client-id",
+                "exp": 2_000_000_000,
+                "nonce": "token-nonce",
+                "email": "root@squarelabs.hu",
+                "email_verified": True,
+            },
+            private_key,
+            algorithm="RS256",
+            headers={"kid": "google-key"},
+        )
+        client.get_metadata = mocker.Mock(
+            return_value=SimpleNamespace(jwks_uri="https://google.test/jwks")
+        )
+        jwk = {
+            **json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(private_key.public_key())),
+            "kid": "google-key",
+        }
+        client._breaker.call = mocker.Mock(
+            return_value=SimpleNamespace(
+                json=lambda: {"keys": [jwk]}, raise_for_status=mocker.Mock()
+            )
+        )
+
+        with pytest.raises(GoogleOIDCValidationError, match="nonce mismatch"):
+            client.validate_id_token(id_token, "different-nonce")
