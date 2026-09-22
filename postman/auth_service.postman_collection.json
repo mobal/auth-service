@@ -1362,10 +1362,10 @@
                   "  if (remaining === 0) { done(); return; }",
                   "  pm.sendRequest(tokenRequest, (error, response) => {",
                   "    assertShortCircuited(index, error, response);",
-                  "    sendRemaining(remaining - 1, index + 1, done);",
+                  "    setTimeout(() => sendRemaining(remaining - 1, index + 1, done), 100);",
                   "  });",
                   "};",
-                  "sendRemaining(5, 2, () => {",
+                  "setTimeout(() => sendRemaining(5, 2, () => {",
                   "  pm.sendRequest({",
                   "    url: pm.variables.replaceIn('{{userServiceUrl}}/__admin/requests/count'),",
                   "    method: 'POST',",
@@ -1387,7 +1387,7 @@
                   "      pm.expect(response.json().count).to.eql(5);",
                   "    });",
                   "  });",
-                  "});"
+                  "}), 500);"
                 ]
               }
             }

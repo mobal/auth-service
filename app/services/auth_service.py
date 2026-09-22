@@ -14,8 +14,10 @@ from aws_lambda_powertools import Logger
 from starlette import status
 
 from app import settings
+from app.clients.google_oidc_client import GoogleOIDCClient
 from app.clients.user_service_client import UserServiceClient
 from app.exceptions import (
+    GoogleOIDCValidationError,
     InvalidCredentialsException,
     OAuthException,
     TokenExpiredException,
@@ -23,11 +25,27 @@ from app.exceptions import (
     UserNotFoundException,
 )
 from app.models.authorization_code import AuthorizationCode
+from app.models.authorization_decision import AuthorizationDecision
 from app.models.google_identity import GoogleIdentity
+from app.models.google_login_result import GoogleLoginResult
 from app.models.jwt import JWTToken, RefreshToken
+from app.models.pending_authorization_request import PendingAuthorizationRequest
+from app.models.request.oauth_token import (
+    AuthorizationCodeGrantRequest,
+    BaseGrantRequest,
+    ClientCredentialsGrantRequest,
+    PasswordGrantRequest,
+    RefreshTokenGrantRequest,
+)
+from app.models.response.token import OAuthTokenResponse
 from app.models.service import ServiceCredential
 from app.repositories.audience_repository import AudienceRepository
 from app.repositories.authorization_code_repository import AuthorizationCodeRepository
+from app.repositories.browser_session_repository import BrowserSessionRepository
+from app.repositories.google_oidc_state_repository import GoogleOIDCStateRepository
+from app.repositories.pending_authorization_request_repository import (
+    PendingAuthorizationRequestRepository,
+)
 from app.repositories.role_scope_repository import RoleScopeRepository
 from app.repositories.service_repository import ServiceRepository
 from app.services.token_service import TokenService
@@ -35,6 +53,7 @@ from app.services.token_service import TokenService
 ERROR_MESSAGE_UNAUTHORIZED = "Unauthorized"
 ERROR_MESSAGE_TOKEN_NOT_FOUND = "The requested token was not found"
 ERROR_MESSAGE_USER_NOT_FOUND = "The requested user was not found"
+ERROR_MESSAGE_UNSUPPORTED_RESPONSE_TYPE = "Unsupported response type"
 
 
 def _invalid_client_error() -> OAuthException:
@@ -489,7 +508,7 @@ class AuthService:
         redirect_uri: str,
         code_challenge: str | None,
         code_challenge_method: str | None,
-    ) -> None:
+    ) -> tuple[str, str]:
         """Validate the browser-facing authorization request before login."""
         if response_type != "code":
             raise OAuthException("unsupported_response_type")
@@ -525,6 +544,111 @@ class AuthService:
                 "invalid_request",
                 "Redirect URI is not registered for this client",
             )
+        if code_challenge is None or code_challenge_method is None:
+            raise OAuthException(
+                "invalid_request",
+                "PKCE parameters are required for browser authorization",
+            )
+        return code_challenge, code_challenge_method
+
+    def process_authorization_request(
+        self,
+        *,
+        response_type: str,
+        client_id: str,
+        redirect_uri: str,
+        scope: str | None,
+        state: str | None,
+        code_challenge: str | None,
+        code_challenge_method: str | None,
+        bearer_user_id: str | None,
+        browser_session_user_id: str | None,
+        pending_requests: PendingAuthorizationRequestRepository,
+    ) -> AuthorizationDecision:
+        """Validate and process an OAuth authorization request.
+
+        A bearer-authenticated request is completed immediately. A browser
+        request is validated for PKCE and either completed from an existing
+        browser session or persisted for the login flow.
+        """
+        if bearer_user_id is not None:
+            if response_type != "code":
+                raise OAuthException(ERROR_MESSAGE_UNSUPPORTED_RESPONSE_TYPE)
+            code = self.authorize(
+                user_id=bearer_user_id,
+                client_id=client_id,
+                redirect_uri=redirect_uri,
+                requested_scope=scope,
+                code_challenge=code_challenge,
+                code_challenge_method=code_challenge_method,
+            )
+            return AuthorizationDecision(
+                redirect_uri=redirect_uri,
+                state=state,
+                authorization_code=code,
+            )
+
+        validated_challenge, validated_method = self.validate_authorization_request(
+            response_type,
+            client_id,
+            redirect_uri,
+            code_challenge,
+            code_challenge_method,
+        )
+        if browser_session_user_id is not None:
+            code = self.authorize(
+                user_id=browser_session_user_id,
+                client_id=client_id,
+                redirect_uri=redirect_uri,
+                requested_scope=scope,
+                code_challenge=validated_challenge,
+                code_challenge_method=validated_method,
+            )
+            return AuthorizationDecision(
+                redirect_uri=redirect_uri,
+                state=state,
+                authorization_code=code,
+            )
+
+        request_id = pending_requests.create(
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            response_type=response_type,
+            scope=scope,
+            state=state,
+            code_challenge=validated_challenge,
+            code_challenge_method=validated_method,
+            lifetime_seconds=settings.pending_authorization_request_lifetime_seconds,
+        )
+        pending = pending_requests.get(request_id)
+        if pending is None:
+            raise OAuthException("invalid_request")
+        return AuthorizationDecision(
+            redirect_uri=redirect_uri,
+            pending_request=pending,
+        )
+
+    def authorize_pending_request(
+        self,
+        pending: PendingAuthorizationRequest,
+        user_id: str,
+    ) -> str:
+        """Issue an authorization code for a completed browser login."""
+        return self.authorize(
+            user_id=user_id,
+            client_id=pending.client_id,
+            redirect_uri=pending.redirect_uri,
+            requested_scope=pending.scope,
+            code_challenge=pending.code_challenge,
+            code_challenge_method=pending.code_challenge_method,
+        )
+
+    def get_pending_authorization_request(
+        self,
+        request_id: str,
+        pending_requests: PendingAuthorizationRequestRepository,
+    ) -> PendingAuthorizationRequest | None:
+        return pending_requests.get(request_id)
 
     def authenticate_user(self, email: str, password: str) -> dict:
         """Authenticate a browser user without issuing OAuth tokens."""
@@ -547,6 +671,119 @@ class AuthService:
                 "access_denied", "No local account matches Google email"
             )
         return user
+
+    def start_google_login(
+        self,
+        request_id: str,
+        csrf_token: str | None,
+        pending_requests: PendingAuthorizationRequestRepository,
+        google_states: GoogleOIDCStateRepository,
+        google_client: GoogleOIDCClient,
+    ) -> str | None:
+        """Validate a pending browser login and return Google's auth URL."""
+        pending = pending_requests.get(request_id)
+        if pending is None or csrf_token != pending.csrf_token:
+            return None
+        oidc_state = google_states.create(
+            pending_request_id=request_id,
+            lifetime_seconds=settings.pending_authorization_request_lifetime_seconds,
+        )
+        return google_client.authorization_url(oidc_state.state, oidc_state.nonce)
+
+    def complete_google_login(
+        self,
+        code: str | None,
+        state: str | None,
+        error: str | None,
+        pending_requests: PendingAuthorizationRequestRepository,
+        google_states: GoogleOIDCStateRepository,
+        google_client: GoogleOIDCClient,
+    ) -> GoogleLoginResult:
+        """Validate Google's callback and resolve its local user."""
+        if not state:
+            return GoogleLoginResult(
+                status="invalid_request", error_message="Invalid Google login state."
+            )
+        oidc_state = google_states.consume(state)
+        if oidc_state is None:
+            return GoogleLoginResult(
+                status="invalid_request", error_message="Invalid Google login state."
+            )
+        pending = pending_requests.get(oidc_state.pending_request_id)
+        if pending is None:
+            return GoogleLoginResult(status="invalid_request")
+        if error:
+            return GoogleLoginResult(
+                status="error", pending=pending, error_message=error
+            )
+        if not code:
+            return GoogleLoginResult(
+                status="error",
+                pending=pending,
+                error_message="Google did not return an authorization code.",
+            )
+        try:
+            token_response = google_client.exchange_code(code)
+            id_token = token_response.get("id_token")
+            if not isinstance(id_token, str):
+                raise GoogleOIDCValidationError("Google did not return an ID token")
+            identity = google_client.validate_id_token(id_token, oidc_state.nonce)
+            user = self.authenticate_google_user(identity)
+        except GoogleOIDCValidationError:
+            return GoogleLoginResult(
+                status="error",
+                pending=pending,
+                error_message="Google authentication could not be verified.",
+            )
+        except OAuthException as oauth_error:
+            return GoogleLoginResult(
+                status="error",
+                pending=pending,
+                error_message=str(
+                    oauth_error.detail.get("error_description", "Google login failed")
+                ),
+            )
+
+        consumed = pending_requests.consume(oidc_state.pending_request_id)
+        if consumed is None:
+            return GoogleLoginResult(status="invalid_request")
+        return GoogleLoginResult(status="success", pending=consumed, user_id=user["id"])
+
+    def complete_browser_login(
+        self,
+        request_id: str,
+        csrf_token: str | None,
+        login_csrf: str | None,
+        email: str,
+        password: str,
+        pending_requests: PendingAuthorizationRequestRepository,
+    ) -> tuple[PendingAuthorizationRequest, dict] | None:
+        """Validate, authenticate, and consume a pending browser login."""
+        pending = pending_requests.get(request_id)
+        if (
+            pending is None
+            or csrf_token != pending.csrf_token
+            or login_csrf != pending.csrf_token
+        ):
+            return None
+        user = self.authenticate_user(email, password)
+        consumed = pending_requests.consume(request_id)
+        if consumed is None:
+            return None
+        return consumed, user
+
+    def create_browser_session(
+        self, user_id: str, browser_sessions: BrowserSessionRepository
+    ) -> str:
+        return browser_sessions.create(
+            user_id, settings.browser_session_lifetime_seconds
+        )
+
+    def logout_browser_session(
+        self, session_id: str | None, browser_sessions: BrowserSessionRepository
+    ) -> None:
+        if session_id:
+            browser_sessions.delete(session_id)
 
     def login(
         self,
@@ -666,6 +903,69 @@ class AuthService:
             settings.service_token_lifetime_seconds,
             jwt_token.scope,
         )
+
+    def issue_token(
+        self,
+        body: BaseGrantRequest,
+        client_name: str | None = None,
+        client_secret: str | None = None,
+    ) -> OAuthTokenResponse:
+        """Execute a parsed OAuth token grant and build its response."""
+        match body:
+            case PasswordGrantRequest():
+                self.validate_grant_type(body.client_id, "password")
+                access_token, refresh_token, expires_in, scope = self.login(
+                    body.username, body.password, body.scope, body.resource
+                )
+                return OAuthTokenResponse(
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    expires_in=expires_in,
+                    scope=scope,
+                )
+            case RefreshTokenGrantRequest():
+                access_token, refresh_token, expires_in, scope = self.refresh(
+                    body.refresh_token
+                )
+                return OAuthTokenResponse(
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    expires_in=expires_in,
+                    scope=scope,
+                )
+            case AuthorizationCodeGrantRequest():
+                self.validate_grant_type(body.client_id, "authorization_code")
+                access_token, refresh_token, expires_in, scope = self.exchange_code(
+                    body.code,
+                    body.redirect_uri,
+                    body.code_verifier,
+                    body.client_id,
+                )
+                return OAuthTokenResponse(
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    expires_in=expires_in,
+                    scope=scope,
+                )
+            case ClientCredentialsGrantRequest():
+                if client_name is None or client_secret is None:
+                    raise OAuthException(
+                        "invalid_client",
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        headers={"WWW-Authenticate": "Basic"},
+                    )
+                access_token, expires_in, scope = self.client_credentials(
+                    client_name,
+                    client_secret,
+                    body.scope,
+                    resource=body.resource,
+                )
+                return OAuthTokenResponse(
+                    access_token=access_token,
+                    expires_in=expires_in,
+                    scope=scope,
+                )
+        raise OAuthException("unsupported_grant_type")
 
     def validate_grant_type(self, client_id: str | None, grant_type: str) -> None:
         """Apply an optional per-client grant allowlist."""

@@ -21,10 +21,10 @@ from app.dependencies import (
     get_pending_authorization_request_repository,
 )
 from app.exceptions import (
-    GoogleOIDCValidationError,
     InvalidCredentialsException,
     OAuthException,
 )
+from app.models.authorization_decision import AuthorizationDecision
 from app.models.grant_type import GrantType
 from app.models.jwt import JWTToken
 from app.models.pending_authorization_request import PendingAuthorizationRequest
@@ -35,7 +35,6 @@ from app.models.request.oauth_token import (
     PasswordGrantRequest,
     RefreshTokenGrantRequest,
 )
-from app.models.response.token import OAuthTokenResponse
 from app.repositories.browser_session_repository import BrowserSessionRepository
 from app.repositories.google_oidc_state_repository import GoogleOIDCStateRepository
 from app.repositories.pending_authorization_request_repository import (
@@ -143,87 +142,6 @@ async def parse_oauth_token_request(request: Request) -> BaseGrantRequest:
             )
 
 
-def _handle_password_grant(
-    body: PasswordGrantRequest, auth_service: AuthService
-) -> OAuthTokenResponse:
-    logger.warning(
-        "Password grant used — this flow is deprecated per OAuth 2.1 (BCP). "
-        "Migrate clients to authorization code grant with PKCE.",
-        extra={
-            "oauth_password_grant_requests_total": 1,
-            "client_id": body.client_id,
-        },
-    )
-    metrics.add_metric(
-        name="oauth_password_grant_requests_total",
-        unit=MetricUnit.Count,
-        value=1,
-    )
-
-    access_token, refresh_token, expires_in, scope = auth_service.login(
-        body.username, body.password, body.scope, body.resource
-    )
-
-    return OAuthTokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        expires_in=expires_in,
-        scope=scope,
-    )
-
-
-def _handle_refresh_token_grant(
-    body: RefreshTokenGrantRequest, auth_service: AuthService
-) -> OAuthTokenResponse:
-    logger.info("Handling refresh_token grant")
-
-    access_token, refresh_token, expires_in, scope = auth_service.refresh(
-        body.refresh_token
-    )
-
-    return OAuthTokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        expires_in=expires_in,
-        scope=scope,
-    )
-
-
-def _handle_authorization_code_grant(
-    body: AuthorizationCodeGrantRequest, auth_service: AuthService
-) -> OAuthTokenResponse:
-    logger.info("Handling authorization_code grant")
-
-    access_token, refresh_token, expires_in, scope = auth_service.exchange_code(
-        body.code, body.redirect_uri, body.code_verifier, body.client_id
-    )
-
-    return OAuthTokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        expires_in=expires_in,
-        scope=scope,
-    )
-
-
-def _handle_client_credentials_grant(
-    request: Request, body: ClientCredentialsGrantRequest, auth_service: AuthService
-) -> OAuthTokenResponse:
-    logger.info("Handling client_credentials grant")
-    authorization = request.headers.get("Authorization")
-    client_name, client_secret = _parse_authorization_header(authorization)
-
-    access_token, expires_in, scope = auth_service.client_credentials(
-        client_name, client_secret, body.scope, resource=body.resource
-    )
-
-    return OAuthTokenResponse(
-        access_token=access_token,
-        expires_in=expires_in,
-        scope=scope,
-    )
-
-
 @router.post(
     "/oauth/token",
     status_code=status.HTTP_200_OK,
@@ -241,19 +159,24 @@ def token(
         "OAuth token endpoint called",
         extra={"grant_type": str(body.grant_type)},
     )
-    match body:
-        case PasswordGrantRequest():
-            auth_service.validate_grant_type(body.client_id, "password")
-            token_response = _handle_password_grant(body, auth_service)
-        case RefreshTokenGrantRequest():
-            token_response = _handle_refresh_token_grant(body, auth_service)
-        case AuthorizationCodeGrantRequest():
-            auth_service.validate_grant_type(body.client_id, "authorization_code")
-            token_response = _handle_authorization_code_grant(body, auth_service)
-        case ClientCredentialsGrantRequest():
-            token_response = _handle_client_credentials_grant(
-                request, body, auth_service
-            )
+    client_name = client_secret = None
+    if isinstance(body, ClientCredentialsGrantRequest):
+        client_name, client_secret = _parse_authorization_header(
+            request.headers.get("Authorization")
+        )
+    token_response = auth_service.issue_token(body, client_name, client_secret)
+
+    if isinstance(body, PasswordGrantRequest):
+        logger.warning(
+            "Password grant used — this flow is deprecated per OAuth 2.1 (BCP). "
+            "Migrate clients to authorization code grant with PKCE.",
+            extra={"client_id": body.client_id},
+        )
+        metrics.add_metric(
+            name="oauth_password_grant_requests_total",
+            unit=MetricUnit.Count,
+            value=1,
+        )
 
     headers: dict[str, str] = {
         "Cache-Control": "no-store",
@@ -311,26 +234,54 @@ def _authorization_redirect(
     pending: PendingAuthorizationRequest,
     user_id: str,
 ) -> RedirectResponse:
-    code = auth_service.authorize(
-        user_id=user_id,
-        client_id=pending.client_id,
-        redirect_uri=pending.redirect_uri,
-        requested_scope=pending.scope,
-        code_challenge=pending.code_challenge,
-        code_challenge_method=pending.code_challenge_method,
-    )
-    query_params = {"code": code}
-    if pending.state:
-        query_params["state"] = pending.state
+    code = auth_service.authorize_pending_request(pending, user_id)
+    query_params = _authorization_query_params(code, pending.state)
     return RedirectResponse(
         url=_append_query(pending.redirect_uri, query_params),
         status_code=status.HTTP_302_FOUND,
     )
 
 
+def _authorization_query_params(code: str, state: str | None) -> dict[str, str]:
+    query_params = {"code": code}
+    if state is not None:
+        query_params["state"] = state
+    return query_params
+
+
 def _append_query(uri: str, params: dict[str, str]) -> str:
     separator = "&" if "?" in uri else "?"
     return f"{uri}{separator}{urlencode(params)}"
+
+
+def _authorization_response(decision: AuthorizationDecision) -> RedirectResponse:
+    if decision.pending_request is not None:
+        pending = decision.pending_request
+        response = RedirectResponse(
+            url=f"/login?{urlencode({'request_id': pending.id})}",
+            status_code=status.HTTP_302_FOUND,
+        )
+        response.set_cookie(
+            "login_csrf",
+            pending.csrf_token,
+            max_age=settings.pending_authorization_request_lifetime_seconds,
+            httponly=True,
+            secure=settings.stage == "prod",
+            samesite="lax",
+            path="/",
+        )
+        return response
+
+    if decision.authorization_code is None:
+        raise OAuthException("invalid_request")
+    response = RedirectResponse(
+        url=_append_query(
+            decision.redirect_uri,
+            _authorization_query_params(decision.authorization_code, decision.state),
+        ),
+        status_code=status.HTTP_302_FOUND,
+    )
+    return response
 
 
 @router.get("/oauth/authorize")
@@ -353,112 +304,35 @@ def authorize(
     code_challenge: str | None = None,
     code_challenge_method: str | None = None,
 ) -> Response:
-    if jwt_token is None:
-        auth_service.validate_authorization_request(
-            response_type,
-            client_id,
-            redirect_uri,
-            code_challenge,
-            code_challenge_method,
-        )
-        assert code_challenge is not None
-        assert code_challenge_method is not None
-        session_id = request.cookies.get("auth_session")
-        session = browser_sessions.get(session_id) if session_id else None
-        if session is None:
-            request_id = pending_requests.create(
-                client_id=client_id,
-                redirect_uri=redirect_uri,
-                response_type=response_type,
-                scope=scope,
-                state=state,
-                code_challenge=code_challenge,
-                code_challenge_method=code_challenge_method,
-                lifetime_seconds=settings.pending_authorization_request_lifetime_seconds,
-            )
-            response = RedirectResponse(
-                url=f"/login?request_id={urlencode({'': request_id})[1:]}",
-                status_code=status.HTTP_302_FOUND,
-            )
-            pending = pending_requests.get(request_id)
-            if pending is None:
-                raise OAuthException("invalid_request")
-            response.set_cookie(
-                "login_csrf",
-                pending.csrf_token,
-                max_age=settings.pending_authorization_request_lifetime_seconds,
-                httponly=True,
-                secure=settings.stage == "prod",
-                samesite="lax",
-                path="/",
-            )
-            return response
-        code = auth_service.authorize(
-            user_id=session.user_id,
-            client_id=client_id,
-            redirect_uri=redirect_uri,
-            requested_scope=scope,
-            code_challenge=code_challenge,
-            code_challenge_method=code_challenge_method,
-        )
-        query_params = {"code": code}
-        if state:
-            query_params["state"] = state
-        return RedirectResponse(
-            url=_append_query(redirect_uri, query_params),
-            status_code=status.HTTP_302_FOUND,
-        )
-
-    logger.info(
-        "OAuth authorize endpoint called for user_id=%s",
-        jwt_token.sub,
-        extra={
-            "client_id": client_id,
-            "user_id": jwt_token.sub,
-            "has_scope": scope is not None,
-        },  # noqa
-    )
-    if response_type != "code":
-        logger.warning(
-            "Unsupported authorize response type",
-            extra={"response_type": response_type},
-        )
-        raise OAuthException(ERROR_MESSAGE_UNSUPPORTED_RESPONSE_TYPE)
-
-    code = auth_service.authorize(
-        user_id=jwt_token.sub,
+    session_id = request.cookies.get("auth_session")
+    session = browser_sessions.get(session_id) if session_id else None
+    decision = auth_service.process_authorization_request(
+        response_type=response_type,
         client_id=client_id,
         redirect_uri=redirect_uri,
-        requested_scope=scope,
+        scope=scope,
+        state=state,
         code_challenge=code_challenge,
         code_challenge_method=code_challenge_method,
+        bearer_user_id=jwt_token.sub if jwt_token is not None else None,
+        browser_session_user_id=session.user_id if session is not None else None,
+        pending_requests=pending_requests,
     )
-
-    query_params = {"code": code}
-    if state:
-        query_params["state"] = state
-
-    logger.info(
-        "OAuth authorize completed for user_id=%s",
-        jwt_token.sub,
-        extra={"client_id": client_id, "user_id": jwt_token.sub},  # noqa
-    )
-
-    return Response(
-        status_code=status.HTTP_302_FOUND,
-        headers={"Location": _append_query(redirect_uri, query_params)},
-    )
+    return _authorization_response(decision)
 
 
 @router.get("/login")
 def login_page(
     request_id: str,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
     pending_requests: Annotated[
         PendingAuthorizationRequestRepository,
         Depends(get_pending_authorization_request_repository),
     ],
 ) -> HTMLResponse:
-    pending = pending_requests.get(request_id)
+    pending = auth_service.get_pending_authorization_request(
+        request_id, pending_requests
+    )
     if pending is None:
         return HTMLResponse(
             ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID, status_code=400
@@ -470,6 +344,7 @@ def login_page(
 def google_login(
     request: Request,
     request_id: str,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
     pending_requests: Annotated[
         PendingAuthorizationRequestRepository,
         Depends(get_pending_authorization_request_repository),
@@ -479,26 +354,27 @@ def google_login(
     ],
     google_client: Annotated[GoogleOIDCClient, Depends(get_google_oidc_client)],
 ) -> Response:
-    pending = pending_requests.get(request_id)
-    if pending is None or request.cookies.get("login_csrf") != pending.csrf_token:
+    authorization_url = auth_service.start_google_login(
+        request_id,
+        request.cookies.get("login_csrf"),
+        pending_requests,
+        google_states,
+        google_client,
+    )
+    if authorization_url is None:
         return HTMLResponse(
             ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID, status_code=400
         )
-
-    oidc_state = google_states.create(
-        pending_request_id=request_id,
-        lifetime_seconds=settings.pending_authorization_request_lifetime_seconds,
-    )
     logger.info("Google login started", extra={"pending_request_id": request_id})
     return RedirectResponse(
-        url=google_client.authorization_url(oidc_state.state, oidc_state.nonce),
+        url=authorization_url,
         status_code=status.HTTP_302_FOUND,
     )
 
 
 @router.get("/login/google/callback")
 def google_callback(
-    request: Request,
+    _: Request,
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     browser_sessions: Annotated[
         BrowserSessionRepository, Depends(get_browser_session_repository)
@@ -515,59 +391,32 @@ def google_callback(
     state: str | None = None,
     error: str | None = None,
 ) -> Response:
-    """Complete the temporary Google login flow for an existing local user."""
-    if not state:
-        return HTMLResponse("Invalid Google login state.", status_code=400)
-
-    oidc_state = google_states.consume(state)
-    if oidc_state is None:
-        return HTMLResponse("Invalid Google login state.", status_code=400)
-
-    pending = pending_requests.get(oidc_state.pending_request_id)
-    if pending is None:
+    result = auth_service.complete_google_login(
+        code, state, error, pending_requests, google_states, google_client
+    )
+    if result.status == "invalid_request":
         return HTMLResponse(
-            "Authorization request expired or invalid.", status_code=400
+            result.error_message
+            or ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID,
+            status_code=400,
         )
-
-    if error:
-        return _login_page(oidc_state.pending_request_id, pending.csrf_token, error)
-    if not code:
-        return _login_page(
-            oidc_state.pending_request_id,
-            pending.csrf_token,
-            "Google did not return an authorization code.",
-        )
-
-    try:
-        token_response = google_client.exchange_code(code)
-        id_token = token_response.get("id_token")
-        if not isinstance(id_token, str):
-            raise GoogleOIDCValidationError("Google did not return an ID token")
-        identity = google_client.validate_id_token(id_token, oidc_state.nonce)
-        user = auth_service.authenticate_google_user(identity)
-    except GoogleOIDCValidationError:
-        return _login_page(
-            oidc_state.pending_request_id,
-            pending.csrf_token,
-            "Google authentication could not be verified.",
-        )
-    except OAuthException as oauth_error:
-        return _login_page(
-            oidc_state.pending_request_id,
-            pending.csrf_token,
-            str(oauth_error.detail.get("error_description", "Google login failed")),
-        )
-
-    consumed = pending_requests.consume(oidc_state.pending_request_id)
-    if consumed is None:
+    if result.pending is None:
         return HTMLResponse(
-            "Authorization request expired or invalid.", status_code=400
+            ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID, status_code=400
+        )
+    if result.status == "error":
+        return _login_page(
+            result.pending.id, result.pending.csrf_token, result.error_message
+        )
+    if result.user_id is None:
+        return HTMLResponse(
+            ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID, status_code=400
         )
 
-    response = _authorization_redirect(auth_service, consumed, user["id"])
+    response = _authorization_redirect(auth_service, result.pending, result.user_id)
     response.set_cookie(
         "auth_session",
-        browser_sessions.create(user["id"], settings.browser_session_lifetime_seconds),
+        auth_service.create_browser_session(result.user_id, browser_sessions),
         max_age=settings.browser_session_lifetime_seconds,
         httponly=True,
         secure=settings.stage == "prod",
@@ -592,32 +441,34 @@ async def login(
 ) -> Response:
     form = dict(await request.form())
     request_id = str(form.get("request_id", ""))
-    pending = pending_requests.get(request_id)
-    if (
-        pending is None
-        or form.get("csrf_token") != pending.csrf_token
-        or request.cookies.get("login_csrf") != pending.csrf_token
-    ):
-        return HTMLResponse(
-            ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID, status_code=400
-        )
-
     try:
-        user = auth_service.authenticate_user(
-            str(form.get("email", "")), str(form.get("password", ""))
+        result = auth_service.complete_browser_login(
+            request_id,
+            str(form.get("csrf_token", "")),
+            request.cookies.get("login_csrf"),
+            str(form.get("email", "")),
+            str(form.get("password", "")),
+            pending_requests,
         )
     except InvalidCredentialsException:
+        pending = auth_service.get_pending_authorization_request(
+            request_id, pending_requests
+        )
+        if pending is None:
+            return HTMLResponse(
+                ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID,
+                status_code=400,
+            )
         return _login_page(request_id, pending.csrf_token, "Invalid email or password.")
-
-    consumed = pending_requests.consume(request_id)
-    if consumed is None:
+    if result is None:
         return HTMLResponse(
             ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID, status_code=400
         )
+    consumed, user = result
     response = _authorization_redirect(auth_service, consumed, user["id"])
     response.set_cookie(
         "auth_session",
-        browser_sessions.create(user["id"], settings.browser_session_lifetime_seconds),
+        auth_service.create_browser_session(user["id"], browser_sessions),
         max_age=settings.browser_session_lifetime_seconds,
         httponly=True,
         secure=settings.stage == "prod",
@@ -632,12 +483,13 @@ async def login(
 def browser_logout(
     request: Request,
     response: Response,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
     browser_sessions: Annotated[
         BrowserSessionRepository, Depends(get_browser_session_repository)
     ],
 ) -> Response:
-    session_id = request.cookies.get("auth_session")
-    if session_id:
-        browser_sessions.delete(session_id)
+    auth_service.logout_browser_session(
+        request.cookies.get("auth_session"), browser_sessions
+    )
     response.delete_cookie("auth_session", path="/")
     return response
