@@ -34,7 +34,15 @@ class TestGoogleOIDCClient:
         )
         get = mocker.patch.object(client._client, "get", return_value=response)
 
-        assert client.get_metadata() == client.get_metadata()
+        first_metadata = client.get_metadata()
+        second_metadata = client.get_metadata()
+
+        assert first_metadata is second_metadata
+        assert str(first_metadata.issuer) == "https://accounts.google.com/"
+        assert (
+            str(first_metadata.authorization_endpoint)
+            == "https://accounts.google.com/o/oauth2/v2/auth"
+        )
         get.assert_called_once()
 
     def test_discovery_rejects_unexpected_issuer(

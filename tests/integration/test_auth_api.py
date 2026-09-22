@@ -172,8 +172,8 @@ class TestAuthApi:
         from app import settings
 
         monkeypatch.setattr(settings, "google_dev_email_login_enabled", True)
-        GoogleOIDCClient._metadata_cache = None
-        GoogleOIDCClient._metadata_expires_at = 0.0
+        monkeypatch.setattr(GoogleOIDCClient, "_metadata_cache", None)
+        monkeypatch.setattr(GoogleOIDCClient, "_metadata_expires_at", 0.0)
 
         pending_requests = PendingAuthorizationRequestRepository()
         request_id = pending_requests.create(
