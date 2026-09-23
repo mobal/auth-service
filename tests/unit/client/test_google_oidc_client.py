@@ -78,6 +78,60 @@ class TestGoogleOIDCClient:
 
         assert len(httpx2_mock.get_requests()) == 1
 
+    def test_request_rejects_unsupported_method(self, client: GoogleOIDCClient):
+        with pytest.raises(ValueError, match="Unsupported HTTP method"):
+            client._request("PUT", "https://accounts.google.com")
+
+    def test_discovery_cache_is_checked_again_inside_lock(
+        self, mocker, monkeypatch, client: GoogleOIDCClient
+    ):
+        metadata = SimpleNamespace(
+            issuer="https://accounts.google.com",
+            authorization_endpoint="https://accounts.google.com/auth",
+            token_endpoint="https://oauth2.googleapis.com/token",
+            jwks_uri="https://www.googleapis.com/oauth2/v3/certs",
+        )
+        monkeypatch.setattr(GoogleOIDCClient, "_metadata_cache", metadata)
+        monkeypatch.setattr(GoogleOIDCClient, "_metadata_expires_at", 1.0)
+        mocker.patch(
+            "app.clients.google_oidc_client.time.monotonic", side_effect=[0.0, 2.0]
+        )
+        get = mocker.patch.object(client._client, "get")
+
+        assert client.get_metadata() == metadata
+        get.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "token", ["not-a-jwt", jwt.encode({}, "secret", algorithm="HS256")]
+    )
+    def test_validate_id_token_rejects_unsupported_token_header(
+        self, client: GoogleOIDCClient, token: str
+    ):
+        with pytest.raises(GoogleOIDCValidationError):
+            client.validate_id_token(token, "nonce")
+
+    def test_validate_id_token_rejects_missing_signing_key(
+        self, mocker, client: GoogleOIDCClient
+    ):
+        client.get_metadata = mocker.Mock(
+            return_value=SimpleNamespace(jwks_uri="https://google.test/jwks")
+        )
+        client._breaker.call = mocker.Mock(
+            return_value=SimpleNamespace(
+                json=lambda: {"keys": []}, raise_for_status=mocker.Mock()
+            )
+        )
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        token = jwt.encode(
+            {"iss": "https://accounts.google.com", "sub": "subject"},
+            private_key,
+            algorithm="RS256",
+            headers={"kid": "missing", "alg": "RS256"},
+        )
+
+        with pytest.raises(GoogleOIDCValidationError, match="signing key"):
+            client.validate_id_token(token, "nonce")
+
     def test_validate_id_token_accepts_signed_verified_identity(
         self, mocker, client: GoogleOIDCClient
     ):

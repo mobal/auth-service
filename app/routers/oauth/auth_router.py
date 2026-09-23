@@ -1,5 +1,5 @@
 import base64
-import html
+from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlencode
 
@@ -7,6 +7,7 @@ from aws_lambda_powertools import Logger, Metrics
 from aws_lambda_powertools.metrics import MetricUnit
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
 from app import settings
@@ -27,6 +28,7 @@ from app.exceptions import (
 from app.models.authorization_decision import AuthorizationDecision
 from app.models.grant_type import GrantType
 from app.models.jwt import JWTToken
+from app.models.login_page import LoginPage
 from app.models.pending_authorization_request import PendingAuthorizationRequest
 from app.models.request.oauth_token import (
     AuthorizationCodeGrantRequest,
@@ -46,6 +48,7 @@ logger = Logger()
 metrics = Metrics(namespace="AuthService")
 
 router = APIRouter()
+templates = Jinja2Templates(directory=Path(__file__).resolve().parents[2] / "templates")
 
 ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID = (
     "Authorization request expired or invalid."
@@ -201,32 +204,17 @@ def revoke(
     auth_service.logout(jwt_token)
 
 
-def _login_page(
-    request_id: str,
-    csrf_token: str,
-    error: str | None = None,
+def _render_login_page(
+    request: Request,
+    page: LoginPage,
+    status_code: int = status.HTTP_200_OK,
 ) -> HTMLResponse:
-    escaped_request_id = html.escape(request_id, quote=True)
-    message = html.escape(error or "", quote=False)
-    content = f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in</title><style>
-body{{font-family:system-ui,sans-serif;background:#f4f6f8;display:grid;place-items:center;min-height:100vh;margin:0}}
-main{{background:#fff;padding:2rem;border-radius:.75rem;box-shadow:0 .5rem 2rem #0002;width:min(22rem,calc(100% - 3rem))}}
-label{{display:block;margin:.9rem 0 .3rem}}input{{box-sizing:border-box;width:100%;padding:.7rem;border:1px solid #bbc3cc;border-radius:.35rem}}
-button{{width:100%;margin-top:1.2rem;padding:.75rem;border:0;border-radius:.35rem;background:#175cd3;color:#fff;font-weight:600}}
-.google{{display:block;box-sizing:border-box;text-align:center;text-decoration:none;background:#fff;color:#344054;border:1px solid #d0d5dd}}
-.divider{{display:flex;align-items:center;gap:.6rem;margin-top:1.2rem;color:#667085;font-size:.85rem}}
-.divider::before,.divider::after{{content:"";height:1px;background:#d0d5dd;flex:1}}
-.error{{color:#b42318;min-height:1.4rem}}h1{{margin-top:0}}
-</style></head><body><main><h1>Sign in</h1><div class="error" role="alert">{message}</div>
-<form method="post" action="/login"><input type="hidden" name="request_id" value="{escaped_request_id}">
-<input type="hidden" name="csrf_token" value="{html.escape(csrf_token, quote=True)}">
-<label for="email">Email</label><input id="email" name="email" type="email" autocomplete="username" required>
-<label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required>
-<button type="submit">Sign in</button></form><div class="divider">or</div>
-<a class="google" href="/login/google?request_id={escaped_request_id}">Continue with Google</a></main></body></html>"""
-    return HTMLResponse(content)
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context=page.model_dump(),
+        status_code=status_code,
+    )
 
 
 def _authorization_redirect(
@@ -323,6 +311,7 @@ def authorize(
 
 @router.get("/login")
 def login_page(
+    request: Request,
     request_id: str,
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     pending_requests: Annotated[
@@ -330,14 +319,15 @@ def login_page(
         Depends(get_pending_authorization_request_repository),
     ],
 ) -> HTMLResponse:
-    pending = auth_service.get_pending_authorization_request(
-        request_id, pending_requests
+    page = auth_service.get_login_page(
+        request_id,
+        pending_requests,
     )
-    if pending is None:
+    if page is None:
         return HTMLResponse(
             ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID, status_code=400
         )
-    return _login_page(request_id, pending.csrf_token)
+    return _render_login_page(request, page)
 
 
 @router.get("/login/google")
@@ -374,7 +364,7 @@ def google_login(
 
 @router.get("/login/google/callback")
 def google_callback(
-    _: Request,
+    request: Request,
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     browser_sessions: Annotated[
         BrowserSessionRepository, Depends(get_browser_session_repository)
@@ -405,9 +395,17 @@ def google_callback(
             ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID, status_code=400
         )
     if result.status == "error":
-        return _login_page(
-            result.pending.id, result.pending.csrf_token, result.error_message
+        page = auth_service.get_login_page(
+            result.pending.id,
+            pending_requests,
+            result.error_message,
         )
+        if page is None:
+            return HTMLResponse(
+                ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID,
+                status_code=400,
+            )
+        return _render_login_page(request, page)
     if result.user_id is None:
         return HTMLResponse(
             ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID, status_code=400
@@ -459,7 +457,17 @@ async def login(
                 ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID,
                 status_code=400,
             )
-        return _login_page(request_id, pending.csrf_token, "Invalid email or password.")
+        page = auth_service.get_login_page(
+            request_id,
+            pending_requests,
+            "Invalid email or password.",
+        )
+        if page is None:
+            return HTMLResponse(
+                ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID,
+                status_code=400,
+            )
+        return _render_login_page(request, page)
     if result is None:
         return HTMLResponse(
             ERROR_MESSAGE_AUTHORIZATION_REQUEST_EXPIRED_OR_INVALID, status_code=400

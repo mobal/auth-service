@@ -29,6 +29,7 @@ from app.models.authorization_decision import AuthorizationDecision
 from app.models.google_identity import GoogleIdentity
 from app.models.google_login_result import GoogleLoginResult
 from app.models.jwt import JWTToken, RefreshToken
+from app.models.login_page import LoginPage
 from app.models.pending_authorization_request import PendingAuthorizationRequest
 from app.models.request.oauth_token import (
     AuthorizationCodeGrantRequest,
@@ -649,6 +650,22 @@ class AuthService:
         pending_requests: PendingAuthorizationRequestRepository,
     ) -> PendingAuthorizationRequest | None:
         return pending_requests.get(request_id)
+
+    def get_login_page(
+        self,
+        request_id: str,
+        pending_requests: PendingAuthorizationRequestRepository,
+        error: str | None = None,
+    ) -> LoginPage | None:
+        """Build the view data for a valid pending browser login request."""
+        pending = self.get_pending_authorization_request(request_id, pending_requests)
+        if pending is None:
+            return None
+        return LoginPage(
+            request_id=pending.id,
+            csrf_token=pending.csrf_token,
+            error=error,
+        )
 
     def authenticate_user(self, email: str, password: str) -> dict:
         """Authenticate a browser user without issuing OAuth tokens."""

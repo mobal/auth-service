@@ -11,12 +11,15 @@ from fastapi import HTTPException, status
 
 from app.clients.user_service_client import UserServiceClient
 from app.exceptions import (
+    GoogleOIDCValidationError,
     OAuthException,
     TokenNotFoundException,
     UserNotFoundException,
 )
 from app.models.audience import Audience
+from app.models.google_identity import GoogleIdentity
 from app.models.jwt import JWTToken, RefreshToken
+from app.models.pending_authorization_request import PendingAuthorizationRequest
 from app.models.service import ServiceCredential
 from app.repositories.audience_repository import AudienceRepository
 from app.repositories.authorization_code_repository import (
@@ -32,6 +35,22 @@ ALGORITHMS = ["HS256"]
 
 
 class TestAuthService:
+    @staticmethod
+    def _pending_request() -> PendingAuthorizationRequest:
+        return PendingAuthorizationRequest(
+            id="request-1",
+            client_id="client-1",
+            redirect_uri="https://example.com/callback",
+            response_type="code",
+            scope="users:read",
+            state="state",
+            code_challenge="challenge",
+            code_challenge_method="S256",
+            csrf_token="csrf",
+            created_at="2026-01-01T00:00:00+00:00",
+            ttl=2_000_000_000,
+        )
+
     @pytest.fixture(autouse=True)
     def _patch_auth_service_dependencies(self, mocker, monkeypatch, settings: Settings):
         patched_settings = SimpleNamespace(
@@ -110,6 +129,304 @@ class TestAuthService:
         )
         token_service.create.assert_called_once_with(decoded, ANY)
 
+    def test_get_login_page_returns_pending_request_view_data(
+        self, mocker, auth_service: AuthService
+    ):
+        pending = SimpleNamespace(id="request-1", csrf_token="csrf-1")
+        pending_requests = mocker.Mock()
+        pending_requests.get.return_value = pending
+
+        page = auth_service.get_login_page(
+            "request-1", pending_requests, "Invalid credentials"
+        )
+
+        assert page is not None
+        assert page.request_id == "request-1"
+        assert page.csrf_token == "csrf-1"
+        assert page.error == "Invalid credentials"
+
+    def test_get_login_page_returns_none_for_missing_request(
+        self, mocker, auth_service: AuthService
+    ):
+        pending_requests = mocker.Mock()
+        pending_requests.get.return_value = None
+
+        assert auth_service.get_login_page("missing", pending_requests) is None
+
+    def test_audience_is_unavailable_without_registry(self, auth_service: AuthService):
+        auth_service._audience_repository = None
+
+        assert auth_service._audience_is_registered("api") is False
+
+    def test_validate_audience_rejects_without_registry(
+        self, auth_service: AuthService
+    ):
+        auth_service._audience_repository = None
+
+        with pytest.raises(OAuthException, match="registry is not available"):
+            auth_service._validate_audience("api", "client")
+
+    def test_pkce_rejects_unsupported_method(self, auth_service: AuthService):
+        with pytest.raises(OAuthException, match="Unsupported code_challenge_method"):
+            auth_service._get_pkce_challenge("verifier", "unsupported")
+
+    def test_authenticate_google_user_requires_feature_flag(
+        self, auth_service: AuthService, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "app.services.auth_service.settings.google_dev_email_login_enabled",
+            False,
+        )
+        identity = GoogleIdentity(
+            issuer="https://accounts.google.com",
+            subject="google-subject",
+            email="user@example.com",
+            email_verified=True,
+            nonce="nonce",
+        )
+
+        with pytest.raises(OAuthException, match="Google login is not enabled"):
+            auth_service.authenticate_google_user(identity)
+
+    def test_authenticate_google_user_rejects_unknown_email(
+        self, mocker, auth_service: AuthService, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "app.services.auth_service.settings.google_dev_email_login_enabled",
+            True,
+        )
+        mocker.patch.object(auth_service, "_fetch_user_by_email", return_value=None)
+        identity = GoogleIdentity(
+            issuer="https://accounts.google.com",
+            subject="google-subject",
+            email="unknown@example.com",
+            email_verified=True,
+            nonce="nonce",
+        )
+
+        with pytest.raises(OAuthException, match="No local account"):
+            auth_service.authenticate_google_user(identity)
+
+    def test_authenticate_google_user_returns_existing_user(
+        self, mocker, auth_service: AuthService, monkeypatch, user_data: dict
+    ):
+        monkeypatch.setattr(
+            "app.services.auth_service.settings.google_dev_email_login_enabled",
+            True,
+        )
+        mocker.patch.object(
+            auth_service, "_fetch_user_by_email", return_value=user_data
+        )
+        identity = GoogleIdentity(
+            issuer="https://accounts.google.com",
+            subject="google-subject",
+            email=user_data["email"],
+            email_verified=True,
+            nonce="nonce",
+        )
+
+        assert auth_service.authenticate_google_user(identity) == user_data
+
+    def test_start_google_login_rejects_invalid_csrf(
+        self, mocker, auth_service: AuthService
+    ):
+        pending_requests = mocker.Mock()
+        pending_requests.get.return_value = SimpleNamespace(csrf_token="expected")
+
+        result = auth_service.start_google_login(
+            "request-1",
+            "wrong",
+            pending_requests,
+            mocker.Mock(),
+            mocker.Mock(),
+        )
+
+        assert result is None
+
+    def test_start_google_login_returns_authorization_url(
+        self, mocker, auth_service: AuthService
+    ):
+        pending_requests = mocker.Mock()
+        pending_requests.get.return_value = SimpleNamespace(csrf_token="csrf")
+        google_states = mocker.Mock()
+        google_states.create.return_value = SimpleNamespace(
+            state="state", nonce="nonce"
+        )
+        google_client = mocker.Mock()
+        google_client.authorization_url.return_value = (
+            "https://accounts.google.com/auth"
+        )
+
+        result = auth_service.start_google_login(
+            "request-1", "csrf", pending_requests, google_states, google_client
+        )
+
+        assert result == "https://accounts.google.com/auth"
+        google_states.create.assert_called_once()
+        google_client.authorization_url.assert_called_once_with("state", "nonce")
+
+    def test_complete_google_login_rejects_missing_code(
+        self, mocker, auth_service: AuthService
+    ):
+        google_states = mocker.Mock()
+        google_states.consume.return_value = SimpleNamespace(
+            pending_request_id="request-1", nonce="nonce"
+        )
+        pending_requests = mocker.Mock()
+        pending_requests.get.return_value = self._pending_request()
+
+        result = auth_service.complete_google_login(
+            None, "state", None, pending_requests, google_states, mocker.Mock()
+        )
+
+        assert result.status == "error"
+        assert result.error_message == "Google did not return an authorization code."
+
+    def test_complete_google_login_returns_provider_error(
+        self, mocker, auth_service: AuthService
+    ):
+        google_states = mocker.Mock()
+        google_states.consume.return_value = SimpleNamespace(
+            pending_request_id="request-1", nonce="nonce"
+        )
+        pending_requests = mocker.Mock()
+        pending_requests.get.return_value = self._pending_request()
+
+        result = auth_service.complete_google_login(
+            None,
+            "state",
+            "access_denied",
+            pending_requests,
+            google_states,
+            mocker.Mock(),
+        )
+
+        assert result.status == "error"
+        assert result.error_message == "access_denied"
+
+    def test_complete_google_login_rejects_missing_state(
+        self, mocker, auth_service: AuthService
+    ):
+        result = auth_service.complete_google_login(
+            "code", None, None, mocker.Mock(), mocker.Mock(), mocker.Mock()
+        )
+
+        assert result.status == "invalid_request"
+        assert result.error_message == "Invalid Google login state."
+
+    def test_complete_google_login_rejects_unknown_state(
+        self, mocker, auth_service: AuthService
+    ):
+        google_states = mocker.Mock()
+        google_states.consume.return_value = None
+
+        result = auth_service.complete_google_login(
+            "code", "state", None, mocker.Mock(), google_states, mocker.Mock()
+        )
+
+        assert result.status == "invalid_request"
+
+    def test_complete_google_login_rejects_missing_pending_request(
+        self, mocker, auth_service: AuthService
+    ):
+        google_states = mocker.Mock()
+        google_states.consume.return_value = SimpleNamespace(
+            pending_request_id="request-1", nonce="nonce"
+        )
+        pending_requests = mocker.Mock()
+        pending_requests.get.return_value = None
+
+        result = auth_service.complete_google_login(
+            "code", "state", None, pending_requests, google_states, mocker.Mock()
+        )
+
+        assert result.status == "invalid_request"
+
+    def test_complete_google_login_handles_invalid_google_token(
+        self, mocker, auth_service: AuthService
+    ):
+        google_states = mocker.Mock()
+        google_states.consume.return_value = SimpleNamespace(
+            pending_request_id="request-1", nonce="nonce"
+        )
+        pending_requests = mocker.Mock()
+        pending_requests.get.return_value = self._pending_request()
+        google_client = mocker.Mock()
+        google_client.exchange_code.return_value = {"id_token": "token"}
+        google_client.validate_id_token.side_effect = GoogleOIDCValidationError
+
+        result = auth_service.complete_google_login(
+            "code", "state", None, pending_requests, google_states, google_client
+        )
+
+        assert result.status == "error"
+        assert result.error_message == "Google authentication could not be verified."
+
+    def test_complete_google_login_handles_authentication_error(
+        self, mocker, auth_service: AuthService
+    ):
+        google_states = mocker.Mock()
+        google_states.consume.return_value = SimpleNamespace(
+            pending_request_id="request-1", nonce="nonce"
+        )
+        pending_requests = mocker.Mock()
+        pending_requests.get.return_value = self._pending_request()
+        google_client = mocker.Mock()
+        google_client.exchange_code.return_value = {"id_token": "token"}
+        identity = GoogleIdentity(
+            issuer="https://accounts.google.com",
+            subject="subject",
+            email="user@example.com",
+            email_verified=True,
+            nonce="nonce",
+        )
+        google_client.validate_id_token.return_value = identity
+        mocker.patch.object(
+            auth_service,
+            "authenticate_google_user",
+            side_effect=OAuthException("access_denied", "Google login failed"),
+        )
+
+        result = auth_service.complete_google_login(
+            "code", "state", None, pending_requests, google_states, google_client
+        )
+
+        assert result.status == "error"
+        assert result.error_message == "Google login failed"
+
+    def test_complete_google_login_rejects_failed_pending_request_consumption(
+        self, mocker, auth_service: AuthService, monkeypatch, user_data: dict
+    ):
+        monkeypatch.setattr(
+            "app.services.auth_service.settings.google_dev_email_login_enabled",
+            True,
+        )
+        google_states = mocker.Mock()
+        google_states.consume.return_value = SimpleNamespace(
+            pending_request_id="request-1", nonce="nonce"
+        )
+        pending_requests = mocker.Mock()
+        pending_requests.get.return_value = self._pending_request()
+        pending_requests.consume.return_value = None
+        google_client = mocker.Mock()
+        google_client.exchange_code.return_value = {"id_token": "token"}
+        google_client.validate_id_token.return_value = GoogleIdentity(
+            issuer="https://accounts.google.com",
+            subject="subject",
+            email=user_data["email"],
+            email_verified=True,
+            nonce="nonce",
+        )
+        mocker.patch.object(
+            auth_service, "_fetch_user_by_email", return_value=user_data
+        )
+
+        result = auth_service.complete_google_login(
+            "code", "state", None, pending_requests, google_states, google_client
+        )
+
+        assert result.status == "invalid_request"
+
     def test_fail_to_login_due_to_invalid_credentials(
         self,
         mocker,
@@ -177,7 +494,7 @@ class TestAuthService:
             auth_service.logout(jwt_token)
 
         assert status.HTTP_404_NOT_FOUND == excinfo.value.status_code
-        assert error_message == excinfo.value.detail
+        assert excinfo.value.detail == error_message
         token_service.delete_by_id.assert_called_once_with(jwt_token.jti)
 
     def test_successfully_refresh_tokens(
@@ -228,7 +545,7 @@ class TestAuthService:
             auth_service.refresh(refresh_token.token)
 
         assert excinfo.type == TokenNotFoundException
-        assert "The requested token was not found" == excinfo.value.detail
+        assert excinfo.value.detail == "The requested token was not found"
 
         token_service.get_by_refresh_token.assert_called_once_with(refresh_token.token)
 
@@ -280,7 +597,7 @@ class TestAuthService:
 
         assert excinfo.type == TokenExpiredException
         assert status.HTTP_401_UNAUTHORIZED == excinfo.value.status_code
-        assert "The requested token has expired" == excinfo.value.detail
+        assert excinfo.value.detail == "The requested token has expired"
 
         token_service.get_by_refresh_token.assert_called_once_with(refresh_token.token)
 

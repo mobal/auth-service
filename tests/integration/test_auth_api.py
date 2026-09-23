@@ -14,8 +14,11 @@ from fastapi import Request, status
 from fastapi.testclient import TestClient
 
 from app.clients.google_oidc_client import GoogleOIDCClient
+from app.exceptions import InvalidCredentialsException
 from app.jwt_bearer import JWTBearer
+from app.models.google_login_result import GoogleLoginResult
 from app.models.jwt import JWTToken, RefreshToken
+from app.models.pending_authorization_request import PendingAuthorizationRequest
 from app.repositories.authorization_code_repository import (
     AuthorizationCodeRepository,
 )
@@ -612,6 +615,7 @@ class TestAuthApi:
     def test_modern_browser_authorization_code_pkce_flow(
         self,
         httpx2_mock,
+        monkeypatch,
         services_table,
         service_credential,
         user_data,
@@ -619,6 +623,9 @@ class TestAuthApi:
         test_client: TestClient,
     ):
         import os
+
+        monkeypatch.setattr(GoogleOIDCClient, "_metadata_cache", None)
+        monkeypatch.setattr(GoogleOIDCClient, "_metadata_expires_at", 0.0)
 
         redirect_uri = "https://example.com/callback"
         services_table.put_item(
@@ -656,7 +663,28 @@ class TestAuthApi:
         login_url = response.headers["location"]
         request_id = parse_qs(urlparse(login_url).query)["request_id"][0]
         login_page = test_client.get(login_url)
+        assert login_page.status_code == status.HTTP_200_OK
+        assert "Continue with Google" in login_page.text
+        assert 'class="h-14 w-full rounded-xl' in login_page.text
         csrf_token = login_page.text.split('name="csrf_token" value="')[1].split('"')[0]
+
+        httpx2_mock.add_response(
+            method="GET",
+            url="https://accounts.google.com/.well-known/openid-configuration",
+            json={
+                "issuer": "https://accounts.google.com",
+                "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+                "token_endpoint": "https://oauth2.googleapis.com/token",
+                "jwks_uri": "https://www.googleapis.com/oauth2/v3/certs",
+            },
+            status_code=status.HTTP_200_OK,
+        )
+        google_redirect = test_client.get(
+            f"/login/google?request_id={request_id}", follow_redirects=False
+        )
+        assert google_redirect.status_code == status.HTTP_302_FOUND
+        assert "client_id=test-google-client-id" in google_redirect.headers["location"]
+        assert "scope=openid+email+profile" in google_redirect.headers["location"]
 
         httpx2_mock.add_response(
             method="GET",
@@ -711,6 +739,96 @@ class TestAuthApi:
 
         assert response.status_code == status.HTTP_200_OK
         assert "access_token" in response.json()
+
+    def test_login_page_rejects_missing_pending_request(self, test_client: TestClient):
+        response = test_client.get("/login?request_id=missing")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "Authorization request expired or invalid." in response.text
+
+    def test_google_login_rejects_missing_browser_request(
+        self, test_client: TestClient
+    ):
+        response = test_client.get("/login/google?request_id=missing")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "Authorization request expired or invalid." in response.text
+
+    def test_google_callback_renders_provider_error(self, test_client: TestClient):
+        pending_requests = PendingAuthorizationRequestRepository()
+        request_id = pending_requests.create(
+            client_id="my-app",
+            redirect_uri="https://example.com/callback",
+            response_type="code",
+            scope="users:read",
+            state="oauth-state",
+            code_challenge="challenge",
+            code_challenge_method="S256",
+        )
+        google_state = GoogleOIDCStateRepository().create(
+            pending_request_id=request_id,
+            lifetime_seconds=600,
+        )
+
+        response = test_client.get(
+            "/login/google/callback",
+            params={"state": google_state.state, "error": "access_denied"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert "access_denied" in response.text
+
+    def test_login_renders_invalid_credentials_error(
+        self, mocker, test_client: TestClient
+    ):
+        pending = PendingAuthorizationRequest(
+            id="request-1",
+            client_id="client-1",
+            redirect_uri="https://example.com/callback",
+            response_type="code",
+            code_challenge="challenge",
+            code_challenge_method="S256",
+            csrf_token="csrf",
+            created_at="2026-01-01T00:00:00+00:00",
+            ttl=2_000_000_000,
+        )
+        mocker.patch.object(
+            AuthService,
+            "complete_browser_login",
+            side_effect=InvalidCredentialsException("Invalid email or password."),
+        )
+        mocker.patch.object(
+            AuthService,
+            "get_pending_authorization_request",
+            return_value=pending,
+        )
+
+        response = test_client.post(
+            "/login",
+            data={"request_id": "request-1", "csrf_token": "csrf"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert "Invalid email or password." in response.text
+
+    def test_google_callback_rejects_success_without_user(
+        self, mocker, test_client: TestClient
+    ):
+        mocker.patch.object(
+            AuthService,
+            "complete_google_login",
+            return_value=GoogleLoginResult(status="success"),
+        )
+
+        response = test_client.get("/login/google/callback", params={"state": "state"})
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "Authorization request expired or invalid." in response.text
+
+    def test_browser_logout_clears_session_cookie(self, test_client: TestClient):
+        response = test_client.post("/logout")
+
+        assert "auth_session" in response.headers["set-cookie"]
 
     def test_browser_authorization_rejects_plain_pkce(
         self,
