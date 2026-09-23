@@ -202,7 +202,7 @@ class TestAuthService:
             auth_service.logout(jwt_token)
 
         assert status.HTTP_404_NOT_FOUND == excinfo.value.status_code
-        assert error_message == excinfo.value.detail
+        assert excinfo.value.detail == error_message
         token_service.delete_by_id.assert_called_once_with(jwt_token.jti)
 
     def test_successfully_refresh_tokens(
@@ -253,7 +253,7 @@ class TestAuthService:
             auth_service.refresh(refresh_token.token)
 
         assert excinfo.type == TokenNotFoundException
-        assert "The requested token was not found" == excinfo.value.detail
+        assert excinfo.value.detail == "The requested token was not found"
 
         token_service.get_by_refresh_token.assert_called_once_with(refresh_token.token)
 
@@ -305,7 +305,7 @@ class TestAuthService:
 
         assert excinfo.type == TokenExpiredException
         assert status.HTTP_401_UNAUTHORIZED == excinfo.value.status_code
-        assert "The requested token has expired" == excinfo.value.detail
+        assert excinfo.value.detail == "The requested token has expired"
 
         token_service.get_by_refresh_token.assert_called_once_with(refresh_token.token)
 
