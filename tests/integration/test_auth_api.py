@@ -11,8 +11,11 @@ from argon2 import PasswordHasher
 from fastapi import Request, status
 from fastapi.testclient import TestClient
 
+from app.exceptions import InvalidCredentialsException
 from app.jwt_bearer import JWTBearer
 from app.models.jwt import JWTToken, RefreshToken
+from app.models.login_page import LoginPage
+from app.models.pending_authorization_request import PendingAuthorizationRequest
 from app.repositories.authorization_code_repository import (
     AuthorizationCodeRepository,
 )
@@ -547,6 +550,9 @@ class TestAuthApi:
         login_url = response.headers["location"]
         request_id = parse_qs(urlparse(login_url).query)["request_id"][0]
         login_page = test_client.get(login_url)
+        assert login_page.status_code == status.HTTP_200_OK
+        assert 'class="h-14 w-full rounded-xl' in login_page.text
+        assert "Continue with Google" not in login_page.text
         csrf_token = login_page.text.split('name="csrf_token" value="')[1].split('"')[0]
 
         httpx2_mock.add_response(
@@ -602,6 +608,54 @@ class TestAuthApi:
 
         assert response.status_code == status.HTTP_200_OK
         assert "access_token" in response.json()
+
+    def test_login_page_rejects_missing_pending_request(self, test_client: TestClient):
+        response = test_client.get("/login?request_id=missing")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "Authorization request expired or invalid." in response.text
+
+    def test_login_renders_invalid_credentials_error(
+        self, mocker, test_client: TestClient
+    ):
+        pending = PendingAuthorizationRequest(
+            id="request-1",
+            client_id="client-1",
+            redirect_uri="https://example.com/callback",
+            response_type="code",
+            code_challenge="challenge",
+            code_challenge_method="S256",
+            csrf_token="csrf",
+            created_at="2026-01-01T00:00:00+00:00",
+            ttl=2_000_000_000,
+        )
+        mocker.patch.object(
+            AuthService,
+            "complete_browser_login",
+            side_effect=InvalidCredentialsException("Invalid email or password."),
+        )
+        mocker.patch.object(
+            AuthService,
+            "get_login_page",
+            return_value=LoginPage(
+                request_id=pending.id,
+                csrf_token=pending.csrf_token,
+                error="Invalid email or password.",
+            ),
+        )
+
+        response = test_client.post(
+            "/login",
+            data={"request_id": "request-1", "csrf_token": "csrf"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert "Invalid email or password." in response.text
+
+    def test_browser_logout_clears_session_cookie(self, test_client: TestClient):
+        response = test_client.post("/logout")
+
+        assert "auth_session" in response.headers["set-cookie"]
 
     def test_browser_authorization_rejects_plain_pkce(
         self,

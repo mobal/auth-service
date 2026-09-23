@@ -32,6 +32,31 @@ ALGORITHMS = ["HS256"]
 
 
 class TestAuthService:
+    def test_get_login_page_returns_pending_request_view_data(
+        self, mocker, auth_service: AuthService
+    ):
+        pending_requests = mocker.Mock()
+        pending_requests.get.return_value = SimpleNamespace(
+            id="request-1", csrf_token="csrf-1"
+        )
+
+        page = auth_service.get_login_page(
+            "request-1", pending_requests, "Invalid credentials"
+        )
+
+        assert page is not None
+        assert page.request_id == "request-1"
+        assert page.csrf_token == "csrf-1"
+        assert page.error == "Invalid credentials"
+
+    def test_get_login_page_returns_none_for_missing_request(
+        self, mocker, auth_service: AuthService
+    ):
+        pending_requests = mocker.Mock()
+        pending_requests.get.return_value = None
+
+        assert auth_service.get_login_page("missing", pending_requests) is None
+
     @pytest.fixture(autouse=True)
     def _patch_auth_service_dependencies(self, mocker, monkeypatch, settings: Settings):
         patched_settings = SimpleNamespace(
