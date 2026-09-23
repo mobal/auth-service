@@ -23,10 +23,25 @@ from app.exceptions import (
     UserNotFoundException,
 )
 from app.models.authorization_code import AuthorizationCode
+from app.models.authorization_decision import AuthorizationDecision
 from app.models.jwt import JWTToken, RefreshToken
+from app.models.login_page import LoginPage
+from app.models.pending_authorization_request import PendingAuthorizationRequest
+from app.models.request.oauth_token import (
+    AuthorizationCodeGrantRequest,
+    BaseGrantRequest,
+    ClientCredentialsGrantRequest,
+    PasswordGrantRequest,
+    RefreshTokenGrantRequest,
+)
+from app.models.response.token import OAuthTokenResponse
 from app.models.service import ServiceCredential
 from app.repositories.audience_repository import AudienceRepository
 from app.repositories.authorization_code_repository import AuthorizationCodeRepository
+from app.repositories.browser_session_repository import BrowserSessionRepository
+from app.repositories.pending_authorization_request_repository import (
+    PendingAuthorizationRequestRepository,
+)
 from app.repositories.role_scope_repository import RoleScopeRepository
 from app.repositories.service_repository import ServiceRepository
 from app.services.token_service import TokenService
@@ -581,6 +596,180 @@ class AuthService:
             extra={"sub": user["id"], "has_scope": scope is not None},
         )
         return self._token_response(access_token, refresh_token)
+
+    def process_authorization_request(
+        self,
+        *,
+        response_type: str,
+        client_id: str,
+        redirect_uri: str,
+        scope: str | None,
+        state: str | None,
+        code_challenge: str | None,
+        code_challenge_method: str | None,
+        bearer_user_id: str | None,
+        browser_session_user_id: str | None,
+        pending_requests: PendingAuthorizationRequestRepository,
+    ) -> AuthorizationDecision:
+        if bearer_user_id is not None:
+            if response_type != "code":
+                raise OAuthException("Unsupported response type")
+            code = self.authorize(
+                bearer_user_id,
+                client_id,
+                redirect_uri,
+                scope,
+                code_challenge,
+                code_challenge_method,
+            )
+            return AuthorizationDecision(
+                redirect_uri=redirect_uri, state=state, authorization_code=code
+            )
+        self.validate_authorization_request(
+            response_type,
+            client_id,
+            redirect_uri,
+            code_challenge,
+            code_challenge_method,
+        )
+        if browser_session_user_id is not None:
+            code = self.authorize(
+                browser_session_user_id,
+                client_id,
+                redirect_uri,
+                scope,
+                code_challenge,
+                code_challenge_method,
+            )
+            return AuthorizationDecision(
+                redirect_uri=redirect_uri, state=state, authorization_code=code
+            )
+        request_id = pending_requests.create(
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            response_type=response_type,
+            scope=scope,
+            state=state,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+            lifetime_seconds=settings.pending_authorization_request_lifetime_seconds,
+        )
+        pending = pending_requests.get(request_id)
+        if pending is None:
+            raise OAuthException("invalid_request")
+        return AuthorizationDecision(redirect_uri=redirect_uri, pending_request=pending)
+
+    def authorize_pending_request(
+        self, pending: PendingAuthorizationRequest, user_id: str
+    ) -> str:
+        return self.authorize(
+            user_id,
+            pending.client_id,
+            pending.redirect_uri,
+            pending.scope,
+            pending.code_challenge,
+            pending.code_challenge_method,
+        )
+
+    def get_pending_authorization_request(
+        self, request_id: str, pending_requests: PendingAuthorizationRequestRepository
+    ) -> PendingAuthorizationRequest | None:
+        return pending_requests.get(request_id)
+
+    def get_login_page(
+        self,
+        request_id: str,
+        pending_requests: PendingAuthorizationRequestRepository,
+        error: str | None = None,
+    ) -> LoginPage | None:
+        pending = pending_requests.get(request_id)
+        if pending is None:
+            return None
+        return LoginPage(
+            request_id=request_id,
+            csrf_token=pending.csrf_token,
+            error=error,
+        )
+
+    def complete_browser_login(
+        self,
+        request_id: str,
+        csrf_token: str,
+        login_csrf: str | None,
+        email: str,
+        password: str,
+        pending_requests: PendingAuthorizationRequestRepository,
+    ) -> tuple[PendingAuthorizationRequest, dict] | None:
+        pending = pending_requests.get(request_id)
+        if (
+            pending is None
+            or csrf_token != pending.csrf_token
+            or login_csrf != pending.csrf_token
+        ):
+            return None
+        user = self.authenticate_user(email, password)
+        consumed = pending_requests.consume(request_id)
+        return (consumed, user) if consumed is not None else None
+
+    def create_browser_session(
+        self, user_id: str, browser_sessions: BrowserSessionRepository
+    ) -> str:
+        return browser_sessions.create(
+            user_id, settings.browser_session_lifetime_seconds
+        )
+
+    def logout_browser_session(
+        self, session_id: str | None, browser_sessions: BrowserSessionRepository
+    ) -> None:
+        if session_id:
+            browser_sessions.delete(session_id)
+
+    def issue_token(
+        self,
+        body: BaseGrantRequest,
+        client_name: str | None = None,
+        client_secret: str | None = None,
+    ) -> OAuthTokenResponse:
+        match body:
+            case PasswordGrantRequest():
+                self.validate_grant_type(body.client_id, "password")
+                access, refresh, expires, scope = self.login(
+                    body.username, body.password, body.scope, body.resource
+                )
+                return OAuthTokenResponse(
+                    access_token=access,
+                    refresh_token=refresh,
+                    expires_in=expires,
+                    scope=scope,
+                )
+            case RefreshTokenGrantRequest():
+                access, refresh, expires, scope = self.refresh(body.refresh_token)
+                return OAuthTokenResponse(
+                    access_token=access,
+                    refresh_token=refresh,
+                    expires_in=expires,
+                    scope=scope,
+                )
+            case AuthorizationCodeGrantRequest():
+                self.validate_grant_type(body.client_id, "authorization_code")
+                access, refresh, expires, scope = self.exchange_code(
+                    body.code, body.redirect_uri, body.code_verifier, body.client_id
+                )
+                return OAuthTokenResponse(
+                    access_token=access,
+                    refresh_token=refresh,
+                    expires_in=expires,
+                    scope=scope,
+                )
+            case ClientCredentialsGrantRequest():
+                if client_name is None or client_secret is None:
+                    raise OAuthException("invalid_client")
+                access, expires, scope = self.client_credentials(
+                    client_name, client_secret, body.scope, resource=body.resource
+                )
+                return OAuthTokenResponse(
+                    access_token=access, expires_in=expires, scope=scope
+                )
 
     def logout(self, jwt_token: JWTToken) -> None:
         self._logger.info("Logout requested for jti=%s", jwt_token.jti)
